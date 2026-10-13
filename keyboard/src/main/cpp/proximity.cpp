@@ -233,6 +233,9 @@ uint32_t lowerCodePoint(uint32_t codePoint) {
     if (codePoint >= 0xC0u && codePoint <= 0xDEu && codePoint != 0xD7u) {
         return codePoint + 0x20u;
     }
+    if (codePoint == kDottedCapitalI) {
+        return 'i';
+    }
     if (codePoint >= 0x100u && codePoint <= 0x17Fu && latinExtendedAUpper(codePoint)) {
         return codePoint + 1u;
     }
@@ -249,7 +252,31 @@ uint32_t lowerCodePoint(uint32_t codePoint) {
     return lowerArmenianGeorgian(codePoint);
 }
 
-/** Whether two UTF-8 spellings are the same but for case. Diacritics still have to match. */
+uint32_t lowerCodePointIn(uint32_t codePoint, bool first, bool last) {
+    return (codePoint == kCapitalSigma && !first && last) ? kFinalSigma : lowerCodePoint(codePoint);
+}
+
+int lowerUtf8(const char* text, size_t length, char* out, int outBytes) {
+    const char* cursor = text;
+    const char* const end = text + length;
+    int written = 0;
+    while (cursor < end) {
+        const bool first = cursor == text;
+        uint32_t codePoint = 0;
+        cursor = utf8Decode(cursor, end, &codePoint);
+        if (cursor == nullptr || written + kMaxUtf8Bytes > outBytes) {
+            return -1;
+        }
+        const uint32_t lower = lowerCodePointIn(codePoint, first, cursor == end);
+        const int bytes = utf8Encode(lower, out + written);
+        if (bytes <= 0) {
+            return -1;
+        }
+        written += bytes;
+    }
+    return written;
+}
+
 bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size_t bLength) {
     const char* p = a;
     const char* q = b;
@@ -263,7 +290,8 @@ bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size
         if (nextLeft == nullptr || nextRight == nullptr) {
             return false;
         }
-        if (lowerCodePoint(left) != lowerCodePoint(right)) {
+        if (lowerCodePointIn(left, p == a, nextLeft == aEnd) !=
+            lowerCodePointIn(right, q == b, nextRight == bEnd)) {
             return false;
         }
         p = nextLeft;

@@ -7,11 +7,14 @@ import androidx.room.withTransaction
 import com.borderkeys.data.BorderKeysDatabase
 import com.borderkeys.data.ClipboardRepository
 import com.borderkeys.data.DictionaryRepository
-import com.borderkeys.data.theme.ThemeRepository
+import com.borderkeys.data.PhraseKey
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.BlockedWord
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserTripleContext
+import com.borderkeys.data.theme.ThemeRepository
 import kotlinx.coroutines.flow.first
 
 /**
@@ -23,6 +26,8 @@ class BackupRepository(
     private val database: BorderKeysDatabase,
     private val themes: ThemeRepository,
     private val dictionary: DictionaryRepository,
+    /** The language of a restored link that names none and whose words name none either. */
+    private val fallbackLanguage: () -> String,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     /** What the caller asked to include. Each is a separate answer. */
@@ -94,21 +99,53 @@ class BackupRepository(
             emptyList()
         }
         val bigrams = if (parts.dictionary) {
-            database.userBigramDao().topPairs(Int.MAX_VALUE).map {
-                BackupBigram(previous = it.previousWord, word = it.word, count = it.count)
+            database.userBigramDao().all().map {
+                BackupBigram(
+                    previous = it.previousWord,
+                    word = it.word,
+                    count = it.count,
+                    language = it.language,
+                    lastUsedAt = it.lastUsedAt,
+                    contextSeen = it.contextSeen,
+                    languageSeen = it.languageSeen,
+                )
             }
         } else {
             emptyList()
         }
         val trigrams = if (parts.dictionary) {
-            database.userTrigramDao().topTriples(Int.MAX_VALUE).map {
+            database.userTrigramDao().all().map {
                 BackupTrigram(
                     previous2 = it.previousWord2,
                     previous1 = it.previousWord1,
                     word = it.word,
                     count = it.count,
+                    language = it.language,
+                    lastUsedAt = it.lastUsedAt,
+                    contextSeen = it.contextSeen,
+                    languageSeen = it.languageSeen,
                 )
             }
+        } else {
+            emptyList()
+        }
+        // Each context's uses and each language's clocks, with the pairs and triples.
+        val pairContexts = if (parts.dictionary) {
+            database.userBigramDao().allContexts().map {
+                BackupPairContext(it.language, it.previousWord, it.total, it.seen, it.lastUsedAt)
+            }
+        } else {
+            emptyList()
+        }
+        val tripleContexts = if (parts.dictionary) {
+            database.userTrigramDao().allContexts().map {
+                BackupTripleContext(it.language, it.previousWord2, it.previousWord1, it.total, it.seen, it.lastUsedAt)
+            }
+        } else {
+            emptyList()
+        }
+        val phraseClocks = if (parts.dictionary) {
+            database.userPhraseClockDao().all().map { BackupPhraseClock(it.language, it.pairs, it.triples) }
         } else {
             emptyList()
         }
@@ -141,6 +178,9 @@ class BackupRepository(
             words = words,
             bigrams = bigrams,
             trigrams = trigrams,
+            pairContexts = pairContexts,
+            tripleContexts = tripleContexts,
+            phraseClocks = phraseClocks,
             blocked = blocked,
             clips = clips,
             models = models,
@@ -235,16 +275,17 @@ class BackupRepository(
 
         if (parts.dictionary) {
             val stamp = now()
-            // One transaction across all four tables.
+            // One transaction across every table the dictionary writes.
             database.withTransaction {
+                // A file without a word's or a link's last use reads it as used now.
+                fun usedAt(written: Long) = if (written > 0L) written else stamp
                 database.userWordDao().incrementAll(
                     payload.words.map {
                         LearnedWord(
                             word = it.word,
                             locale = it.locale,
                             delta = it.count,
-                            // A file without the stamp reads as used now.
-                            lastUsedAt = if (it.lastUsedAt > 0L) it.lastUsedAt else stamp,
+                            lastUsedAt = usedAt(it.lastUsedAt),
                         )
                     },
                 )
@@ -256,24 +297,40 @@ class BackupRepository(
                         database.userWordDao().raiseAsserted(word.word, word.asserted)
                     }
                 }
-                database.userBigramDao().incrementAll(
-                    payload.bigrams.map {
+                // A file without languages: each link takes the one its word was learned under, else
+                // the one most words were, else the fallback.
+                val languageOf = PhraseKey.languageOfWord(
+                    payload.words.associate { it.word to it.locale }, fallbackLanguage(),
+                )
+                // The contexts' carried uses; the stamps and the clocks are not read, a merge
+                // stamps at this device's tick.
+                dictionary.importPhrases(
+                    payload.bigrams.filter { it.count > 0 }.map {
                         LearnedBigram(
-                            previousWord = it.previous,
-                            word = it.word,
+                            language = it.language.ifEmpty { languageOf(it.word) },
+                            previousWord = PhraseKey.word(it.previous),
+                            word = PhraseKey.word(it.word),
                             delta = it.count,
-                            lastUsedAt = stamp,
+                            lastUsedAt = usedAt(it.lastUsedAt),
                         )
                     },
-                )
-                database.userTrigramDao().incrementAll(
-                    payload.trigrams.map {
+                    payload.trigrams.filter { it.count > 0 }.map {
                         LearnedTrigram(
-                            previousWord2 = it.previous2,
-                            previousWord1 = it.previous1,
-                            word = it.word,
+                            language = it.language.ifEmpty { languageOf(it.word) },
+                            previousWord2 = PhraseKey.word(it.previous2),
+                            previousWord1 = PhraseKey.word(it.previous1),
+                            word = PhraseKey.word(it.word),
                             delta = it.count,
-                            lastUsedAt = stamp,
+                            lastUsedAt = usedAt(it.lastUsedAt),
+                        )
+                    },
+                    payload.pairContexts.map {
+                        UserPairContext(it.language, PhraseKey.word(it.previous), it.total, it.lastUsedAt, it.seen)
+                    },
+                    payload.tripleContexts.map {
+                        UserTripleContext(
+                            it.language, PhraseKey.word(it.previous2), PhraseKey.word(it.previous1), it.total,
+                            it.lastUsedAt, it.seen,
                         )
                     },
                 )

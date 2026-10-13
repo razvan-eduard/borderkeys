@@ -27,25 +27,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.ComposerBar
 import com.borderkeys.data.theme.ComposerBarItem
-import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.CustomAction
+import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.ChoiceSlider
 import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.SettingLabel
+import com.borderkeys.settings.ReorderRow
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -142,7 +146,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable { picking = !picking }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = SPACE_MEDIUM),
                 ) {
                     SettingLabel(strings[Keys.COMPOSER_SETTINGS_ADD], color = MaterialTheme.colorScheme.primary)
                 }
@@ -181,7 +185,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             }
             for (action in preferences.customActions) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     var pickingIcon by remember(action.id) { mutableStateOf(false) }
@@ -211,7 +215,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                         }
                     }
                     Column(
-                        modifier = Modifier.weight(1f).padding(start = 4.dp)
+                        modifier = Modifier.weight(1f).padding(start = SPACE_XSMALL)
                             .clickable { editingCustomAction = action },
                     ) {
                         Text(action.name, style = MaterialTheme.typography.bodyLarge)
@@ -231,7 +235,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .clickable { creatingCustomAction = true }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = SPACE_MEDIUM),
             ) {
                 SettingLabel(strings[Keys.COMPOSER_SETTINGS_CREATE_CUSTOM], color = MaterialTheme.colorScheme.primary)
             }
@@ -335,48 +339,7 @@ private fun BarRow(
         is ComposerBarItem.Builtin -> strings[labelFor(item.action)]
         is ComposerBarItem.Custom -> item.action.name
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onAdd != null) Modifier.clickable(onClick = onAdd) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f).padding(start = 16.dp),
-        )
-        if (onAdd == null) {
-            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_top),
-                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_up),
-                    contentDescription = strings[Keys.QUICK_MOVE_UP],
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_remove),
-                    contentDescription = strings[Keys.QUICK_REMOVE],
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
+    ReorderRow(label, index, icon, onMoveTop, onMoveUp, onRemove, onAdd)
 }
 
 private fun iconFor(action: ComposerAction): Int = when (action) {

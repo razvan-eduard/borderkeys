@@ -3,15 +3,20 @@
 
 package com.borderkeys.typing
 
-import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.entity.KeyTouch
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 
 /** Where learned words, pairs and triples are kept. */
 interface LearningStore {
-    /** Writes [batch], off the typing flow's thread. */
-    fun persist(batch: LearningBatch)
+    /**
+     * Writes [batch], off the typing flow's thread, and hands the pairs and triples the store
+     * gave up under its budget beyond the engine's to [onDropped] on the typing flow's thread.
+     */
+    fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit)
 
     /** Writes [batch], when there is one, and waits a bounded time for every write in flight. */
     fun persistBeforeShutdown(batch: LearningBatch?)
@@ -23,8 +28,10 @@ interface LearningStore {
 /** What the learning buffer had accumulated, taken out of it in one go. */
 class LearningBatch(
     val updates: List<LearnedWord>,
-    val pairs: List<LearnedBigram>,
-    val triples: List<LearnedTrigram>,
+    /** Each pair use the engine recorded, with what it dropped right after, in order. */
+    val pairs: List<PairStep>,
+    /** [pairs], for the triples. */
+    val triples: List<TripleStep>,
     /** The heatmap's samples since the last write, as totals by bucket and letter. */
     val touches: List<KeyTouch> = emptyList(),
     /** The half-life [touches] are merged into what is stored under. */

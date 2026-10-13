@@ -6,20 +6,33 @@ package com.borderkeys.data
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 
-/** A learned pair or triple: its words in order, how often it was written, and when last. */
-data class UserPhrase(val words: List<String>, val count: Int, val lastUsedAt: Long) {
+/**
+ * A learned pair or triple: the primary language subtag it was written in, its words in order,
+ * how often it was written, and when last.
+ */
+data class UserPhrase(val language: String, val words: List<String>, val count: Int, val lastUsedAt: Long) {
+
+    /** Whether this is a pair rather than a triple. */
+    val isPair: Boolean
+        get() = words.size == PAIR_WORDS
 
     /** Whether this is a pair whose word opened a sentence. */
     val opensSentence: Boolean
         get() = words.first() == UserBigram.SENTENCE_START
 
     companion object {
+        /** How many words a pair holds. */
+        const val PAIR_WORDS = 2
+
         /** [pairs] and [triples] as one list, most used first, then most recent. */
         fun merged(pairs: List<UserBigram>, triples: List<UserTrigram>): List<UserPhrase> {
-            val phrases = pairs.map { UserPhrase(listOf(it.previousWord, it.word), it.count, it.lastUsedAt) } +
-                triples.map {
-                    UserPhrase(listOf(it.previousWord2, it.previousWord1, it.word), it.count, it.lastUsedAt)
-                }
+            val phrases =
+                pairs.map { UserPhrase(it.language, listOf(it.previousWord, it.word), it.count, it.lastUsedAt) } +
+                    triples.map {
+                        UserPhrase(
+                            it.language, listOf(it.previousWord2, it.previousWord1, it.word), it.count, it.lastUsedAt,
+                        )
+                    }
             return phrases.sortedWith(
                 compareByDescending<UserPhrase> { it.count }.thenByDescending { it.lastUsedAt },
             )

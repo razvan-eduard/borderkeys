@@ -3,20 +3,13 @@
 
 package com.borderkeys.settings.screen
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
-import com.borderkeys.settings.PickerChip
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.ChoiceSlider
-import com.borderkeys.settings.DEFAULT_PREFERENCES
-import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.SettingLabel
-import com.borderkeys.settings.Screen
-
 import android.content.Context
 import android.content.Intent
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,28 +19,37 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.ModifierRowKeys
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
-import com.borderkeys.settings.SettingRow
-import com.borderkeys.settings.SwitchRow
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.borderkeys.data.theme.ModifierRowKeys
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.ReorderRow
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingLabel
+import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
 
@@ -74,8 +76,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
-        // First: which layouts are enabled, since the keys below draw their accents from the
-        // languages and the globe key shows only with two or more.
+        // First: which layouts are enabled.
         SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {
             SettingRow(strings[Keys.LAYOUT_OWN_LAYOUTS], strings[Keys.LAYOUT_OWN_LAYOUTS_NOTE]) { open(Screen.CustomLayouts) }
             if (subtypes.isEmpty()) {
@@ -96,8 +97,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     subtitle = own,
                     content = {
                         FlowRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = SPACE_XSMALL),
+                            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                         ) {
                             Text(strings[Keys.CUSTOM_LAYOUTS_FOR_SUBTYPE], style = MaterialTheme.typography.bodySmall)
                             PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosen == null) {
@@ -110,8 +111,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                             }
                         }
                         FlowRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = SPACE_XSMALL),
+                            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                         ) {
                             Text(strings[Keys.CUSTOM_LAYOUTS_IN_LANDSCAPE], style = MaterialTheme.typography.bodySmall)
                             PickerChip(strings[Keys.CUSTOM_LAYOUTS_AS_UPRIGHT], chosenLandscape == null) {
@@ -144,7 +145,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.LAYOUT_CHOOSE_WHICH_LAYOUTS_ARE_ENABLED]) }
             Explanation(strings[Keys.LAYOUT_A_LAYOUT_AND_A_LANGUAGE_ARE])
             Explanation(strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE])
@@ -163,8 +164,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             ) { value -> update { it.copy(modifierRow = value) } }
             Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_POSITION])
             FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
             ) {
                 PickerChip(
                     strings[Keys.LAYOUT_MODIFIER_ROW_ABOVE],
@@ -184,8 +185,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             AdvancedSection(strings[Keys.LAYOUT_ADVANCED_DIGITS_NOTE]) {
                 Explanation(strings[Keys.LAYOUT_WHERE_THE_DIGITS_SIT])
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     PickerChip(
                         strings[Keys.LAYOUT_DIGITS_TOP],
@@ -235,7 +236,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
                     KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
                 default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
-                steps = 10,
+                steps = (KeyboardPreferences.MAX_LONG_PRESS_MILLIS - KeyboardPreferences.MIN_LONG_PRESS_MILLIS) /
+                    KeyboardPreferences.LONG_PRESS_STEP_MILLIS - 1,
             ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
             SwitchRow(
                 title = strings[Keys.LAYOUT_KEY_POPUP],
@@ -328,8 +330,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             AdvancedSection(strings[Keys.LAYOUT_ADVANCED_KEYS_NOTE]) {
                 SettingLabel(strings[Keys.LAYOUT_ENTER_KEY])
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     PickerChip(
                         strings[Keys.LAYOUT_ENTER_KEY_AUTO],
@@ -377,7 +379,7 @@ private fun ModifierRowKeysEditor(
     if (chosen != ModifierRowKeys.DEFAULT) {
         TextButton(
             onClick = { update { it.copy(modifierRowKeys = ModifierRowKeys.DEFAULT) } },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
         ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
     }
     Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_KEYS_NOTE])
@@ -386,7 +388,7 @@ private fun ModifierRowKeysEditor(
         Row(
             modifier = Modifier.fillMaxWidth()
                 .clickable { picking = !picking }
-                .padding(vertical = 8.dp),
+                .padding(vertical = SPACE_MEDIUM),
         ) {
             SettingLabel(strings[Keys.LAYOUT_MODIFIER_ROW_ADD], color = MaterialTheme.colorScheme.primary)
         }

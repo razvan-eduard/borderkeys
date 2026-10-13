@@ -7,32 +7,33 @@ import android.text.InputType
 
 /**
  * Whether the field being typed into holds an address: an e-mail address, in either of Android's
- * variations, or a URI. The keyboard adds no automatic spaces or full stops in one. An e-mail,
- * number or phone field is also [isVerbatim]: the keys go in as typed and no swipe is read, while
- * dictionary words are still offered. A URI field is not, because browsers search from it.
+ * variations, or a URI. The keyboard adds no automatic spaces or full stops in one. An e-mail
+ * field ([isEmail]) and a number or phone field ([isNumberOrPhone]) take the keys as typed, while
+ * dictionary words and swipe still work. A URI field is not.
  */
 object AddressField {
 
-    fun isVerbatim(inputType: Int): Boolean {
-        return when (inputType and InputType.TYPE_MASK_CLASS) {
-            InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE -> true
-            InputType.TYPE_CLASS_TEXT -> {
-                val variation = inputType and InputType.TYPE_MASK_VARIATION
-                variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
-                    variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
-            }
-            else -> false
-        }
+    /** An e-mail address field, in either of Android's variations. */
+    fun isEmail(inputType: Int): Boolean {
+        val variation = textVariation(inputType)
+        return variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+            variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
     }
 
-    fun isAddress(inputType: Int): Boolean {
-        // The variation counts only inside the text class.
-        if ((inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) {
-            return false
-        }
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        return variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
-            variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
-            variation == InputType.TYPE_TEXT_VARIATION_URI
+    /** A number or a phone field. */
+    fun isNumberOrPhone(inputType: Int): Boolean = when (inputType and InputType.TYPE_MASK_CLASS) {
+        InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE -> true
+        else -> false
     }
+
+    fun isAddress(inputType: Int): Boolean =
+        isEmail(inputType) || textVariation(inputType) == InputType.TYPE_TEXT_VARIATION_URI
+
+    /** The field's variation within the text class; null in another class. */
+    private fun textVariation(inputType: Int): Int? =
+        if ((inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT) {
+            inputType and InputType.TYPE_MASK_VARIATION
+        } else {
+            null
+        }
 }

@@ -77,6 +77,7 @@ the pipeline, with the touch surface left out.
 | `pipeline_cases.tsv` | 49 cases, `typed <TAB> committed <TAB> reason` |
 | `pipeline_cases_ro.tsv` | 13 Romanian cases, against the pack most reports come from |
 | `PipelineCorpusTest` | Every autocorrect corpus, with a floor per corpus -- see [the whole path](#the-whole-path--pipelinecorpustest) |
+| `PersonalCorpusTest` | A persona's history learned, then words typed after their context, with a floor per learned context and kind -- see [a learned history](#a-learned-history--personalcorpustest) |
 | `LanguageSwitchPipelineTest` | The backward correction, end to end over two packs |
 
 The **reason** is asserted beside the outcome because an outcome on its own can be right by
@@ -965,6 +966,46 @@ centre, so a typo three or more keys away is rarely a hundred times likelier tha
 on a phone, with the taps, it is more often. Of the 533 misses a word at a time, 277 never have
 the word meant in the engine's ranking. A third of real phone typos are three or more edits from
 their word; the generated corpora hold none.
+
+### A learned history — `PersonalCorpusTest`
+
+```
+python3 tools/heldout_overlap.py en_US ro_RO es_ES
+python3 tools/make_personal_corpus.py en_US native-tests/data   # and ro_RO, es_ES
+```
+
+What a person has written changes what the keyboard offers after it, so this corpus types words
+after a history. `heldout_overlap.py` admits a language only when no corpus its pack is counted
+from is from the held-out file's year and every one is cached: English, Romanian and Spanish (the
+German, French and Italian packs count a 2020 newscrawl). `make_personal_corpus.py` takes a
+persona from the held-out 2020 news (every sentence mentioning the name the file writes most,
+less any sentence a counted corpus also writes, Romanian respelled as its list is), learns the
+first half, and draws rows from the second: words after their two words of context, each word
+and context once, typed with a slip, omitted, extra or mid-word typo in turn, and as written
+when the pack spells it exactly.
+
+The history is learned through `LearningFlow.record`, the call a commit makes, under the
+language the engine answers in, and read back as the service reads it at start: through the
+same `PhraseRecorder` budget, then decayed (`PersonalSnapshot`). Each row is typed three ways,
+the model held as loaded: with no personal model, with the history's words alone, and with the
+whole history. A row's class is what that history taught after its context: **meant** (a learned
+pair or triple ends in the word), **others** (the context learned other words), **none**. A
+**none** row must read the same with and without the pairs and triples, in every language.
+
+Floors, rows right with the whole history:
+
+| | en | ro | es |
+|---|---|---|---|
+| meant, as written | 81 / 81 | 106 / 106 | 58 / 58 |
+| meant, typo | 73 / 81 | 93 / 106 | 54 / 58 |
+| others, as written | 289 / 289 | 297 / 297 | 332 / 332 |
+| others, typo | 222 / 289 | 228 / 298 | 264 / 332 |
+| none, as written | 230 / 230 | 191 / 191 | 204 / 205 |
+| none, typo | 170 / 230 | 131 / 196 | 141 / 210 |
+
+**meant** is smaller than the 200 words a class is drawn to: the generator estimates a class from
+raw counts, and the budget gives up links in busy contexts, so the test files those rows under
+**others**.
 
 ### Accent restoration — the one that was missing
 

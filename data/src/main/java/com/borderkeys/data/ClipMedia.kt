@@ -17,6 +17,9 @@ object ClipMedia {
 
     /** The thumbnail's side, in pixels, and the most bytes it may take. */
     const val THUMBNAIL_PX = 80
+
+    /** What a decoder sub-samples by: powers of two. */
+    const val SAMPLE_STEP = 2
     const val THUMBNAIL_MAX_BYTES = 10 * 1024
 
     /** A stored image's name: `partition/sha256.extension`. */
@@ -33,17 +36,7 @@ object ClipMedia {
         "image/avif" to "avif",
     )
 
-    private val hex = "0123456789abcdef".toCharArray()
-
-    fun sha256(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        val out = CharArray(digest.size * 2)
-        for ((index, byte) in digest.withIndex()) {
-            out[index * 2] = hex[(byte.toInt() shr 4) and 0xF]
-            out[index * 2 + 1] = hex[byte.toInt() and 0xF]
-        }
-        return String(out)
-    }
+    fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).toHexString()
 
     /** The extension for [mimeType], or null for a type that is not kept. */
     fun extensionFor(mimeType: String): String? = extensions[mimeType.lowercase().substringBefore(';').trim()]
@@ -69,8 +62,8 @@ object ClipMedia {
     /** The power of two that brings a [width] by [height] picture to at most [THUMBNAIL_PX] on its longer side, times two. */
     fun thumbnailSampleSize(width: Int, height: Int): Int {
         var sample = 1
-        while (maxOf(width, height) / sample > THUMBNAIL_PX * 2) {
-            sample *= 2
+        while (maxOf(width, height) / sample > THUMBNAIL_PX * SAMPLE_STEP) {
+            sample *= SAMPLE_STEP
         }
         return sample
     }

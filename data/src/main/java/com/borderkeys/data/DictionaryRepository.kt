@@ -9,13 +9,19 @@ import com.borderkeys.data.dao.KeyTouchDao
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.dao.UserBigramDao
+import com.borderkeys.data.dao.UserPhraseClockDao
 import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.entity.UserWord
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +41,10 @@ class DictionaryRepository internal constructor(
     private val userBigrams: UserBigramDao,
     private val userTrigrams: UserTrigramDao,
     private val keyTouches: KeyTouchDao,
+    private val userPhraseClocks: UserPhraseClockDao,
 ) {
+    private val phraseRecorder = PhraseRecorder(userBigrams, userTrigrams, userPhraseClocks)
+
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val wordCount: Flow<Int> = userWords.observeCount()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
@@ -77,16 +86,23 @@ class DictionaryRepository internal constructor(
 
     suspend fun blockedWordSet(): Set<String> = blockedWords.allWords().toSet()
 
-    /** The word pairs pushed into the native engine at service start. */
-    suspend fun topBigrams(limit: Int = MAX_BIGRAMS_IN_MEMORY): List<UserBigram> =
-        userBigrams.topPairs(limit)
+    /**
+     * The pairs the native engine loads at service start: each language's [MAX_BIGRAMS_IN_MEMORY]
+     * most used, in the order each was first recorded.
+     */
+    suspend fun pairsToLoad(): List<UserBigram> = loadedPairs(userBigrams.all())
 
-    /** How many pairs are remembered. */
-    suspend fun bigramCount(): Int = userBigrams.count()
+    /** [pairsToLoad], for the triples and [MAX_TRIGRAMS_IN_MEMORY]. */
+    suspend fun triplesToLoad(): List<UserTrigram> = loadedTriples(userTrigrams.all())
 
-    /** The three-word sequences pushed into the native engine at service start. */
-    suspend fun topTrigrams(limit: Int = MAX_TRIGRAMS_IN_MEMORY): List<UserTrigram> =
-        userTrigrams.topTriples(limit)
+    /** How many times each previous word of a pair has been seen, per language. */
+    suspend fun pairContexts(): List<UserPairContext> = userBigrams.allContexts()
+
+    /** How many times each two-word start of a triple has been seen, per language. */
+    suspend fun tripleContexts(): List<UserTripleContext> = userTrigrams.allContexts()
+
+    /** Each language's pair clock and triple clock. */
+    suspend fun phraseClocks(): List<UserPhraseClock> = userPhraseClocks.all()
 
     /** Applies a batch of learning updates in one transaction. */
     suspend fun applyLearned(updates: List<LearnedWord>) {
@@ -96,54 +112,114 @@ class DictionaryRepository internal constructor(
         userWords.incrementAll(updates)
     }
 
-    /** The same, for the pairs. Flushed in the same batch as the words. */
-    suspend fun applyLearnedBigrams(updates: List<LearnedBigram>) {
-        if (updates.isEmpty()) {
-            return
+    /**
+     * The same, for the pairs: the engine's steps replayed under [PhraseBudget]
+     * ([PhraseRecorder.recordPairs]). Returns the pairs given up beyond the engine's.
+     */
+    suspend fun applyLearnedBigrams(steps: List<PairStep>): List<UserBigram> {
+        if (steps.isEmpty()) {
+            return emptyList()
         }
-        userBigrams.incrementAll(updates)
+        return database.withTransaction { phraseRecorder.recordPairs(steps) }
     }
 
-    suspend fun applyLearnedTrigrams(updates: List<LearnedTrigram>) {
-        if (updates.isEmpty()) {
-            return
+    /** [applyLearnedBigrams], for the triples. */
+    suspend fun applyLearnedTrigrams(steps: List<TripleStep>): List<UserTrigram> {
+        if (steps.isEmpty()) {
+            return emptyList()
         }
-        userTrigrams.incrementAll(updates)
+        return database.withTransaction { phraseRecorder.recordTriples(steps) }
     }
 
     /**
-     * Halves the stored count of every word, pair and triple nobody has written in a
-     * [halfLifeMillis] or longer, then deletes the words written once before
-     * [PersonalWordDecay.unconfirmedLifeMillis] and those past the [keep] used most, with their
-     * phrases.
+     * Adds pairs and triples from a backup, with the contexts it carried
+     * ([PhraseRecorder.importLinks]); the caller holds the transaction.
      */
-    suspend fun decayStaleEntries(keep: Int, halfLifeMillis: Long, now: Long = System.currentTimeMillis()) {
+    internal suspend fun importPhrases(
+        pairs: List<LearnedBigram>,
+        triples: List<LearnedTrigram>,
+        pairContexts: List<UserPairContext>,
+        tripleContexts: List<UserTripleContext>,
+    ) {
+        phraseRecorder.importLinks(pairs, triples, pairContexts, tripleContexts)
+    }
+
+    /**
+     * Halves the stored count of every word, pair and triple, and the total of every context,
+     * nobody has written in a [halfLifeMillis] or longer, then deletes the words written once and
+     * unused for [unconfirmedLifeMillis] (none when it is null) and those past the [keep] used
+     * most, with the phrases of those no case of which is left.
+     */
+    suspend fun decayStaleEntries(
+        keep: Int,
+        halfLifeMillis: Long,
+        unconfirmedLifeMillis: Long?,
+        now: Long = System.currentTimeMillis(),
+    ) {
         val cutoff = now - halfLifeMillis
-        val unconfirmedCutoff = now - PersonalWordDecay.unconfirmedLifeMillis(halfLifeMillis)
         database.withTransaction {
             userWords.decayStale(cutoff, now)
             userBigrams.decayStale(cutoff, now)
+            userBigrams.decayStaleContexts(cutoff, now)
             userTrigrams.decayStale(cutoff, now)
-            for (word in userWords.unconfirmedBefore(unconfirmedCutoff)) {
-                userBigrams.deleteInvolving(word)
-                userTrigrams.deleteInvolving(word)
+            userTrigrams.decayStaleContexts(cutoff, now)
+            if (unconfirmedLifeMillis != null) {
+                val unconfirmedCutoff = now - unconfirmedLifeMillis
+                val unconfirmed = userWords.unconfirmedBefore(unconfirmedCutoff)
+                userWords.deleteUnconfirmedBefore(unconfirmedCutoff)
+                forgetPhrasesOfGone(unconfirmed)
             }
-            userWords.deleteUnconfirmedBefore(unconfirmedCutoff)
             deleteWordsBeyond(keep)
         }
     }
 
-    /** Deletes the words past the [keep] used most, with every phrase they are part of. */
+    /**
+     * Deletes the pairs and triples used at most [PhraseBudget.PURGE_MOST_USES] times that hold a
+     * word [learnable] answers false for, in one transaction; [learnable] answers for each word of
+     * a list, in order, and is never asked about the sentence start. Returns what it deleted.
+     */
+    suspend fun purgeUnlearnable(learnable: suspend (List<String>) -> List<Boolean>): PhraseRecorder.Dropped =
+        database.withTransaction {
+            val pairs = userBigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
+            val triples = userTrigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
+            val words = (
+                pairs.flatMap { listOf(it.previousWord, it.word) } +
+                    triples.flatMap { listOf(it.previousWord2, it.previousWord1, it.word) }
+                ).filter { it != UserBigram.SENTENCE_START }.distinct()
+            if (words.isEmpty()) {
+                return@withTransaction PhraseRecorder.Dropped()
+            }
+            val unlearnable = words.zip(learnable(words)).filterNot { it.second }.mapTo(HashSet()) { it.first }
+            val gonePairs = pairs.filter { it.previousWord in unlearnable || it.word in unlearnable }
+            val goneTriples = triples.filter {
+                it.previousWord2 in unlearnable || it.previousWord1 in unlearnable || it.word in unlearnable
+            }
+            phraseRecorder.purge(gonePairs, goneTriples)
+            PhraseRecorder.Dropped(gonePairs, goneTriples)
+        }
+
+    /** Deletes the words past the [keep] used most, with the phrases of those no case of which is left. */
     suspend fun keepWords(keep: Int) {
         database.withTransaction { deleteWordsBeyond(keep) }
         edited()
     }
 
     private suspend fun deleteWordsBeyond(keep: Int) {
-        for (word in userWords.wordsBeyond(keep)) {
-            userBigrams.deleteInvolving(word)
-            userTrigrams.deleteInvolving(word)
-            userWords.delete(word)
+        val beyond = userWords.wordsBeyond(keep)
+        beyond.forEach { userWords.delete(it) }
+        forgetPhrasesOfGone(beyond)
+    }
+
+    /** Forgets the phrases of each of [words] that no learned word is any longer, in any case. */
+    private suspend fun forgetPhrasesOfGone(words: Collection<String>) {
+        if (words.isEmpty()) {
+            return
+        }
+        val left = userWords.allWords().mapTo(HashSet(), PhraseKey::word)
+        for (key in words.mapTo(LinkedHashSet(), PhraseKey::word)) {
+            if (key !in left) {
+                phraseRecorder.forget(key)
+            }
         }
     }
 
@@ -160,17 +236,17 @@ class DictionaryRepository internal constructor(
         return cases.isNotEmpty()
     }
 
-    /** Forgets [words] and every phrase any of them was part of, in one transaction. */
+    /**
+     * Forgets [words], and every phrase each is part of in any case and in every language, in one
+     * transaction.
+     */
     suspend fun forget(words: Collection<String>) {
         if (words.isEmpty()) {
             return
         }
         database.withTransaction {
-            for (word in words) {
-                userWords.delete(word)
-                userBigrams.deleteInvolving(word)
-                userTrigrams.deleteInvolving(word)
-            }
+            words.forEach { userWords.delete(it) }
+            words.mapTo(LinkedHashSet(), PhraseKey::word).forEach { phraseRecorder.forget(it) }
         }
         edited()
     }
@@ -188,24 +264,25 @@ class DictionaryRepository internal constructor(
         }
         database.withTransaction {
             for (phrase in phrases) {
-                val words = phrase.words
-                if (words.size == 2) {
-                    userBigrams.delete(words[0], words[1])
-                    userTrigrams.deleteContainingPair(words[0], words[1])
+                if (phrase.isPair) {
+                    val (previousWord, word) = phrase.words
+                    userBigrams.inContext(phrase.language, previousWord)
+                        .firstOrNull { it.word == word }
+                        ?.let { phraseRecorder.forgetPair(it) }
                 } else {
-                    userTrigrams.delete(words[0], words[1], words[2])
+                    val (previousWord2, previousWord1, word) = phrase.words
+                    userTrigrams.inContext(phrase.language, previousWord2, previousWord1)
+                        .firstOrNull { it.word == word }
+                        ?.let { phraseRecorder.forgetTriple(it) }
                 }
             }
         }
         edited()
     }
 
-    /** Forgets every pair and triple. The words stay. */
+    /** Forgets every pair and triple, with their contexts and clocks. The words stay. */
     suspend fun forgetAllPhrases() {
-        database.withTransaction {
-            userBigrams.deleteAll()
-            userTrigrams.deleteAll()
-        }
+        database.withTransaction { phraseRecorder.forgetAll() }
         edited()
     }
 
@@ -213,8 +290,7 @@ class DictionaryRepository internal constructor(
     suspend fun forgetEverything() {
         database.withTransaction {
             userWords.deleteAll()
-            userBigrams.deleteAll()
-            userTrigrams.deleteAll()
+            phraseRecorder.forgetAll()
             keyTouches.deleteAll()
         }
         edited()
@@ -251,8 +327,7 @@ class DictionaryRepository internal constructor(
         database.withTransaction {
             blockedWords.insert(BlockedWord(word))
             userWords.delete(word)
-            userBigrams.deleteInvolving(word)
-            userTrigrams.deleteInvolving(word)
+            phraseRecorder.forget(word)
         }
         edited()
     }
@@ -262,12 +337,33 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
-    private companion object {
-        /** Matches UserModel::kMaxBigrams. */
-        const val MAX_BIGRAMS_IN_MEMORY = 4_096
+    companion object {
+        /** The pairs of one language the native engine holds; matches `UserModel::kMaxBigrams`. */
+        const val MAX_BIGRAMS_IN_MEMORY = PhraseBudget.LANGUAGE_CAP
 
-        /** Matches UserModel::kMaxTrigrams. */
-        const val MAX_TRIGRAMS_IN_MEMORY = 2_048
+        /** [MAX_BIGRAMS_IN_MEMORY], for the triples; matches `UserModel::kMaxTrigrams`. */
+        const val MAX_TRIGRAMS_IN_MEMORY = PhraseBudget.LANGUAGE_CAP
+
+        /** Of [pairs], in their order, the ones [pairsToLoad] gives. */
+        fun loadedPairs(pairs: List<UserBigram>): List<UserBigram> =
+            mostUsedPerLanguage(pairs, MAX_BIGRAMS_IN_MEMORY, UserBigram::language, UserBigram::count)
+
+        /** Of [triples], in their order, the ones [triplesToLoad] gives. */
+        fun loadedTriples(triples: List<UserTrigram>): List<UserTrigram> =
+            mostUsedPerLanguage(triples, MAX_TRIGRAMS_IN_MEMORY, UserTrigram::language, UserTrigram::count)
+
+        /** Of [links], in their order, each language's [most] with the highest counts. */
+        private fun <T> mostUsedPerLanguage(
+            links: List<T>,
+            most: Int,
+            languageOf: (T) -> String,
+            countOf: (T) -> Int,
+        ): List<T> {
+            val kept = links.groupBy(languageOf).values.flatMap { inLanguage ->
+                if (inLanguage.size <= most) inLanguage else inLanguage.sortedByDescending(countOf).take(most)
+            }.toHashSet()
+            return links.filter { it in kept }
+        }
     }
 }
 

@@ -4,6 +4,10 @@
 package com.borderkeys.typing
 
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.dao.TripleStep
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 
 /**
  * The prediction engine as the typing flow uses it. Every call returns at once; an answer to
@@ -24,9 +28,35 @@ interface EnginePort {
         tapYs: FloatArray?,
     )
 
-    fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?)
+    /**
+     * Learns [updates] after [previous1] and [previous2], the pair and triple they make in the
+     * store of [language], a primary language subtag, each under [com.borderkeys.data.PhraseBudget]
+     * as it is recorded; [onLearned] receives what was recorded and dropped.
+     */
+    fun learn(
+        updates: List<LearnedWord>,
+        previous1: String?,
+        previous2: String?,
+        language: String,
+        onLearned: (LearnOutcome) -> Unit,
+    )
+
+    /** Drops the pairs and triples the store gave up under its budget. */
+    fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>)
 
     fun setPersonalModelEnabled(enabled: Boolean)
+
+    /**
+     * How many uses a word, pair or triple needs before it counts; see
+     * [com.borderkeys.data.theme.KeyboardPreferences.learnAfter].
+     */
+    fun setLearnAfterUses(uses: Int)
+
+    /**
+     * How much evidence an edit needs before it outranks a word spelled as typed; see
+     * [com.borderkeys.data.theme.KeyboardPreferences.correctionStrictness].
+     */
+    fun setCorrectionStrictness(scale: Float)
 
     /**
      * Whether the learned touch patterns count, how far they move a substitution's cost from the
@@ -85,3 +115,9 @@ interface EnginePort {
     /** Drops a preview decode that has not answered yet. */
     fun cancelPendingPreview()
 }
+
+/**
+ * What the engine did with an [EnginePort.learn]: each pair and triple it recorded, with the links
+ * its budget dropped right after, in order.
+ */
+class LearnOutcome(val pairs: List<PairStep>, val triples: List<TripleStep>)

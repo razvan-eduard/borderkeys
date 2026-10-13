@@ -3,9 +3,9 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,18 +18,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -38,30 +34,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.BackgroundImages
 import com.borderkeys.data.theme.CustomThemeEntry
 import com.borderkeys.data.theme.CustomThemeFile
-import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
+import com.borderkeys.settings.BORDER_WIDTH
 import com.borderkeys.settings.ColourRow
-import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.SELECTED_BORDER_WIDTH
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_MEDIUM_PLUS
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
@@ -155,7 +160,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     // The preview stays above the scrolling controls.
     Column(modifier = modifier.fillMaxSize()) {
         // The live appearance, auto dark/light included, in its real placement.
-        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
+        PlacementPreview(appearance, Modifier.padding(vertical = SPACE_LARGE))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             SettingsSectionCard(strings[Keys.SCREEN_THEME]) {
@@ -168,14 +173,14 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         Text(
                             strings[category.labelKey],
                             style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 2.dp),
+                            modifier = Modifier.padding(start = SPACE_GUTTER, end = SPACE_GUTTER, top = SPACE_MEDIUM, bottom = SPACE_TINY),
                         )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                .padding(horizontal = SPACE_GUTTER),
+                            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
                         ) {
                             for (preset in presetsInCategory) {
                                 // showKeyBorders is carried over; a preset does not change it.
@@ -228,8 +233,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                .padding(horizontal = SPACE_GUTTER),
+                            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
                         ) {
                             for (entry in customThemes) {
                                 // showKeyBorders is carried over, as for a preset.
@@ -244,8 +249,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     TextButton(onClick = { savingCurrentTheme = true }) {
                         Text(strings[Keys.THEME_SAVE_CURRENT_THEME])
@@ -260,8 +265,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 }
                 if (active != null) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                     ) {
                         TextButton(onClick = { renaming = active }) {
                             Text(strings[Keys.THEME_RENAME])
@@ -361,14 +366,14 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 Text(
                     strings[Keys.THEME_PATTERN],
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL),
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     // Chips that toggle: patterns layer, and none selected means none.
                     for (index in KeyboardTheme.PATTERN_DOTS until KeyboardTheme.PATTERN_COUNT) {
@@ -407,12 +412,12 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 Text(
                     strings[Keys.THEME_PICTURE],
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL),
                 )
                 Explanation(strings[Keys.THEME_PICTURE_NOTE])
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     TextButton(onClick = { picture.launch(arrayOf("image/*")) }) {
                         Text(strings[Keys.THEME_CHOOSE_PICTURE])
@@ -515,7 +520,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                             )
                         }
                     },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                 ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
                 Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
                 SwitchRow(
@@ -635,26 +640,26 @@ internal fun PresetCard(
 ) {
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(SPACE_LARGE))
             .background(Color(preset.backgroundColor))
             .border(
-                width = if (selected) 3.dp else 1.dp,
+                width = if (selected) SELECTED_BORDER_WIDTH else BORDER_WIDTH,
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(SPACE_LARGE),
             )
             .clickable(onClick = onPick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM_PLUS),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(SPACE_XSMALL)) {
             for (colour in listOf(preset.keyColor, preset.accentColor, preset.textColor)) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .size(PRESET_DOT_SIZE)
                         .background(Color(colour), CircleShape),
                 )
             }
@@ -664,7 +669,7 @@ internal fun PresetCard(
             style = MaterialTheme.typography.labelMedium,
             // The preset's label colour, on its own background.
             color = Color(preset.textColor),
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier.padding(top = SPACE_SMALL),
         )
     }
 }
@@ -912,3 +917,6 @@ internal val PRESETS = listOf(
     Preset(Keys.THEME_NEON, NEON, ThemeCategory.NEON),
     Preset(Keys.THEME_AURORA, AURORA, ThemeCategory.NEON),
 )
+
+/** A preset's colour dots. */
+private val PRESET_DOT_SIZE = 12.dp

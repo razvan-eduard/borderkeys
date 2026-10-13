@@ -13,7 +13,7 @@ class LanguageSwitchCorrector {
     /**
      * A correction that turned [typedText] into [appliedText], at [startOffset] until
      * [endOffset] in the field, made while [madeUnder] was the detected pack: -1 undecided,
-     * [UNKNOWN] before any was observed.
+     * [UNKNOWN] before any was observed, until the verdict the field opens under arrives.
      */
     data class Flag(
         val typedText: String,
@@ -58,11 +58,19 @@ class LanguageSwitchCorrector {
         lastDecided = UNKNOWN
     }
 
-    /** Takes [pack] as the verdict the field opens under, which is no change. */
+    /**
+     * Takes [pack] as the verdict the field opens under, which is no change; the corrections
+     * recorded before it arrived take it as the verdict they were made under.
+     */
     fun startUnder(pack: Int) {
         verdict = pack
         if (pack >= 0) {
             lastDecided = pack
+        }
+        for (index in flags.indices) {
+            if (flags[index].madeUnder == UNKNOWN) {
+                flags[index] = flags[index].copy(madeUnder = pack)
+            }
         }
     }
 

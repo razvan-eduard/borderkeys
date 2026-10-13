@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.View
 import android.view.animation.AnimationUtils
+import com.borderkeys.geometry.middle
 
 /**
  * Where an effect plays: the middle of the keys, above them, never touchable. [onTouchEvent] is
@@ -86,8 +87,8 @@ class EffectStage(context: Context) : View(context) {
     private fun begin(next: Playing) {
         current = next
         startedAt = AnimationUtils.currentAnimationTimeMillis()
-        centreX = (keyAreaLeft + keyAreaRight) / 2f
-        centreY = (keyAreaTop + keyAreaBottom) / 2f
+        centreX = middle(keyAreaLeft, keyAreaRight)
+        centreY = middle(keyAreaTop, keyAreaBottom)
         visibility = VISIBLE
         postInvalidateOnAnimation()
     }

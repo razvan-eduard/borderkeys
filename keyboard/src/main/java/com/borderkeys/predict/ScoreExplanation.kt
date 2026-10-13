@@ -18,8 +18,10 @@ class ScoreExplanation(
     val personal: Float,
     /** The cost of the edits and the letters added between what was typed and the word. */
     val editsAndCompletion: Float,
-    /** Which of the active packs the word came from, in the order they were enabled. */
+    /** The engine's slot of the pack the word came from. */
     val packIndex: Int,
+    /** The tag of the pack the word came from, or null when none did. */
+    val packTag: String?,
     /** The word's position in the engine's list, from zero. */
     val rank: Int,
     val editDistance: Int,
@@ -38,13 +40,26 @@ class ScoreExplanation(
     companion object {
         const val SLOTS = 15
 
-        fun fromSlots(values: FloatArray): ScoreExplanation = ScoreExplanation(
+        /** The slot holding the pack's slot in the engine. */
+        private const val PACK_SLOT = 5
+
+        /** The engine's account of [candidate]'s score for [typed], or null when it is not offered. */
+        fun read(handle: Long, typed: String, candidate: String): ScoreExplanation? {
+            val slots = FloatArray(SLOTS)
+            if (!NativePredictor.nativeExplainScore(handle, typed, candidate, slots)) {
+                return null
+            }
+            return fromSlots(slots, NativePredictor.nativePackTag(handle, slots[PACK_SLOT].toInt()))
+        }
+
+        fun fromSlots(values: FloatArray, packTag: String?): ScoreExplanation = ScoreExplanation(
             total = values[0],
             packWeight = values[1],
             languageModel = values[2],
             personal = values[3],
             editsAndCompletion = values[4],
-            packIndex = values[5].toInt(),
+            packIndex = values[PACK_SLOT].toInt(),
+            packTag = packTag,
             rank = values[6].toInt(),
             editDistance = values[7].toInt(),
             addedCharacters = values[8].toInt(),

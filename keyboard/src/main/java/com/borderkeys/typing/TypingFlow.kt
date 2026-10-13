@@ -7,8 +7,8 @@ import com.borderkeys.data.theme.KeyboardPreferences
 
 /**
  * One part of the typing pipeline that [TypingOrchestrator] drives. The lifecycle is fixed here;
- * a flow supplies only what it does when a field starts or ends, when the settings change, and
- * when the keyboard goes.
+ * a flow supplies only what it does when a field starts or ends, when the settings or the subtype
+ * change, and when the keyboard goes.
  */
 abstract class TypingFlow {
 
@@ -63,6 +63,11 @@ abstract class TypingFlow {
 
     /** The field's policy changed while it is open; a flow with a gate re-reads it here. */
     protected open fun onPolicyChanged() {}
+
+    /** The user switched the input-method subtype. */
+    fun subtypeChanged() = onSubtypeChanged()
+
+    protected open fun onSubtypeChanged() {}
 
     /** The keyboard is going; the open field is finished first. */
     fun shutdown() {

@@ -8,6 +8,7 @@ import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.language.LanguageTags
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.RefusedWords
 
@@ -46,10 +47,18 @@ class LearningFlow(
         get() = KeyTouches.halfLifeMillis(settings.heatmapHalfLifeDays)
 
     override fun onFieldStarted(field: FieldSession) {
+        answerLanguage = null
+        learnedIn = null
+        wordsSinceChange = null
         applyGate()
         if (field.policy.privateField) {
             learning.discard()
         }
+    }
+
+    /** Pairs and triples go under the subtype's language until an answer names one. */
+    override fun onSubtypeChanged() {
+        answerLanguage = null
     }
 
     /** What was learned in the field is written. */
@@ -100,6 +109,27 @@ class LearningFlow(
     }
 
     /**
+     * The primary language subtag of the last answer in this field and subtype; pairs and triples
+     * are learned under it.
+     */
+    private var answerLanguage: String? = null
+
+    /**
+     * The language the last word in this field was learned under, and how many words have been
+     * learned under it since the language last changed, null while it has not changed in this
+     * field: a pair spans no change of language, nor a triple.
+     */
+    private var learnedIn: String? = null
+    private var wordsSinceChange: Int? = null
+
+    /** The engine answered reading [language]'s pairs and triples; an unknown language is ignored. */
+    fun answeredIn(language: String) {
+        if (language != LanguageTags.UNKNOWN) {
+            answerLanguage = language
+        }
+    }
+
+    /**
      * Drops [word], in any case, from what is waiting to be written, with its pairs and triples.
      * Returns whether the word itself was waiting.
      */
@@ -112,10 +142,11 @@ class LearningFlow(
 
     /**
      * Records a confirmed word, and the pair and triple it makes with [contextWord] and
-     * [grandContextWord], read before the commit. [deliberateCapital] is whether its capital was
-     * typed with shift; [asserted] whether the user chose it on purpose. [taps] is the word as it
-     * was typed, with where each letter was tapped, lined up with [word], or with its first
-     * letters when [completion].
+     * [grandContextWord], read before the commit; a word of one letter is not counted, but its
+     * pair and triple are learned. [deliberateCapital] is whether its capital was typed with shift;
+     * [asserted] whether the user chose it on purpose. [taps] is the word as it was typed, with
+     * where each letter was tapped, lined up with [word], or with its first letters when
+     * [completion].
      */
     fun record(
         word: String,
@@ -127,26 +158,51 @@ class LearningFlow(
         completion: Boolean = false,
     ) {
         val touched = taps != null && recordTouches(taps, word, completion)
-        val learned = learning.enabled && word.length >= MIN_LEARNED_LENGTH
-        if (learned) {
+        var learned = false
+        if (learning.enabled) {
             // The input-method subtype's tag, recorded with the word.
             val locale = host.subtypeTag()
+            // The pair and triple go under the last answer's language, else the subtype's.
+            val language = answerLanguage ?: LanguageTags.primary(locale)
             val now = clock.currentTimeMillis()
+            if (learnedIn != null && language != learnedIn) {
+                wordsSinceChange = 0
+            }
+            val since = wordsSinceChange
+            learnedIn = language
+            wordsSinceChange = since?.plus(1)
             // A word with nothing before it is paired with the sentence start.
             val pairContext = contextWord ?: UserBigram.SENTENCE_START
-            learning.recordPair(pairContext, word, now)
-            if (contextWord != null && grandContextWord != null) {
-                learning.recordTriple(grandContextWord, contextWord, word, now)
-            }
-            if (learning.record(word, locale, now, deliberateCapital, asserted)) {
+            val pairKept = (since == null || since >= 1) && learning.acceptsPair(pairContext, word)
+            val tripleKept = (since == null || since >= 2) && contextWord != null && grandContextWord != null &&
+                learning.acceptsTriple(grandContextWord, contextWord, word)
+            val counted = learning.record(word, locale, now, deliberateCapital, asserted)
+            if (counted) {
                 host.playEffect(EffectEvent.LearnedWord, word)
+            }
+            learned = counted || pairKept
+            if (learned) {
+                // The engine learns the pair and the triple the buffer takes; the buffer keeps what
+                // the engine recorded.
                 engine.learn(
-                    listOf(LearnedWord(word, locale, 1, now, deliberateCapital, asserted)),
-                    pairContext, grandContextWord,
-                )
+                    listOf(LearnedWord(word, locale, if (counted) 1 else 0, now, deliberateCapital, asserted)),
+                    pairContext.takeIf { pairKept }, grandContextWord.takeIf { tripleKept }, language,
+                ) { outcome ->
+                    if (outcome.pairs.isNotEmpty() || outcome.triples.isNotEmpty()) {
+                        learning.recordSteps(outcome.pairs, outcome.triples, clock.currentTimeMillis())
+                        scheduleFlush()
+                    }
+                }
             }
         }
-        if (!(learned || touched) || !host.viewAttached) {
+        if (learned || touched) {
+            scheduleFlush()
+        }
+    }
+
+    /** Writes the buffer now when it is due, else after the debounce, while the views are up. */
+    private fun scheduleFlush() {
+        if (!host.viewAttached) {
             return
         }
         host.removeCallbacks(flushRunnable)
@@ -195,21 +251,23 @@ class LearningFlow(
     }
 
     /**
-     * Whether anything is learned, whether the personal dictionary is consulted, and whether the
-     * learned touch patterns count: off with their switches or in a private field.
+     * Whether anything is learned, whether the personal dictionary is consulted and from how many
+     * uses, and whether the learned touch patterns count: off with their switches or in a private
+     * field.
      */
     private fun applyGate() {
         learning.enabled = session.policy.personalAllowed
         engine.setPersonalModelEnabled(learning.enabled)
+        engine.setLearnAfterUses(settings.learnAfter)
         engine.setTouchModel(
             session.policy.heatmapAllowed, settings.heatmapWeight, settings.heatmapMinTaps,
         )
     }
 
-    /** Writes the buffered learning to the [store]. */
+    /** Writes the buffered learning to the [store]; what the store gives up, the engine drops. */
     private fun flush() {
         val batch = drain() ?: return
-        store.persist(batch)
+        store.persist(batch) { pairs, triples -> engine.dropLinks(pairs, triples) }
     }
 
     /** Empties [learning] and [touches], or returns null when there was nothing in them. */
@@ -222,9 +280,5 @@ class LearningFlow(
             return null
         }
         return LearningBatch(updates, pairs, triples, taps, halfLifeMillis)
-    }
-
-    private companion object {
-        const val MIN_LEARNED_LENGTH = 2
     }
 }

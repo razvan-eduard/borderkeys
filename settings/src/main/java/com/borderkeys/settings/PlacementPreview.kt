@@ -15,17 +15,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.ime.KeyboardCanvasView
 import com.borderkeys.ime.KeyboardHostView
 import com.borderkeys.ime.KeyboardLayout
-import com.borderkeys.ime.KeyboardCanvasView
-import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.ime.LayoutLoader
 import com.borderkeys.ime.TouchGlows
 import com.borderkeys.theme.ThemeMode
@@ -60,7 +59,7 @@ fun PlacementPreview(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(SPACE_LARGE))
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         AndroidView(

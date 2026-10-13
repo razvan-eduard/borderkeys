@@ -4,6 +4,7 @@
 package com.borderkeys.typing
 
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.LanguageSwitchCorrector
 import com.borderkeys.ime.WordCommit
 import com.borderkeys.typing.TypingOrchestrator.Companion.FIELD_HISTORY_CHARS
@@ -36,10 +37,11 @@ class CommitFlow(
     )
 
     /**
-     * Each field starts with no corrections for a change of language to take back, under the
-     * language the engine detects as it opens.
+     * Each field starts at the strictness the settings ask for, with no corrections for a change of
+     * language to take back, under the language the engine detects as it opens.
      */
     override fun onFieldStarted(field: FieldSession) {
+        engine.setCorrectionStrictness(settings.correctionStrictness)
         languageSwitchCorrector.reset()
         if (settings.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             return
@@ -95,7 +97,7 @@ class CommitFlow(
         runningText: Boolean,
         answer: SearchAnswer,
     ): String? {
-        val outcome = decide(typed, ' '.code, fromGesture, runningText, answer)
+        val outcome = decide(typed, KeyCodes.SPACE, fromGesture, runningText, answer)
         return if (outcome.kind == WordCommit.Kind.SHORTCUT) null else outcome.text
     }
 
@@ -219,17 +221,12 @@ class CommitFlow(
     }
 
     /**
-     * What autocorrect writes for [typed] from [answer]: its correction, the letters as typed
-     * when the dictionaries spell them, or null when it would leave an unknown word as typed.
+     * What a space writes for [typed] from [answer] ([outline]), else the letters as typed when
+     * the dictionaries spell them; null when it would leave an unknown word as typed.
      */
-    private fun writtenFor(typed: String, answer: SearchAnswer): String? {
-        val outcome = decide(typed, ' '.code, fromGesture = false, runningText = true, answer = answer)
-        return when {
-            outcome.kind == WordCommit.Kind.CORRECTION -> outcome.text
-            outcome.kind == WordCommit.Kind.NONE && answer.knownWord.isNotEmpty() -> typed
-            else -> null
-        }
-    }
+    private fun writtenFor(typed: String, answer: SearchAnswer): String? =
+        outline(typed, fromGesture = false, runningText = true, answer = answer)
+            ?: typed.takeIf { answer.knownWord.isNotEmpty() }
 
     /**
      * Applies [replacements] in their order, each only if its text is still in place, then puts

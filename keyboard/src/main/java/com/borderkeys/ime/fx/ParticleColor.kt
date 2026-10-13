@@ -3,7 +3,8 @@
 
 package com.borderkeys.ime.fx
 
-import kotlin.math.PI
+import com.borderkeys.geometry.FULL_TURN
+import com.borderkeys.geometry.half
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -68,7 +69,7 @@ object ParticleColor {
 
     /** [color] with its alpha oscillating at [frequencyHz]. */
     fun singleColorPulse(color: Int, ageSeconds: Float, frequencyHz: Float): Int {
-        val t = (sin(ageSeconds * frequencyHz * TWO_PI) + 1f) / 2f
+        val t = half(sin(ageSeconds * frequencyHz * FULL_TURN) + 1f)
         val alpha = channel(MIN_PULSE_ALPHA + (MAX_PULSE_ALPHA - MIN_PULSE_ALPHA) * t)
         return (color and 0x00FFFFFF) or (alpha shl 24)
     }
@@ -85,7 +86,6 @@ object ParticleColor {
         return d
     }
 
-    private val TWO_PI = (2.0 * PI).toFloat()
     private const val ALPHA_OPAQUE = 0xFF shl 24
     private const val HOT_THRESHOLD = 0.6f
     private const val COOL_THRESHOLD = 0.3f

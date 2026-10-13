@@ -4,11 +4,14 @@
 package com.borderkeys.typing
 
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.predict.AnswerScratch
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.NativePredictor
 import com.borderkeys.predict.NewestWins
+import com.borderkeys.predict.PersonalLinks
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.answerRequest
@@ -34,7 +37,8 @@ internal class QueuedEngine(
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
-    ) -> Unit = { _, _, _, _, _, _, _ -> }
+        language: String?,
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> }
 
     private class Task(val request: Boolean, val run: () -> Unit)
 
@@ -81,26 +85,68 @@ internal class QueuedEngine(
                 onSuggestions(
                     answer.candidates(refused), answer.knownWord, answer.knownWordExact,
                     answer.knownWordIsName, answer.query, answer.possessive,
-                    answer.offers(refused),
+                    answer.offers(refused), answer.language,
                 )
             },
         )
     }
 
-    override fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?) {
+    /** The language each [learn] call named, in order. */
+    val learnedIn = mutableListOf<String>()
+
+    /** The word before, and the one before that, each [learn] call named, in order. */
+    val learnedAfter = mutableListOf<Pair<String?, String?>>()
+
+    /**
+     * Whether [learn] reaches the engine; off, the engine's personal model stays as loaded and
+     * nothing is reported as recorded.
+     */
+    var learns = true
+
+    override fun learn(
+        updates: List<LearnedWord>,
+        previous1: String?,
+        previous2: String?,
+        language: String,
+        onLearned: (LearnOutcome) -> Unit,
+    ) {
         if (updates.isEmpty()) {
+            return
+        }
+        learnedIn += language
+        learnedAfter += previous1 to previous2
+        if (!learns) {
             return
         }
         tasks.addLast(
             Task(request = false) {
                 for (update in updates) {
-                    NativePredictor.nativeLearn(
-                        handle, update.word, previous1, previous2, update.deliberateCapital,
-                        update.asserted,
-                    )
+                    onLearned(PersonalLinks.learn(handle, update, previous1, previous2, language))
                 }
             },
         )
+    }
+
+    override fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>) {
+        tasks.addLast(Task(request = false) { PersonalLinks.drop(handle, pairs, triples) })
+    }
+
+    /** The learn-after count last handed over, or null before any. */
+    var learnAfterUses: Int? = null
+        private set
+
+    override fun setLearnAfterUses(uses: Int) {
+        learnAfterUses = uses
+        tasks.addLast(Task(request = false) { NativePredictor.nativeSetLearnAfterUses(handle, uses) })
+    }
+
+    /** The correction strictness last handed over, or null before any. */
+    var correctionStrictness: Float? = null
+        private set
+
+    override fun setCorrectionStrictness(scale: Float) {
+        correctionStrictness = scale
+        tasks.addLast(Task(request = false) { NativePredictor.nativeSetCorrectionStrictness(handle, scale) })
     }
 
     override fun setPersonalModelEnabled(enabled: Boolean) {
@@ -160,8 +206,8 @@ internal class QueuedEngine(
         gestureRequests.cancel()
     }
 
-    /** Receives each answer to [decodeGesture]. */
-    var onGestureCandidates: (List<Candidate>) -> Unit = {}
+    /** Receives each answer to [decodeGesture], with the language it read. */
+    var onGestureCandidates: (List<Candidate>, String?) -> Unit = { _, _ -> }
 
     /** Receives each answer to [decodeGesturePreview]. */
     var onGesturePreviewCandidates: (List<Candidate>) -> Unit = {}
@@ -187,7 +233,7 @@ internal class QueuedEngine(
             Task(request = false) {
                 val found = decode(path, previous1, previous2)
                 if (gestureRequests.isNewest(generation)) {
-                    onGestureCandidates(found)
+                    onGestureCandidates(found, decodeTexts[NativePredictor.TEXT_LANGUAGE])
                 }
             },
         )
@@ -230,12 +276,14 @@ internal class QueuedEngine(
     private val decodeWords = arrayOfNulls<String>(PredictionEngine.MAX_RESULTS)
     private val decodeScores = FloatArray(PredictionEngine.MAX_RESULTS)
     private val decodeProperNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
+    private val decodeTexts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
 
-    /** The decode of [path], best first, the refused words left out. */
+    /** The decode of [path], best first, the refused words left out; its language in [decodeTexts]. */
     private fun decode(path: Path, previous1: String?, previous2: String?): List<Candidate> {
+        decodeTexts.fill(null)
         val found = NativePredictor.nativeDecodeGesture(
             handle, path.xs, path.ys, path.timestamps, path.xs.size, previous1, previous2,
-            decodeWords, decodeScores, decodeProperNoun,
+            decodeWords, decodeScores, decodeProperNoun, decodeTexts,
         )
         return (0 until found).mapNotNull { index ->
             decodeWords[index]?.let { Candidate(it, decodeProperNoun[index], decodeScores[index]) }

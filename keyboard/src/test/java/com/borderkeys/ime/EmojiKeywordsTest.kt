@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.data.RepositoryRoot
+import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,9 +12,7 @@ import java.io.File
 
 class EmojiKeywordsTest {
 
-    private val root = generateSequence(File("").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
-    private val emojiAssets = File(root, "keyboard/src/main/assets/emoji")
+    private val emojiAssets = RepositoryRoot.file("keyboard/src/main/assets/emoji")
 
     @Test
     fun `the languages read are the tags' languages, each once, and English last`() {
@@ -22,7 +22,7 @@ class EmojiKeywordsTest {
             listOf("en", "de"),
             EmojiKeywords.languagesFor(listOf("en-US", "de-DE", "en-GB")),
         )
-        assertEquals("fr", EmojiKeywords.languageOf("fr-FR"))
+        assertEquals("fr", LanguageTags.primary("fr-FR"))
     }
 
     /**

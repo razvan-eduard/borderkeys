@@ -79,7 +79,7 @@ fun ColourPickerSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(SPACE_XLARGE),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onDismiss) {
@@ -92,11 +92,11 @@ fun ColourPickerSheet(
                 Text(
                     strings[Keys.THEME_COLOUR_PICKER],
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = SPACE_MEDIUM),
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(SPACE_XXLARGE))
 
             Column(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -104,32 +104,32 @@ fun ColourPickerSheet(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(96.dp)
+                        .size(PREVIEW_SWATCH_SIZE)
                         .clip(CircleShape)
                         .background(Color(picked))
-                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                        .border(BORDER_WIDTH, MaterialTheme.colorScheme.outline, CircleShape),
                 )
                 // The hex value, not a catalogue string.
                 Text(
                     hexOf(picked),
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = SPACE_MEDIUM_PLUS),
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(SPACE_XXLARGE))
 
             // The swatches again; tapping one loads it into the sliders without choosing it.
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
             ) {
                 for (colour in palette) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
+                            .size(SWATCH_SIZE)
                             .background(Color(colour), CircleShape)
-                            .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                            .border(BORDER_WIDTH, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                             .clickable {
                                 val hsv = FloatArray(3)
                                 android.graphics.Color.colorToHSV(colour, hsv)
@@ -141,7 +141,7 @@ fun ColourPickerSheet(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(SPACE_XLARGE))
 
             Text(strings[Keys.THEME_HUE], style = MaterialTheme.typography.labelLarge)
             Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
@@ -152,13 +152,13 @@ fun ColourPickerSheet(
             Text(strings[Keys.THEME_BRIGHTNESS], style = MaterialTheme.typography.labelLarge)
             Slider(value = brightness, onValueChange = { brightness = it }, valueRange = 0f..1f)
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(SPACE_XXLARGE))
 
             Button(onClick = { onPick(picked) }, modifier = Modifier.fillMaxWidth()) {
                 Text(strings[Keys.THEME_USE_COLOUR])
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(SPACE_XLARGE))
         }
     }
 }
@@ -248,14 +248,14 @@ fun ColourRow(
         )
     }
 
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL)) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(top = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(top = SPACE_SMALL),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
         ) {
             for (colour in ThemePalette.COLOURS) {
                 ColourSwatch(
@@ -293,14 +293,14 @@ fun ColourRow(
             val outline = MaterialTheme.colorScheme.outline
             Box(
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(SWATCH_SIZE)
                     .drawBehind {
                         drawCircle(
                             color = outline,
                             style = Stroke(
-                                width = 1.dp.toPx(),
+                                width = BORDER_WIDTH.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(
-                                    floatArrayOf(4.dp.toPx(), 3.dp.toPx()),
+                                    floatArrayOf(DASH_ON.toPx(), DASH_OFF.toPx()),
                                 ),
                             ),
                         )
@@ -322,10 +322,10 @@ private fun ColourSwatch(
 ) {
     Box(
         modifier = Modifier
-            .size(30.dp)
+            .size(SWATCH_SIZE)
             .background(Color(colour), CircleShape)
             .border(
-                width = if (selected) 3.dp else 1.dp,
+                width = if (selected) SELECTED_BORDER_WIDTH else BORDER_WIDTH,
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -346,10 +346,10 @@ private fun ColourSwatch(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp)
-                    .size(8.dp)
+                    .offset(x = SPACE_TINY, y = -SPACE_TINY)
+                    .size(SWATCH_DOT_SIZE)
                     .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                    .border(BORDER_WIDTH, MaterialTheme.colorScheme.surface, CircleShape),
             )
         }
     }
@@ -357,3 +357,12 @@ private fun ColourSwatch(
 
 private const val RGB_MASK = 0x00FFFFFF
 private const val ALPHA_MASK = 0xFF000000.toInt()
+
+/** The picked colour's preview, a swatch, and the dot that marks one. */
+private val PREVIEW_SWATCH_SIZE = 96.dp
+private val SWATCH_SIZE = 30.dp
+private val SWATCH_DOT_SIZE = 8.dp
+
+/** The dashes of an empty swatch's outline, and the gaps between them. */
+private val DASH_ON = 4.dp
+private val DASH_OFF = 3.dp

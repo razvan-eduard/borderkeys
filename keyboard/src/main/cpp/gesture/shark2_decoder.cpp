@@ -174,7 +174,7 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
                     const char* const text =
                         trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);
                     if (text != nullptr && textLength != 0) {
-                        score += scorer_.userBoost(text, textLength);
+                        score += scorer_.personalScore(text, textLength);
                         heap.offer(Candidate{packIndex, wordIndex, score});
                     }
                 }

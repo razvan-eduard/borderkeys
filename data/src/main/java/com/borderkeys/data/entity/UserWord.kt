@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
  * [count] goes up every time the word is committed; [asserted] only when it was chosen on
  * purpose: tapped on the strip, or put back after a correction took it away. A word no dictionary
  * holds is offered as a completion, and left alone by autocorrect, once it has been asserted or
- * written often enough (`kMinPersonalEvidence` in engine.cpp). The word is the primary key.
+ * written as many times as `KeyboardPreferences.learnAfter` asks. The word is the primary key.
  */
 @Entity(
     tableName = "user_words",

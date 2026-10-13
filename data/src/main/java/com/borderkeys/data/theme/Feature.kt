@@ -26,12 +26,12 @@ enum class FieldRequirement {
 
 /**
  * A feature the settings switch on and a field may refuse: what it needs from the field, the
- * setting that switches it on, and the feature it sits under, which has to be on too. The
- * settings screens read [on]; the keyboard reads the field policy's own `on`, which adds what
- * the field allows.
+ * setting that switches it on, what else it needs from the settings, and the feature it sits
+ * under, which has to be on too. The settings screens read [on]; the keyboard reads the field
+ * policy's own `on`, which adds what the field allows.
  */
 enum class Feature(val needs: FieldRequirement) {
-    /** Remember what you copy. */
+    /** Clipboard history. */
     CLIPBOARD_HISTORY(FieldRequirement.CLIPBOARD),
 
     /** Offer what you copied: the chip on the strip. */
@@ -39,6 +39,9 @@ enum class Feature(val needs: FieldRequirement) {
 
     /** Remember photos: a copied photo kept, offered and pasted. */
     PHOTOS(FieldRequirement.CLIPBOARD),
+
+    /** A copied photo offered on the strip. */
+    PHOTO_OFFER(FieldRequirement.CLIPBOARD),
 
     /** Remember screenshots: the folder watched and each new screenshot kept. */
     SCREENSHOTS(FieldRequirement.CLIPBOARD),
@@ -60,6 +63,7 @@ enum class Feature(val needs: FieldRequirement) {
     val parent: Feature?
         get() = when (this) {
             CLIPBOARD_OFFER, PHOTOS, SCREENSHOTS -> CLIPBOARD_HISTORY
+            PHOTO_OFFER -> PHOTOS
             SCREENSHOT_OFFER -> SCREENSHOTS
             SCREENSHOT_CASCADE -> SCREENSHOT_OFFER
             CLIPBOARD_HISTORY, SWIPE, STRIP -> null
@@ -70,14 +74,26 @@ enum class Feature(val needs: FieldRequirement) {
         CLIPBOARD_HISTORY -> preferences.clipboardEnabled
         CLIPBOARD_OFFER -> preferences.clipboardSuggestion
         PHOTOS -> preferences.photosRemembered
+        PHOTO_OFFER -> preferences.clipboardSuggestion
         SCREENSHOTS -> preferences.screenshotsRemembered
         SCREENSHOT_OFFER -> preferences.clipboardSuggestion
-        SCREENSHOT_CASCADE -> preferences.screenshotCascade && preferences.imageOfferLimited
+        SCREENSHOT_CASCADE -> preferences.screenshotCascade
         SWIPE -> preferences.swipeEnabled
         STRIP -> preferences.showSuggestionStrip
     }
 
-    /** Whether the settings switch this feature on: its own setting and every parent's. */
-    fun on(preferences: KeyboardPreferences): Boolean =
-        switchedOn(preferences) && (parent?.on(preferences) ?: true)
+    /**
+     * Whether this feature would be on were its own setting on: what else it needs from the
+     * settings (an offer window that is not off, for the cascade) and its parent on.
+     */
+    fun canSwitch(preferences: KeyboardPreferences): Boolean {
+        val needed = when (this) {
+            SCREENSHOT_CASCADE -> preferences.imageOfferLimited
+            else -> true
+        }
+        return needed && (parent?.on(preferences) ?: true)
+    }
+
+    /** Whether the settings switch this feature on: its own setting, what else it needs, every parent. */
+    fun on(preferences: KeyboardPreferences): Boolean = switchedOn(preferences) && canSwitch(preferences)
 }

@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
 import kotlin.math.floor
 
 /** How long one pass of the assistant's ring takes to loop. */
@@ -50,7 +52,7 @@ fun rememberRingShift(): State<Float> {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween((RING_PERIOD_MILLIS / effects.speed).toInt(), easing = LinearEasing),
+            animation = tween(millisAtSpeed(RING_PERIOD_MILLIS, effects.speed), easing = LinearEasing),
         ),
     )
     return remember { derivedStateOf { floor(shift.value * RING_STEPS) / RING_STEPS } }
@@ -61,7 +63,7 @@ fun rememberRingShift(): State<Float> {
  * along the diagonal of a square [span] px wide.
  */
 fun ringBrush(shift: Float, alpha: Float = 1f, span: Float = DRAFT_BOX_SPAN): Brush {
-    val x = (shift * span * 2f) - span
+    val x = bothSides(shift * span) - span
     val colours = if (alpha >= 1f) AI_RING_COLOURS else AI_RING_COLOURS.map { it.copy(alpha = alpha) }
     return Brush.linearGradient(
         colors = colours,
@@ -84,7 +86,7 @@ fun Modifier.ringBorder(shift: State<Float>, width: Dp, shape: Shape): Modifier 
             layoutDirection,
             this,
         )
-        translate(stroke / 2f, stroke / 2f) {
+        translate(half(stroke), half(stroke)) {
             drawOutline(outline, ringBrush(shift.value), style = Stroke(stroke))
         }
     }
@@ -112,6 +114,9 @@ private const val RING_REST = 0.5f
 /** How many positions the gradient takes along one loop. */
 private const val RING_STEPS = 75f
 
+/** The shortest motion at any speed. */
+private const val SHORTEST_MOTION_MILLIS = 1
+
 /** Whether the draft box moves: its switch on, and the animations playing under their mode. */
 @Composable
 fun rememberDraftBoxMotion(): Boolean {
@@ -119,9 +124,17 @@ fun rememberDraftBoxMotion(): Boolean {
     return effects.draftBoxMotion && effects.plays(ValueAnimator.areAnimatorsEnabled())
 }
 
-/** How fast the animations run, from the Animations screen's dial; 1 the default. */
+/** How fast the animations run, from the Animations screen's speed slider. */
 @Composable
 fun rememberAnimationSpeed(): Float {
     val effects by rememberEffects()
     return effects.speed
 }
+
+/** [millis] at the animation [speed], at least [SHORTEST_MOTION_MILLIS]. */
+internal fun millisAtSpeed(millis: Int, speed: Float): Int =
+    (millis / speed).toInt().coerceAtLeast(SHORTEST_MOTION_MILLIS)
+
+/** [millis] at the animation [speed] while the draft box moves, else none. */
+internal fun motionMillis(motion: Boolean, speed: Float, millis: Int): Int =
+    if (motion) millisAtSpeed(millis, speed) else 0

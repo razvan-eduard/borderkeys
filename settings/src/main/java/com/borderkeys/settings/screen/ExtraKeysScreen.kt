@@ -4,7 +4,6 @@
 package com.borderkeys.settings.screen
 
 import android.content.Context
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.DeadKeys
 import com.borderkeys.ime.ExtraKeys
@@ -81,11 +81,7 @@ private class Offered(val id: String, val isAccent: Boolean, val languages: List
 
 /** The extra keys of the enabled subtypes' languages, each once, in the order they are added. */
 private fun offeredExtraKeys(context: Context): List<Offered> {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ?: return emptyList()
-    val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
-        ?: return emptyList()
-    val tags = manager.getEnabledInputMethodSubtypeList(ours, true).map { it.languageTag }.filter { it.isNotEmpty() }.distinct()
+    val tags = KeyboardSubtypes.enabledTags(context)
     val table = ExtraKeys.load(context.assets)
     val byId = LinkedHashMap<String, Offered>()
     for (tag in tags) {

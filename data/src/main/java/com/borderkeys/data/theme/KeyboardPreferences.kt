@@ -103,8 +103,7 @@ data class KeyboardPreferences(
     val blockOffensiveWords: Boolean = false,
 
     /**
-     * Read only when [learnAfterUses] is absent, from a file written before it: one of the
-     * LEARNING_ constants below.
+     * Read only when [learnAfterUses] is absent: one of the LEARNING_ constants below.
      */
     val learningSpeed: Int = LEARNING_BALANCED,
 
@@ -120,6 +119,18 @@ data class KeyboardPreferences(
      * [UNLEARN_HALF_LIFE_STEPS]. Clamped on read.
      */
     val unlearnHalfLifeDays: Int = DEFAULT_UNLEARN_HALF_LIFE_DAYS,
+
+    /**
+     * After how many days unused a word written only once is deleted, one of
+     * [UNCONFIRMED_LIFE_STEPS]; [UNCONFIRMED_LIFE_OFF] keeps it. Clamped on read.
+     */
+    val unconfirmedLifeDays: Int = DEFAULT_UNCONFIRMED_LIFE_DAYS,
+
+    /**
+     * How often, in days, the personal dictionary is cleaned up: counts fade, words used once and
+     * unused are deleted, and words past the limit go. One of [CLEAN_UP_STEPS]. Clamped on read.
+     */
+    val cleanUpIntervalDays: Int = DEFAULT_CLEAN_UP_INTERVAL_DAYS,
 
     /**
      * How many learned words are kept, a multiple of [LEARNED_WORD_LIMIT_STEP]; past it, the words
@@ -648,7 +659,7 @@ data class KeyboardPreferences(
     val correctionDistance: Int = CORRECTION_DISTANCE_NORMAL,
 
     /** The shortest word a delimiter will replace. */
-    val minCorrectionLength: Int = 3,
+    val minCorrectionLength: Int = DEFAULT_MIN_CORRECTION_LENGTH,
 
     /**
      * How rare a word the dictionaries know but never offer may be and still count as spelled,
@@ -851,6 +862,9 @@ data class KeyboardPreferences(
         },
         unlearnHalfLifeDays =
             UNLEARN_HALF_LIFE_STEPS[nearestStep(UNLEARN_HALF_LIFE_STEPS, unlearnHalfLifeDays)],
+        unconfirmedLifeDays =
+            UNCONFIRMED_LIFE_STEPS[nearestStep(UNCONFIRMED_LIFE_STEPS, unconfirmedLifeDays)],
+        cleanUpIntervalDays = CLEAN_UP_STEPS[nearestStep(CLEAN_UP_STEPS, cleanUpIntervalDays)],
         heatmapWeight = if (heatmapWeight.isNaN()) {
             DEFAULT_HEATMAP_WEIGHT
         } else {
@@ -886,7 +900,7 @@ data class KeyboardPreferences(
         quickTiles = QuickTile.fromIds(quickTiles).map { it.id },
         effects = effects.copy(
             mode = effects.mode?.takeIf { it in EffectsSettings.MODE_OFF..EffectsSettings.MODE_ON },
-            speed = effects.speed.takeIf { it.isFinite() }?.coerceIn(EffectsSettings.MIN_SPEED, EffectsSettings.MAX_SPEED)
+            speed = effects.speed.takeIf { it.isFinite() }?.let(EffectsSettings::nearestSpeed)
                 ?: EffectsSettings.DEFAULT_SPEED,
         ),
         timestampPattern = TimestampPattern.sanitised(timestampPattern),
@@ -1036,12 +1050,23 @@ data class KeyboardPreferences(
         const val LEARNING_IMMEDIATE = 2
 
         /** [learnAfterUses]' stops and default. */
-        val LEARN_AFTER_USES_STEPS: List<Int> = listOf(1, 2, 3, 5, 10)
+        val LEARN_AFTER_USES_STEPS: List<Int> = listOf(1, 2, 3, 5, 8, 13)
         const val DEFAULT_LEARN_AFTER_USES = 3
 
         /** [unlearnHalfLifeDays]' stops and default. */
         val UNLEARN_HALF_LIFE_STEPS: List<Int> = listOf(7, 14, 30, 90, 180, 365)
         const val DEFAULT_UNLEARN_HALF_LIFE_DAYS = 90
+
+        /** [unconfirmedLifeDays]' Off, stops and default. */
+        const val UNCONFIRMED_LIFE_OFF = 0
+        val UNCONFIRMED_LIFE_STEPS: List<Int> = listOf(UNCONFIRMED_LIFE_OFF, 10, 30, 90)
+        const val DEFAULT_UNCONFIRMED_LIFE_DAYS = 30
+
+        const val CLEAN_UP_DAILY = 1
+        const val CLEAN_UP_WEEKLY = 7
+        const val CLEAN_UP_MONTHLY = 30
+        val CLEAN_UP_STEPS: List<Int> = listOf(CLEAN_UP_DAILY, CLEAN_UP_WEEKLY, CLEAN_UP_MONTHLY)
+        const val DEFAULT_CLEAN_UP_INTERVAL_DAYS = CLEAN_UP_WEEKLY
 
         /** [learnedWordLimit]'s range, step and default. */
         const val MIN_LEARNED_WORD_LIMIT = 1_000
@@ -1179,6 +1204,9 @@ data class KeyboardPreferences(
         const val MIN_LONG_PRESS_MILLIS = 150
         const val MAX_LONG_PRESS_MILLIS = 700
 
+        /** The settings screen's step for the long-press time, in milliseconds. */
+        const val LONG_PRESS_STEP_MILLIS = 50
+
         /** How many recent emoji are kept. */
         const val MAX_EMOJI_RECENTS = 24
 
@@ -1189,7 +1217,7 @@ data class KeyboardPreferences(
         )
 
         /** How many entries are kept, as the values a slider steps through. */
-        val HISTORY_SIZE_STEPS: List<Int> = listOf(10, 20, 30, 50, 75, 100, 150, 200, 500)
+        val HISTORY_SIZE_STEPS: List<Int> = listOf(10, 20, 30, 50, 60, 75, 100, 150, 200, 500)
 
         const val DEFAULT_CLIPBOARD_IMAGE_MAX_MB = 10
         const val MIN_CLIPBOARD_IMAGE_MAX_MB = 1
@@ -1248,8 +1276,8 @@ data class KeyboardPreferences(
             else -> 1f
         }
 
-        /** Longest language code accepted from the stored file. */
-        const val MAX_LANGUAGE_TAG = 16
+        /** Longest language code accepted from the stored file: the engine's kMaxLanguageTagLength. */
+        const val MAX_LANGUAGE_TAG = 15
 
         /**
          * The range [suggestionCount] is clamped to; [MAX_SUGGESTIONS] also sizes
@@ -1266,7 +1294,7 @@ data class KeyboardPreferences(
 
         /**
          * The range [radialPauseDwellMillis] is clamped to, in milliseconds; every bound is a
-         * multiple of 100, the settings screen's step. At `0` the ring opens as soon as
+         * multiple of [RADIAL_STEP_MILLIS]. At `0` the ring opens as soon as
          * [radialMinPathLetters] is crossed.
          */
         const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 0
@@ -1278,10 +1306,13 @@ data class KeyboardPreferences(
         const val MAX_RADIAL_MIN_PATH_LETTERS = 3f
         const val DEFAULT_RADIAL_MIN_PATH_LETTERS = 1f
 
-        /** The range [radialPickTimeoutMillis] is clamped to, in milliseconds, multiples of 100. */
+        /** The range [radialPickTimeoutMillis] is clamped to, in milliseconds, multiples of [RADIAL_STEP_MILLIS]. */
         const val MIN_RADIAL_PICK_TIMEOUT_MILLIS = 500
         const val MAX_RADIAL_PICK_TIMEOUT_MILLIS = 3000
         const val DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS = 1200
+
+        /** The settings screen's step for the ring's times, in milliseconds. */
+        const val RADIAL_STEP_MILLIS = 100
 
         /** [radialMenuAnchor] values. */
         const val RADIAL_ANCHOR_FINGER = 0
@@ -1327,9 +1358,10 @@ data class KeyboardPreferences(
         const val RADIAL_TRUSTED_CHIP = 0
         const val RADIAL_TRUSTED_AUTO_APPLY = 1
 
-        /** The range [minCorrectionLength] is clamped to. */
+        /** The range [minCorrectionLength] is clamped to, and its default. */
         const val MIN_CORRECTION_LENGTH = 1
         const val MAX_CORRECTION_LENGTH = 5
+        const val DEFAULT_MIN_CORRECTION_LENGTH = 3
 
         /** The range [correctionStrictness] is clamped to, and the value "Reset" restores. */
         const val MIN_CORRECTION_STRICTNESS = 0.5f

@@ -5,6 +5,8 @@ package com.borderkeys.typing
 
 import android.text.InputType
 import com.borderkeys.data.entity.KeyTouch
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 
@@ -227,7 +229,7 @@ internal class MemoryLearningStore : LearningStore {
     /** Every heatmap total written, in order. */
     val touches: List<KeyTouch> get() = batches.flatMap { it.touches }
 
-    override fun persist(batch: LearningBatch) {
+    override fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit) {
         batches += batch
     }
 

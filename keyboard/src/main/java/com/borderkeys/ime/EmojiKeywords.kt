@@ -4,6 +4,7 @@
 package com.borderkeys.ime
 
 import android.content.res.AssetManager
+import com.borderkeys.language.LanguageTags
 
 /**
  * The keywords the emoji panel searches beside the names: Unicode's CLDR annotations, compiled by
@@ -13,15 +14,12 @@ internal object EmojiKeywords {
 
     private const val DIRECTORY = "emoji/keywords"
 
-    /** A language tag's language: "ro-RO" gives "ro". */
-    fun languageOf(tag: String): String = tag.substringBefore('-').lowercase()
-
     /** The keyword files to read for [tags], each language once, English last. */
     fun languagesFor(tags: List<String>): List<String> {
         val languages = ArrayList<String>()
         for (tag in tags) {
-            val language = languageOf(tag)
-            if (language.isNotEmpty() && language !in languages) {
+            val language = LanguageTags.primary(tag)
+            if (language != LanguageTags.UNKNOWN && language !in languages) {
                 languages += language
             }
         }

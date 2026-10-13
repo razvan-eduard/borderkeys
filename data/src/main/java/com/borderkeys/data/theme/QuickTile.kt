@@ -77,8 +77,24 @@ enum class QuickTile(val id: Int, val kind: Kind) {
 
     enum class Kind { ACTION, SWITCH, POSITION }
 
+    /** The feature this tile switches, under whose gate it is drawn; null for none. */
+    val feature: Feature?
+        get() = when (this) {
+            CLIPBOARD_OFFER -> Feature.CLIPBOARD_OFFER
+            SWIPE -> Feature.SWIPE
+            SUGGESTION_STRIP -> Feature.STRIP
+            else -> null
+        }
+
+    /** What the field has to allow for this tile to be used: [FEATURES] needs what its quick action does. */
+    val requires: FieldRequirement
+        get() = when (this) {
+            FEATURES -> QuickAction.FEATURES_SWITCH.requires
+            else -> FieldRequirement.NONE
+        }
+
     companion object {
-        /** What a new install starts with: the panel as it was before it could be arranged. */
+        /** What a new install starts with. */
         val DEFAULT: List<QuickTile> = listOf(RESIZE, DOCK, LEFT, RIGHT, FLOAT, NUMBER_ROW)
 
         /** The most tiles the panel keeps, whatever the screen shows of them. */

@@ -30,6 +30,11 @@ inline constexpr uint32_t kMaxNgramCapacity = 1u << 26;
 // The most part-of-speech tags, one byte each.
 inline constexpr uint32_t kMaxPosTags = 256u;
 
+// The longest language tag, in bytes, without its terminator.
+inline constexpr int kMaxLanguageTagLength = 15;
+// A language tag's field: the tag, NUL padded to its terminator.
+inline constexpr int kLanguageTagBytes = kMaxLanguageTagLength + 1;
+
 // Section table. Order is fixed; a section may be empty (length 0) but may not be missing.
 enum BkdSectionIndex : uint32_t {
     kSectionAlphabet = 0,     // uint32_t[alphabetCount], sorted folded code points
@@ -79,7 +84,7 @@ struct BkdHeader {
     uint32_t contentCrc32;     // CRC-32 over [headerBytes, fileBytes)
     uint32_t headerCrc32;      // CRC-32 over the header with this field taken as zero
 
-    char languageTag[16];      // BCP-47, NUL padded, NUL terminated
+    char languageTag[kLanguageTagBytes];  // BCP-47, NUL padded, NUL terminated
 
     uint32_t wordCount;
     uint32_t nodeCount;

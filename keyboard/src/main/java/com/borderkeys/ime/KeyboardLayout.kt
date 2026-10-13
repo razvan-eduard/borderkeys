@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.language.LanguageTags
+
 /**
  * A keyboard layout as described in an asset: rows of keys with relative widths, no pixels.
  * [KeyboardCanvasView] compiles it into arrays once it knows its size.
@@ -15,7 +17,7 @@ class KeyboardLayout(
     val modmap: Modmap = Modmap.NONE,
 ) {
     /** Whether the layout's language is written right to left; the strip and the ring follow it. */
-    val rightToLeft: Boolean = languageTag.substringBefore('-').lowercase() in RIGHT_TO_LEFT_LANGUAGES
+    val rightToLeft: Boolean = LanguageTags.primary(languageTag) in RIGHT_TO_LEFT_LANGUAGES
 
     class Row(
         /** Leading empty space, in key-width units. */
@@ -80,7 +82,7 @@ class KeyboardLayout(
                 // The row's own absorber if it names one, else the space bar.
                 val absorber = remaining.firstOrNull {
                     KeyFlags.has(it.flags, KeyFlags.ABSORBS_FREED_WIDTH)
-                } ?: remaining.firstOrNull { it.code == ' '.code }
+                } ?: remaining.firstOrNull { it.code == KeyCodes.SPACE }
                 Row(
                     row.indent, row.heightScale,
                     remaining.map { key ->

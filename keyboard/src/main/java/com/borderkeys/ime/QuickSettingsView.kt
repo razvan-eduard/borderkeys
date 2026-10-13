@@ -10,18 +10,27 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.text.TextPaint
+import android.text.TextUtils
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import androidx.core.content.ContextCompat
+import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.data.theme.QuickTile
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.max
 import kotlin.math.min
+
+/** How long after the quick panel opens a touch on it is ignored. */
+internal const val OPEN_GUARD_MILLIS = 500L
 
 /**
  * The quick panel over the keys: a grid of tiles, one setting or action each, drawn in the
@@ -37,8 +46,11 @@ class QuickSettingsView(
     private val strings: LanguageManager,
 ) : View(context) {
 
-    /** One tile as drawn: which, and whether it is on, or the current position. */
-    class TileState(val tile: QuickTile, val on: Boolean)
+    /**
+     * One tile as drawn: which, whether it is on or the current position, and whether the field
+     * lets it be used; one that may not is dimmed, as the bar dims a button, and ignores taps.
+     */
+    class TileState(val tile: QuickTile, val on: Boolean, val enabled: Boolean = true)
 
     interface Listener {
         /** A tile was tapped: an action runs, a switch flips, a position is chosen. */
@@ -79,7 +91,7 @@ class QuickSettingsView(
         }
 
     /** How fast the scrolling labels run, 1 the default. */
-    var animationSpeed: Float = 1f
+    var animationSpeed: Float = EffectsSettings.DEFAULT_SPEED
 
     /** Whether animations play at all: an [com.borderkeys.data.theme.EffectsSettings] mode. */
     var animationMode: Int = com.borderkeys.data.theme.EffectsSettings.MODE_SYSTEM
@@ -95,7 +107,7 @@ class QuickSettingsView(
 
     /**
      * The state to draw, pushed from the service whenever the preferences flow emits. While a
-     * tile is being dragged the given order is set aside, since it is the one being changed.
+     * tile is being dragged the given order is set aside.
      */
     fun setState(tiles: List<TileState>, available: List<QuickTile>, fullSettings: Boolean, alignRight: Boolean) {
         this.tiles = if (dragging >= 0) {
@@ -135,7 +147,7 @@ class QuickSettingsView(
     // ---- paints ----------------------------------------------------------------------------
 
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val secondaryPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -184,15 +196,15 @@ class QuickSettingsView(
         if (w <= 0 || h <= 0) {
             return
         }
-        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else h / 5f
-        padding = w * 0.04f
-        gap = w * 0.02f
-        headerHeight = row * 0.8f
-        val footerHeight = row * 0.8f
+        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else h / FALLBACK_ROWS
+        padding = w * PADDING_FRACTION
+        gap = w * GAP_FRACTION
+        headerHeight = row * EDGE_ROW_SHARE
+        val footerHeight = row * EDGE_ROW_SHARE
         footerTop = h - footerHeight
         gridTop = headerHeight
         val gridHeight = footerTop - gridTop
-        cellWidth = (w - padding * 2f - gap * (columns - 1)) / columns
+        cellWidth = (w - bothSides(padding) - gap * (columns - 1)) / columns
         // As many rows as fit at the smallest cell, each then as tall as the room allows.
         val smallest = cellWidth * MIN_CELL_ASPECT
         rows = max(1, ((gridHeight + gap) / (smallest + gap)).toInt())
@@ -202,13 +214,13 @@ class QuickSettingsView(
         nominalLabelPx = cellHeight * LABEL_FRACTION
         badgeRadius = cellHeight * BADGE_FRACTION
 
-        titlePaint.textSize = headerHeight * 0.42f
-        secondaryPaint.textSize = headerHeight * 0.34f
-        accentPaint.textSize = headerHeight * 0.36f
-        outlinePaint.strokeWidth = row * 0.05f
-        dashedPaint.strokeWidth = row * 0.035f
-        dashedPaint.pathEffect = DashPathEffect(floatArrayOf(row * 0.12f, row * 0.08f), 0f)
-        badgeMarkPaint.strokeWidth = badgeRadius * 0.3f
+        titlePaint.textSize = headerHeight * TITLE_TEXT_SHARE
+        secondaryPaint.textSize = headerHeight * SECONDARY_TEXT_SHARE
+        accentPaint.textSize = headerHeight * ACCENT_TEXT_SHARE
+        outlinePaint.strokeWidth = row * OUTLINE_STROKE_SHARE
+        dashedPaint.strokeWidth = row * DASH_STROKE_SHARE
+        dashedPaint.pathEffect = DashPathEffect(floatArrayOf(row * DASH_ON_SHARE, row * DASH_OFF_SHARE), 0f)
+        badgeMarkPaint.strokeWidth = badgeRadius * BADGE_MARK_SHARE
         onThemeChanged()
         fitLabels()
     }
@@ -229,6 +241,12 @@ class QuickSettingsView(
     internal fun cellCentre(index: Int): android.graphics.PointF {
         cellAt(index, cell)
         return android.graphics.PointF(cell.centerX(), cell.centerY())
+    }
+
+    /** The centre of the remove badge on cell [index]. */
+    internal fun badgeCentre(index: Int): android.graphics.PointF {
+        cellAt(index, cell)
+        return android.graphics.PointF(badgeCentreX(cell), badgeCentreY(cell))
     }
 
     /** The cell under ([x], [y]), or -1. */
@@ -336,16 +354,8 @@ class QuickSettingsView(
     }
 
     /** [label] cut with an ellipsis to [room], when it does not fit. */
-    private fun fitted(label: String, room: Float): String {
-        if (labelPaint.measureText(label) <= room) {
-            return label
-        }
-        var end = label.length
-        while (end > 1 && labelPaint.measureText(label, 0, end) + labelPaint.measureText("…") > room) {
-            end--
-        }
-        return label.substring(0, end) + "…"
-    }
+    private fun fitted(label: String, room: Float): String =
+        TextUtils.ellipsize(label, labelPaint, room, TextUtils.TruncateAt.END).toString()
 
     // ---- drawing -----------------------------------------------------------------------------
 
@@ -386,7 +396,7 @@ class QuickSettingsView(
             Mode.PICK -> strings[Keys.PANEL_BACK]
         }
         titlePaint.getFontMetrics(metrics)
-        val baseline = headerHeight / 2f - (metrics.ascent + metrics.descent) / 2f
+        val baseline = half(headerHeight) - middle(metrics.ascent, metrics.descent)
         val titleX = if (alignRight) padding else w - padding - titlePaint.measureText(title)
         canvas.drawText(title, titleX, baseline, titlePaint)
         val actionX = if (alignRight) w - padding - accentPaint.measureText(action) else padding
@@ -395,7 +405,7 @@ class QuickSettingsView(
 
     private fun drawFooter(canvas: Canvas, w: Float, h: Float) {
         accentPaint.getFontMetrics(metrics)
-        val baseline = footerTop + (h - footerTop) / 2f - (metrics.ascent + metrics.descent) / 2f
+        val baseline = footerTop + half(h - footerTop) - middle(metrics.ascent, metrics.descent)
         if (fullSettings && mode != Mode.PICK) {
             val label = strings[Keys.PANEL_ALL_SETTINGS]
             val x = if (alignRight) w - padding - accentPaint.measureText(label) else padding
@@ -411,7 +421,9 @@ class QuickSettingsView(
     private fun drawTile(canvas: Canvas, state: TileState, bounds: RectF, pressed: Boolean) {
         val radius = paints.keyCornerRadiusPx
         val on = state.on && mode != Mode.PICK
-        canvas.drawRoundRect(bounds, radius, radius, if (on || pressed) paints.keyPressedFill else paints.keyFill)
+        val dimmed = mode == Mode.VIEW && !state.enabled
+        val pressedShown = pressed && !dimmed
+        canvas.drawRoundRect(bounds, radius, radius, if (on || pressedShown) paints.keyPressedFill else paints.keyFill)
         if (on) {
             canvas.drawRoundRect(bounds, radius, radius, outlinePaint)
         } else if (paints.showKeyBorders) {
@@ -426,10 +438,11 @@ class QuickSettingsView(
         val labelHeight = metrics.descent - metrics.ascent
         val iconGap = cellHeight * ICON_LABEL_GAP_FRACTION
         val stack = iconPx + iconGap + labelHeight
-        val iconTop = bounds.top + (bounds.height() - stack) / 2f
+        val iconTop = bounds.top + half(bounds.height() - stack)
         val icon = icons[state.tile.id]
+        val dimLayer = if (dimmed) canvas.saveLayerAlpha(bounds, QuickActionsView.DISALLOWED_ALPHA) else null
         if (icon != null) {
-            val left = (bounds.centerX() - iconPx / 2f).toInt()
+            val left = (bounds.centerX() - half(iconPx.toFloat())).toInt()
             icon.setBounds(left, iconTop.toInt(), left + iconPx, iconTop.toInt() + iconPx)
             icon.setTint(paints.label.color)
             icon.draw(canvas)
@@ -441,26 +454,31 @@ class QuickSettingsView(
                 android.os.SystemClock.uptimeMillis() - marqueeStartedAt, wholeWidth - room,
                 resources.displayMetrics.density * LabelMarquee.PACE_DP_PER_SECOND, animationSpeed,
             )
-            val left = bounds.centerX() - room / 2f
+            val left = bounds.centerX() - half(room)
             canvas.save()
             canvas.clipRect(left, labelBaseline + metrics.ascent, left + room, labelBaseline + metrics.descent)
             canvas.drawText(label, left - offset, labelBaseline, labelPaint)
             canvas.restore()
             postInvalidateOnAnimation()
         } else {
-            canvas.drawText(label, bounds.centerX() - labelPaint.measureText(label) / 2f, labelBaseline, labelPaint)
+            canvas.drawText(label, bounds.centerX() - half(labelPaint.measureText(label)), labelBaseline, labelPaint)
         }
+        dimLayer?.let(canvas::restoreToCount)
         if (mode == Mode.ARRANGE) {
             drawBadge(canvas, bounds)
         }
     }
 
-    /** The remove badge at a tile's top corner on the side away from the aligned edge's labels. */
+    /** The remove badge's centre on the tile in [bounds], inset from its top right corner. */
+    private fun badgeCentreX(bounds: RectF): Float = bounds.right - badgeRadius * BADGE_INSET_SHARE
+    private fun badgeCentreY(bounds: RectF): Float = bounds.top + badgeRadius * BADGE_INSET_SHARE
+
+    /** The remove badge at a tile's top right corner. */
     private fun drawBadge(canvas: Canvas, bounds: RectF) {
-        val cx = bounds.right - badgeRadius * 0.6f
-        val cy = bounds.top + badgeRadius * 0.6f
+        val cx = badgeCentreX(bounds)
+        val cy = badgeCentreY(bounds)
         canvas.drawCircle(cx, cy, badgeRadius, badgePaint)
-        val arm = badgeRadius * 0.45f
+        val arm = badgeRadius * BADGE_ARM_SHARE
         canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, badgeMarkPaint)
         canvas.drawLine(cx - arm, cy + arm, cx + arm, cy - arm, badgeMarkPaint)
     }
@@ -480,10 +498,10 @@ class QuickSettingsView(
         val labelHeight = metrics.descent - metrics.ascent
         val iconGap = cellHeight * ICON_LABEL_GAP_FRACTION
         val stack = iconPx + iconGap + labelHeight
-        val top = bounds.top + (bounds.height() - stack) / 2f
+        val top = bounds.top + half(bounds.height() - stack)
         val cx = bounds.centerX()
-        val cy = top + iconPx / 2f
-        val arm = iconPx * 0.32f
+        val cy = top + half(iconPx.toFloat())
+        val arm = iconPx * PLUS_ARM_SHARE
         val previous = secondaryPaint.strokeWidth
         secondaryPaint.strokeWidth = outlinePaint.strokeWidth
         secondaryPaint.strokeCap = Paint.Cap.ROUND
@@ -493,7 +511,7 @@ class QuickSettingsView(
         val labelBaseline = top + iconPx + iconGap - metrics.ascent
         val previousColor = labelPaint.color
         labelPaint.color = secondaryPaint.color
-        canvas.drawText(label, cx - labelPaint.measureText(label) / 2f, labelBaseline, labelPaint)
+        canvas.drawText(label, cx - half(labelPaint.measureText(label)), labelBaseline, labelPaint)
         labelPaint.color = previousColor
     }
 
@@ -549,7 +567,7 @@ class QuickSettingsView(
                 if (index in shown.indices) {
                     pressed = index
                     if (mode == Mode.ARRANGE) {
-                        // In arrange mode a tile lifts at once; its badge removes it on the lift.
+                        // In arrange mode a tile lifts at once; a press on its badge removes it.
                         if (onBadge(index, x, y)) {
                             pressed = -1
                             remove(index)
@@ -626,9 +644,9 @@ class QuickSettingsView(
     /** Whether ([x], [y]) is on the remove badge of the tile at [index]. */
     private fun onBadge(index: Int, x: Float, y: Float): Boolean {
         cellAt(index, cell)
-        val cx = cell.right - badgeRadius * 0.6f
-        val cy = cell.top + badgeRadius * 0.6f
-        val reach = badgeRadius * 1.6f
+        val cx = badgeCentreX(cell)
+        val cy = badgeCentreY(cell)
+        val reach = badgeRadius * BADGE_REACH_SHARE
         return x >= cx - reach && x <= cx + reach && y >= cy - reach && y <= cy + reach
     }
 
@@ -646,7 +664,7 @@ class QuickSettingsView(
             Mode.ARRANGE -> strings[Keys.PANEL_DONE]
             Mode.PICK -> strings[Keys.PANEL_BACK]
         }
-        val reach = accentPaint.measureText(action) + padding * 2f
+        val reach = accentPaint.measureText(action) + bothSides(padding)
         val hit = if (alignRight) x >= width - reach else x <= reach
         if (!hit) {
             return
@@ -670,7 +688,7 @@ class QuickSettingsView(
             return
         }
         val label = strings[Keys.PANEL_ALL_SETTINGS]
-        val reach = accentPaint.measureText(label) + padding * 2f
+        val reach = accentPaint.measureText(label) + bothSides(padding)
         val hit = if (alignRight) x >= width - reach else x <= reach
         if (hit) {
             listener?.onOpenFullSettings()
@@ -681,7 +699,9 @@ class QuickSettingsView(
         val shown = shownTiles()
         when (mode) {
             Mode.VIEW -> if (index in shown.indices) {
-                listener?.onTileTapped(shown[index].tile)
+                if (shown[index].enabled) {
+                    listener?.onTileTapped(shown[index].tile)
+                }
             } else if (index == shown.size && plusShown()) {
                 mode = Mode.PICK
                 fitLabels()
@@ -712,9 +732,6 @@ class QuickSettingsView(
         /** A cell's height as a share of its width, at least; it sets how many rows fit. */
         const val MIN_CELL_ASPECT = 0.55f
 
-        /** How long after the panel opens a touch is ignored, so a finger still typing hits no tile. */
-        const val OPEN_GUARD_MILLIS = 500L
-
         /** The icon's size as a share of the cell's height. */
         const val ICON_FRACTION = 0.4f
 
@@ -732,5 +749,38 @@ class QuickSettingsView(
 
         /** The remove badge's radius as a share of the cell's height. */
         const val BADGE_FRACTION = 0.11f
+
+        /** The rows the panel's height is taken as when the keys report no row height. */
+        const val FALLBACK_ROWS = 5f
+
+        /** The padding at the panel's sides, and the gap between cells, as shares of its width. */
+        const val PADDING_FRACTION = 0.04f
+        const val GAP_FRACTION = 0.02f
+
+        /** The header's and the footer's height as a share of a key row. */
+        const val EDGE_ROW_SHARE = 0.8f
+
+        /** The title's, the secondary text's and the accent text's sizes as shares of the header's height. */
+        const val TITLE_TEXT_SHARE = 0.42f
+        const val SECONDARY_TEXT_SHARE = 0.34f
+        const val ACCENT_TEXT_SHARE = 0.36f
+
+        /** The outline's stroke, the dashed add tile's stroke, and its dashes and gaps, as shares of a key row. */
+        const val OUTLINE_STROKE_SHARE = 0.05f
+        const val DASH_STROKE_SHARE = 0.035f
+        const val DASH_ON_SHARE = 0.12f
+        const val DASH_OFF_SHARE = 0.08f
+
+        /**
+         * The remove badge's mark stroke, its centre's inset from the cell's corner, the mark's arms
+         * and the reach a tap on it has, as shares of the badge's radius.
+         */
+        const val BADGE_MARK_SHARE = 0.3f
+        const val BADGE_INSET_SHARE = 0.6f
+        const val BADGE_ARM_SHARE = 0.45f
+        const val BADGE_REACH_SHARE = 1.6f
+
+        /** The add tile's plus arms as a share of the icon's size. */
+        const val PLUS_ARM_SHARE = 0.32f
     }
 }

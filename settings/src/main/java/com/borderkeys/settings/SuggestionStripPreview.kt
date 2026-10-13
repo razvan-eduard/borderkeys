@@ -3,9 +3,6 @@
 
 package com.borderkeys.settings
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.predict.Candidate
-
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -15,8 +12,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.ParticleRegionSettings
+import com.borderkeys.geometry.halfDown
+import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.SuggestionStripView
 import com.borderkeys.ime.fx.applyParticleLayer
+import com.borderkeys.predict.Candidate
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
@@ -57,7 +57,7 @@ fun SuggestionStripPreview(
                 // Marked the way the real row marks: the first chip is what was typed, and one
                 // in the middle is what a delimiter would put in its place.
                 view.typedIndex = 0
-                view.appliedIndex = (preferences.suggestionCount / 2)
+                view.appliedIndex = halfDown(preferences.suggestionCount)
                     .coerceAtMost(sample.size - 1)
                     .coerceAtLeast(0)
                 // Ignores ParticleRegionSettings.enabled, as previewParticles says.

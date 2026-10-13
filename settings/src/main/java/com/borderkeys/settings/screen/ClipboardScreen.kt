@@ -3,13 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.i18n.LanguageManager
-import com.borderkeys.settings.ChoiceSlider
-import com.borderkeys.settings.DEFAULT_PREFERENCES
-import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.PrivateCopyActivity
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -33,7 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.ClipSearch
 import com.borderkeys.data.ClipboardExclusions
@@ -41,18 +33,29 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.settings.DefaultableSlider
-import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
-import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.AdvancedSection
-import com.borderkeys.settings.PackageListEditor
-import com.borderkeys.settings.SettingRow
-import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Disableable
+import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.NodeSlider
+import com.borderkeys.settings.PackageListEditor
+import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.PrivateCopyActivity
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 /**
  * The clipboard history, and how long it lives: an hour by default, expired rows are deleted, and
@@ -92,25 +95,17 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
     // The same table the keyboard reads: each row is greyed while a feature it sits under is off.
     val history = Feature.CLIPBOARD_HISTORY.on(preferences)
     val offers = Feature.CLIPBOARD_OFFER.on(preferences)
-    val offersImages = offers && (Feature.PHOTOS.on(preferences) || Feature.SCREENSHOT_OFFER.on(preferences))
+    val offersImages = Feature.PHOTO_OFFER.on(preferences) || Feature.SCREENSHOT_OFFER.on(preferences)
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.CLIPBOARD_REMEMBER_AND_OFFER_TITLE]) {
+        SettingsSectionCard(strings[Keys.CLIPBOARD_REMEMBERED_TITLE]) {
             SwitchRow(
-                title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
+                title = strings[Keys.CLIPBOARD_HISTORY_SWITCH],
                 subtitle = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
                 checked = preferences.clipboardEnabled,
             ) { value -> update { it.copy(clipboardEnabled = value) } }
 
-            // The chips on the suggestion strip: the clipboard's text or photo, and the screenshot.
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
-                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
-                checked = preferences.clipboardSuggestion,
-                enabled = history,
-            ) { value -> update { it.copy(clipboardSuggestion = value) } }
-
-            // Copied photos and screenshots, each kept in the history and offered on the strip.
+            // Copied photos and screenshots, each kept in the history.
             SwitchRow(
                 title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
                 subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
@@ -119,16 +114,58 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             ) { value -> scope.launch { setRememberPhotos(value) } }
             ScreenshotSuggestionSetting(preferences, update, enabled = history)
 
+            // Keeping privately, the largest image kept, and the two ways the history forgets, each
+            // independent.
+            AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
+                    subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
+                    checked = preferences.privateCopyInTextMenu,
+                    enabled = history,
+                ) { value ->
+                    PrivateCopyActivity.setOffered(context, value)
+                    update { it.copy(privateCopyInTextMenu = value) }
+                }
+                Disableable(disabled = !history) {
+                    SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
+                    NodeSlider(
+                        label = strings.getString(Keys.CLIPBOARD_MEGABYTES, preferences.clipboardImageMaxMb),
+                        options = KeyboardPreferences.IMAGE_SIZE_STEPS,
+                        value = preferences.clipboardImageMaxMb,
+                        default = KeyboardPreferences.DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
+                    ) { value -> update { it.copy(clipboardImageMaxMb = value) } }
+                    Explanation(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE_NOTE])
+                }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
+                    subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
+                    checked = preferences.clearClipboardOnClose,
+                    enabled = history,
+                ) { value -> update { it.copy(clearClipboardOnClose = value) } }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
+                    subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
+                    checked = preferences.clipboardDeleteAfterUse,
+                    enabled = history,
+                ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
+            }
+        }
+
+        // The chips on the suggestion strip: the clipboard's text or photo, and the screenshot.
+        SettingsSectionCard(strings[Keys.CLIPBOARD_OFFERED_TITLE]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
+                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
+                checked = preferences.clipboardSuggestion,
+                enabled = history,
+            ) { value -> update { it.copy(clipboardSuggestion = value) } }
+
             // How recent a photo or screenshot must be for the strip, off meaning any age.
             Disableable(disabled = !offersImages) {
                 SectionHeader(strings[Keys.CLIPBOARD_IMAGE_OFFER_WINDOW])
                 ChoiceSlider(
                     choices = KeyboardPreferences.IMAGE_OFFER_STEPS.map { minutes ->
-                        minutes to when {
-                            minutes == 0 -> strings[Keys.CLIPBOARD_SCREENSHOT_OFF]
-                            minutes % 60 == 0 -> strings.counted(Keys.CLIPBOARD_HOURS, minutes / 60)
-                            else -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
-                        }
+                        minutes to if (minutes == 0) strings[Keys.CLIPBOARD_SCREENSHOT_OFF] else formatRetention(strings, minutes)
                     },
                     value = preferences.imageOfferMinutes,
                     default = DEFAULT_PREFERENCES.imageOfferMinutes,
@@ -141,7 +178,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                 title = strings[Keys.CLIPBOARD_SCREENSHOT_CASCADE],
                 subtitle = strings[Keys.CLIPBOARD_SCREENSHOT_CASCADE_NOTE],
                 checked = preferences.screenshotCascade,
-                enabled = Feature.SCREENSHOT_OFFER.on(preferences) && preferences.imageOfferLimited,
+                enabled = Feature.SCREENSHOT_CASCADE.canSwitch(preferences),
             ) { value -> update { it.copy(screenshotCascade = value) } }
 
             // A small preview of the image on the photo and screenshot chips.
@@ -152,53 +189,18 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                 enabled = offersImages,
             ) { value -> update { it.copy(chipImagePreview = value) } }
 
-            // The hygiene policies, each independent: one withdraws a chip's offer, one empties
-            // the system clipboard, one removes the history row, one empties the history on close.
-            AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
-                SwitchRow(
-                    title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
-                    subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
-                    checked = preferences.clipboardSuggestionOnce,
-                    enabled = offers,
-                ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
-                SwitchRow(
-                    title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
-                    subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
-                    checked = preferences.privateCopyInTextMenu,
-                    enabled = history,
-                ) { value ->
-                    PrivateCopyActivity.setOffered(context, value)
-                    update { it.copy(privateCopyInTextMenu = value) }
-                }
-                Disableable(disabled = !history) {
-                    SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
-                    StepSlider(
-                        label = strings.getString(Keys.CLIPBOARD_MEGABYTES, preferences.clipboardImageMaxMb),
-                        steps = KeyboardPreferences.IMAGE_SIZE_STEPS,
-                        current = preferences.clipboardImageMaxMb,
-                        default = KeyboardPreferences.DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
-                    ) { value -> update { it.copy(clipboardImageMaxMb = value) } }
-                    Explanation(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE_NOTE])
-                }
-                SwitchRow(
-                    title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
-                    subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
-                    checked = preferences.clearClipboardOnClose,
-                    enabled = history,
-                ) { value -> update { it.copy(clearClipboardOnClose = value) } }
-                SwitchRow(
-                    title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
-                    subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
-                    checked = preferences.clearClipboardAfterInsert,
-                    enabled = offers,
-                ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
-                SwitchRow(
-                    title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
-                    subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
-                    checked = preferences.clipboardDeleteAfterUse,
-                    enabled = history,
-                ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
-            }
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
+                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
+                checked = preferences.clipboardSuggestionOnce,
+                enabled = offers,
+            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
+                subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
+                checked = preferences.clearClipboardAfterInsert,
+                enabled = offers,
+            ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
         }
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_EXCLUDED_TITLE]) {
@@ -211,21 +213,21 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_RETENTION_TITLE]) {
             SectionHeader(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS])
-            StepSlider(
+            NodeSlider(
                 label = strings.counted(
                     Keys.CLIPBOARD_ITEMS, preferences.clipboardMaxEntries,
                 ),
-                steps = KeyboardPreferences.HISTORY_SIZE_STEPS,
-                current = preferences.clipboardMaxEntries,
-                default = 60,
+                options = KeyboardPreferences.HISTORY_SIZE_STEPS,
+                value = preferences.clipboardMaxEntries,
+                default = DEFAULT_PREFERENCES.clipboardMaxEntries,
             ) { value -> update { it.copy(clipboardMaxEntries = value) } }
             Explanation(strings[Keys.CLIPBOARD_SIZE_NOTE])
             SectionHeader(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR])
-            StepSlider(
+            NodeSlider(
                 label = formatRetention(strings, preferences.clipboardRetentionMinutes),
-                steps = KeyboardPreferences.RETENTION_STEPS,
-                current = preferences.clipboardRetentionMinutes,
-                default = 60,
+                options = KeyboardPreferences.RETENTION_STEPS,
+                value = preferences.clipboardRetentionMinutes,
+                default = DEFAULT_PREFERENCES.clipboardRetentionMinutes,
             ) { value -> update { it.copy(clipboardRetentionMinutes = value) } }
             Explanation(strings[Keys.CLIPBOARD_RETENTION_NOTE])
             Explanation(strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY])
@@ -240,12 +242,12 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                     label = { Text(strings[Keys.CLIPBOARD_SEARCH]) },
                     singleLine = true,
                     isError = search.invalid,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                 )
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
+                    verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     for ((mode, labelKey) in listOf(
                         ClipSearch.Mode.PLAIN to Keys.CLIPBOARD_SEARCH_PLAIN,
@@ -273,7 +275,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                         else -> strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER]
                     },
                     trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(SPACE_XSMALL)) {
                             TextButton(
                                 onClick = {
                                     scope.launch { repository.setPinned(entry.id, !entry.isPinned) }
@@ -293,7 +295,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             }
             TextButton(
                 onClick = { confirmingDeleteAll = true },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
         }
     }
@@ -354,37 +356,27 @@ internal suspend fun setRememberPhotos(value: Boolean) {
 }
 
 internal fun formatRetention(strings: LanguageManager, minutes: Int): String {
-    val day = 24 * 60
+    val day = MINUTES_PER_DAY
     return when {
-        minutes < 60 -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
-        minutes == 60 -> strings[Keys.CLIPBOARD_1_HOUR]
-        minutes < day -> if (minutes % 60 == 0) {
-            strings.counted(Keys.CLIPBOARD_HOURS, minutes / 60)
+        minutes < MINUTES_PER_HOUR -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
+        minutes == MINUTES_PER_HOUR -> strings[Keys.CLIPBOARD_1_HOUR]
+        minutes < day -> if (minutes % MINUTES_PER_HOUR == 0) {
+            strings.counted(Keys.CLIPBOARD_HOURS, minutes / MINUTES_PER_HOUR)
         } else {
-            strings.getString(Keys.CLIPBOARD_H_MIN, minutes / 60, minutes % 60)
+            strings.getString(Keys.CLIPBOARD_H_MIN, minutes / MINUTES_PER_HOUR, minutes % MINUTES_PER_HOUR)
         }
         minutes == day -> strings[Keys.CLIPBOARD_1_DAY]
-        minutes == 7 * day -> strings[Keys.CLIPBOARD_1_WEEK]
-        minutes == 30 * day -> strings[Keys.CLIPBOARD_1_MONTH]
-        minutes % (7 * day) == 0 -> strings.counted(Keys.CLIPBOARD_WEEKS, minutes / (7 * day))
+        minutes == DAYS_PER_WEEK * day -> strings[Keys.CLIPBOARD_1_WEEK]
+        minutes == DAYS_PER_MONTH * day -> strings[Keys.CLIPBOARD_1_MONTH]
+        minutes % (DAYS_PER_WEEK * day) == 0 -> strings.counted(Keys.CLIPBOARD_WEEKS, minutes / (DAYS_PER_WEEK * day))
         else -> strings.counted(Keys.CLIPBOARD_DAYS, minutes / day)
     }
 }
 
-/** A slider that moves between named values rather than across a range. */
-@Composable
-internal fun StepSlider(
-    label: String,
-    steps: List<Int>,
-    current: Int,
-    default: Int,
-    onPick: (Int) -> Unit,
-) {
-    DefaultableSlider(
-        label = label,
-        value = KeyboardPreferences.nearestStep(steps, current).toFloat(),
-        range = 0f..(steps.size - 1).toFloat(),
-        default = KeyboardPreferences.nearestStep(steps, default).toFloat(),
-        steps = (steps.size - 2).coerceAtLeast(0),
-    ) { value -> onPick(steps[value.toInt().coerceIn(steps.indices)]) }
-}
+/** Minutes in an hour and in a day, for the windows and the retention shown in hours and days. */
+private val MINUTES_PER_HOUR = TimeUnit.HOURS.toMinutes(1).toInt()
+private val MINUTES_PER_DAY = TimeUnit.DAYS.toMinutes(1).toInt()
+
+/** The days the retention's week and month stand for. */
+private const val DAYS_PER_WEEK = 7
+private const val DAYS_PER_MONTH = 30

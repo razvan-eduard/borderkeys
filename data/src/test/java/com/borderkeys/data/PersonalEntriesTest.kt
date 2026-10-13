@@ -16,7 +16,7 @@ class PersonalEntriesTest {
     private fun word(text: String, count: Int, asserted: Int = 0, lastUsedAt: Long = now) =
         UserWord(word = text, locale = "en-US", count = count, lastUsedAt = lastUsedAt, asserted = asserted)
     private fun learned(vararg words: UserWord, with: KeyboardPreferences = settings) =
-        PersonalEntries.words(words.toList(), with, now) { it.lowercase() }.map { it.word }
+        PersonalEntries.words(words.toList(), with, now).map { it.word }
 
     @Test
     fun `a word is learned at the setting's number of uses, or once chosen`() {
@@ -33,8 +33,14 @@ class PersonalEntriesTest {
     }
 
     @Test
+    fun `a word's mark forms are other words`() {
+        assertEquals(emptyList<String>(), learned(word("masă", 2), word("masa", 2)))
+        assertEquals(listOf("Masă", "masă"), learned(word("Masă", 1), word("masă", 2), word("masa", 1)))
+    }
+
+    @Test
     fun `an unused word fades below the number and is no longer learned`() {
-        val longAgo = now - PersonalWordDecay.halfLifeMillis(90)
+        val longAgo = now - PersonalWordDecay.halfLifeMillis(KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS)
         assertEquals(emptyList<String>(), learned(word("make", 4, lastUsedAt = longAgo)))
         assertEquals(listOf("make"), learned(word("make", 6, lastUsedAt = longAgo)))
     }
@@ -42,8 +48,8 @@ class PersonalEntriesTest {
     @Test
     fun `a phrase is learned at the same number of uses`() {
         val phrases = listOf(
-            UserPhrase(listOf("make", "this"), count = 3, lastUsedAt = now),
-            UserPhrase(listOf("make", "that"), count = 2, lastUsedAt = now),
+            UserPhrase("en", listOf("make", "this"), count = 3, lastUsedAt = now),
+            UserPhrase("en", listOf("make", "that"), count = 2, lastUsedAt = now),
         )
         assertEquals(
             listOf(listOf("make", "this")),

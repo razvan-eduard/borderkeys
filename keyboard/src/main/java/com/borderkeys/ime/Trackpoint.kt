@@ -22,6 +22,9 @@ object Trackpoint {
     const val MAX_DELAY_MILLIS = 200L
     const val MIN_DELAY_MILLIS = 30L
 
+    /** How far a slow speed may stretch [MAX_DELAY_MILLIS]. */
+    private const val SLOWEST_DELAY_FACTOR = 2L
+
     class Tick(val xSteps: Int, val ySteps: Int, val delayMillis: Long)
 
     /**
@@ -36,6 +39,6 @@ object Trackpoint {
         val fraction = (reach / span).coerceIn(0f, 1f)
         val eased = MAX_DELAY_MILLIS - (MAX_DELAY_MILLIS - MIN_DELAY_MILLIS) * fraction
         val scaled = eased * 100f / speedPercent.coerceIn(1, 1_000)
-        return Tick(xSteps, ySteps, scaled.toLong().coerceIn(MIN_DELAY_MILLIS, MAX_DELAY_MILLIS * 2))
+        return Tick(xSteps, ySteps, scaled.toLong().coerceIn(MIN_DELAY_MILLIS, MAX_DELAY_MILLIS * SLOWEST_DELAY_FACTOR))
     }
 }

@@ -6,18 +6,21 @@ package com.borderkeys.typing
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
-import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.ComposeSequences
 import com.borderkeys.ime.Contractions
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.ShiftState
+import com.borderkeys.language.LanguageTags
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.Pipeline
+import com.borderkeys.predict.RefusedWords
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -232,23 +235,20 @@ class TypingScenarioTest {
     }
 
     @Test
-    fun `an e-mail field gets the keys as typed, no swipe, and still a suggestion`() {
+    fun `an e-mail field gets the keys as typed, a suggestion, and a swiped word`() {
         rig.startField(addressField = true, verbatimField = true)
         rig.engine.queries.clear()
         rig.type("teh.")
         assertEquals("teh.", rig.editor.text)
         assertTrue(rig.engine.queries.contains("teh"))
         rig.swipe("the")
-        assertEquals("teh.", rig.editor.text)
-        assertTrue(rig.ring.opened.isEmpty())
+        assertEquals("teh.the", rig.editor.text)
     }
 
     @Test
-    fun `a number field gets the keys as typed and no swipe`() {
+    fun `a number field gets the keys as typed`() {
         rig.startField(verbatimField = true)
         rig.type("teh ")
-        assertEquals("teh ", rig.editor.text)
-        rig.swipe("the")
         assertEquals("teh ", rig.editor.text)
     }
 
@@ -384,7 +384,7 @@ class TypingScenarioTest {
 
     @Test
     fun `a correction made in the wrong language is undone when the language flips`() {
-        val both = Pipeline.open("ro-RO", "en-US")
+        val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
             both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
@@ -410,7 +410,7 @@ class TypingScenarioTest {
 
     @Test
     fun `corrections made while the language is undecided stand when it settles`() {
-        val both = Pipeline.open("ro-RO", "en-US")
+        val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
             both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
@@ -420,12 +420,12 @@ class TypingScenarioTest {
             )
             twoLanguages.startField()
             twoLanguages.type("$ROMANIAN_PHRASE ")
-            assertEquals("the field before was Romanian", 0, both.dominantPack())
+            assertEquals("the field before was Romanian", both.packOf(ROMANIAN_TAG), both.dominantPack())
             twoLanguages.startField()
             twoLanguages.type("I would also makw thia ")
             assertEquals("autocorrect fixed both slips", "I would also make this ", twoLanguages.editor.text)
             twoLanguages.type("for other places where context is queried like")
-            assertEquals("the verdict settled on English", 1, both.dominantPack())
+            assertEquals("the verdict settled on English", both.packOf(ENGLISH_TAG), both.dominantPack())
             assertEquals(
                 "I would also make this for other places where context is queried like",
                 twoLanguages.editor.text,
@@ -437,7 +437,7 @@ class TypingScenarioTest {
 
     @Test
     fun `a correction made under the other language becomes what autocorrect writes in the new one`() {
-        val both = Pipeline.open("ro-RO", "en-US")
+        val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
             both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
@@ -448,10 +448,10 @@ class TypingScenarioTest {
             twoLanguages.startField()
             twoLanguages.type("$ROMANIAN_PHRASE makw ")
             val corrected = twoLanguages.editor.text
-            assertEquals("the Romanian verdict held", 0, both.dominantPack())
+            assertEquals("the Romanian verdict held", both.packOf(ROMANIAN_TAG), both.dominantPack())
             assertFalse("the slip was corrected in '$corrected'", corrected.endsWith(" makw "))
             twoLanguages.type("$ENGLISH_PHRASE ")
-            assertEquals("the verdict turned English", 1, both.dominantPack())
+            assertEquals("the verdict turned English", both.packOf(ENGLISH_TAG), both.dominantPack())
             val text = twoLanguages.editor.text
             assertTrue("English autocorrect's word for makw in '$text'", text.startsWith("$ROMANIAN_PHRASE make "))
         } finally {
@@ -488,7 +488,7 @@ class TypingScenarioTest {
     }
 
     @Test
-    fun `an e-mail field that asks for sentence capitals gets none either`() {
+    fun `an e-mail field that asks for sentence capitals gets them while the keyboard is on`() {
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCapitalise = true))
         rig.startField(
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS or
@@ -496,9 +496,9 @@ class TypingScenarioTest {
             addressField = true,
             verbatimField = true,
         )
-        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        assertEquals(ShiftState.ON, rig.host.shiftState)
         rig.type("hello")
-        assertEquals("hello", rig.editor.text)
+        assertEquals("Hello", rig.editor.text)
     }
 
     @Test
@@ -1142,7 +1142,7 @@ class TypingScenarioTest {
 
     @Test
     fun `in Ask mode a language flip offers its replacements, and a picked one is applied`() {
-        val both = Pipeline.open("ro-RO", "en-US")
+        val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
             both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
@@ -1172,7 +1172,7 @@ class TypingScenarioTest {
 
     @Test
     fun `with the language-switch correction off a language flip changes nothing and offers nothing`() {
-        val both = Pipeline.open("ro-RO", "en-US")
+        val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
             both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(SMOKE_SETTINGS)
@@ -1361,6 +1361,248 @@ class TypingScenarioTest {
         rig.pick(1, "keyboard")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("k e y b", touchedLetters())
+    }
+
+    @Test
+    fun `the learn-after count reaches the engine when a field opens and when it changes`() {
+        val opened = KeyboardPreferences.LEARN_AFTER_USES_STEPS.last()
+        val changed = KeyboardPreferences.LEARN_AFTER_USES_STEPS.first()
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, learnAfterUses = opened))
+        rig.startField()
+        assertEquals(opened, rig.engine.learnAfterUses)
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, learnAfterUses = changed))
+        assertEquals("a change applies in the open field", changed, rig.engine.learnAfterUses)
+    }
+
+    @Test
+    fun `a word's pair and triple are learned under the language the engine answered in`() {
+        answeringInRomanian()
+        val (first, second, third) = ROMANIAN_PHRASE.split(' ')
+        rig.type("$first $second $third ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertTrue(rig.engine.learnedIn.isNotEmpty())
+        assertEquals("not the subtype's", setOf(ROMANIAN), rig.engine.learnedIn.toSet())
+        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        val triples = rig.store.batches.flatMap { batch -> batch.triples.mapNotNull { it.use } }
+        assertTrue(pairs.isNotEmpty() && triples.isNotEmpty())
+        assertEquals(setOf(ROMANIAN), pairs.map { it.language }.toSet())
+        assertEquals(setOf(ROMANIAN), triples.map { it.language }.toSet())
+    }
+
+    @Test
+    fun `a word written after itself hands the engine no pair`() {
+        startWithSwitches(learning = true, heatmap = false)
+        rig.type("very very ")
+        assertEquals(
+            listOf<Pair<String?, String?>>(UserBigram.SENTENCE_START to null, null to null),
+            rig.engine.learnedAfter.takeLast(2),
+        )
+    }
+
+    @Test
+    fun `a word after a one-letter word hands the engine the pair`() {
+        startWithSwitches(learning = true, heatmap = false)
+        rig.type("a book ")
+        assertEquals(
+            listOf<Pair<String?, String?>>(UserBigram.SENTENCE_START to null, "a" to null),
+            rig.engine.learnedAfter,
+        )
+    }
+
+    @Test
+    fun `a one-letter word's pair is learned, the word itself not counted`() {
+        startWithSwitches(learning = true, heatmap = false)
+        rig.type("is a ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        assertTrue(pairs.toString(), pairs.any { it.previousWord == "is" && it.word == "a" })
+        assertTrue(rig.store.batches.flatMap { it.updates }.none { it.word == "a" })
+    }
+
+    @Test
+    fun `a pair after a word no pack knows and not yet learned is not stored`() {
+        val flow = learningFlow()
+        flow.record("the", null, null)
+        flow.record(UNKNOWN_WORD, "the", null)
+        rig.settle()
+        flow.finishField()
+        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        assertTrue(pairs.toString(), pairs.none { it.word == UNKNOWN_WORD })
+        assertTrue("the word itself is", rig.store.batches.flatMap { it.updates }.any { it.word == UNKNOWN_WORD })
+    }
+
+    @Test
+    fun `no pair or triple spans a change of answering language`() {
+        val flow = learningFlow()
+        flow.answeredIn(LanguageTags.primary(ENGLISH_TAG))
+        flow.record("the", null, null)
+        flow.record("time", "the", null)
+        flow.answeredIn(ROMANIAN)
+        flow.record("water", "time", "the")
+        flow.record("under", "water", "time")
+        flow.record("there", "under", "water")
+        assertEquals(
+            listOf<Pair<String?, String?>>(
+                UserBigram.SENTENCE_START to null, "the" to null, null to null, "water" to null, "under" to "water",
+            ),
+            rig.engine.learnedAfter,
+        )
+    }
+
+    @Test
+    fun `a word after a refused word hands the engine no pair`() {
+        startWithSwitches(learning = true, heatmap = false)
+        val refused = "zebra"
+        rig.orchestrator.setRefusedWords(RefusedWords.of(setOf(refused), emptySet()))
+        rig.type("$refused cat ")
+        assertEquals(listOf<Pair<String?, String?>>(null to null), rig.engine.learnedAfter)
+    }
+
+    @Test
+    fun `a pair the engine refuses is not buffered`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, heatmapEnabled = false))
+        // Tatweels alone, which the engine folds to no word.
+        val unheld = "\u0640\u0640"
+        rig.startField("$unheld ")
+        rig.type("cat ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(listOf<Pair<String?, String?>>(unheld to null), rig.engine.learnedAfter)
+        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        assertTrue(pairs.toString(), pairs.none { it.word == "cat" })
+        assertTrue("the word itself is learned", rig.store.batches.any { batch -> batch.updates.any { it.word == "cat" } })
+    }
+
+    @Test
+    fun `a typed word's pair goes under the language the engine answered in, not the subtype's`() {
+        answeringInRomanian()
+        rig.type("$ROMANIAN_WORD ")
+        assertEquals(ROMANIAN, languageOfPairEndingIn(ROMANIAN_WORD))
+    }
+
+    @Test
+    fun `an answer about an older query leaves the language pairs go under`() {
+        answeringInRomanian()
+        rig.type(ROMANIAN_WORD)
+        rig.orchestrator.onSuggestions(
+            emptyList(), "", false, false, ROMANIAN_WORD.dropLast(1), null, emptyList(),
+            language = UNANSWERED_LANGUAGE,
+        )
+        rig.type(" ")
+        assertEquals(ROMANIAN, languageOfPairEndingIn(ROMANIAN_WORD))
+    }
+
+    @Test
+    fun `an answer naming the unknown language leaves the language pairs go under`() {
+        answeringInRomanian()
+        rig.type(ROMANIAN_WORD)
+        rig.orchestrator.onSuggestions(
+            emptyList(), "", false, false, ROMANIAN_WORD, null, emptyList(),
+            language = LanguageTags.UNKNOWN,
+        )
+        rig.type(" ")
+        assertEquals(ROMANIAN, languageOfPairEndingIn(ROMANIAN_WORD))
+    }
+
+    @Test
+    fun `a new field and a subtype change put pairs under the subtype's language until an answer names one`() {
+        answeringInRomanian()
+        val (first, second, third) = ROMANIAN_PHRASE.split(' ')
+        rig.type("$first ")
+        assertEquals("the answers name Romanian", ROMANIAN, languageOfPairEndingIn(first))
+        rig.startField(settle = false)
+        rig.orchestrator.onGestureCandidates(listOf(Candidate(second)))
+        rig.type(" ")
+        assertEquals("a new field", LanguageTags.primary(ENGLISH_TAG), languageOfPairEndingIn(second))
+        rig.type(third)
+        rig.host.subtype = OTHER_SUBTYPE_TAG
+        rig.orchestrator.onSubtypeChanged()
+        rig.type(" ")
+        assertEquals("a subtype change", LanguageTags.primary(OTHER_SUBTYPE_TAG), languageOfPairEndingIn(third))
+    }
+
+    @Test
+    fun `a swiped word's pair goes under the language its decode read`() {
+        answeringInRomanian()
+        rig.orchestrator.onGestureCandidates(listOf(Candidate(ROMANIAN_WORD)), UNANSWERED_LANGUAGE)
+        rig.type(" ")
+        assertEquals(UNANSWERED_LANGUAGE, languageOfPairEndingIn(ROMANIAN_WORD))
+    }
+
+    @Test
+    fun `a completion after a learned context leads the strip, from the learn-after count on`() {
+        rig.type("next mo")
+        assertEquals("month", firstOffered())
+        learnPhrase("next move", KeyboardPreferences.DEFAULT_LEARN_AFTER_USES - 1)
+        rig.type("next mo")
+        assertEquals("one use short, the phrase weighs nothing", "month", firstOffered())
+        learnPhrase("next move", 1)
+        rig.type("next mo")
+        assertEquals("move", firstOffered())
+        rig.startField()
+        rig.type("the mo")
+        assertEquals("after another word, the word's own uses are not enough", "most", firstOffered())
+    }
+
+    @Test
+    fun `a slip after a learned context is corrected to the word learned there`() {
+        rig.type("my ideaa ")
+        assertEquals("my idea ", rig.editor.text)
+        learnPhrase("my ideas", KeyboardPreferences.DEFAULT_LEARN_AFTER_USES)
+        rig.type("my ideaa ")
+        assertEquals("my ideas ", rig.editor.text)
+        rig.startField()
+        rig.type("the ideaa ")
+        assertEquals("after another word, the word's own uses are not enough", "the idea ", rig.editor.text)
+    }
+
+    @Test
+    fun `a known word after a learned context is left as typed, at any strictness`() {
+        rig.type("my idea ")
+        assertEquals("my idea ", rig.editor.text)
+        learnPhrase("my ideas", KeyboardPreferences.DEFAULT_LEARN_AFTER_USES)
+        for (strictness in listOf(
+            KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
+            KeyboardPreferences.MIN_CORRECTION_STRICTNESS,
+        )) {
+            rig.orchestrator.applySettings(
+                SMOKE_SETTINGS.copy(learningEnabled = true, correctionStrictness = strictness),
+            )
+            rig.startField()
+            assertEquals(strictness, rig.engine.correctionStrictness)
+            rig.type("my idea ")
+            assertEquals("at $strictness", "my idea ", rig.editor.text)
+        }
+    }
+
+    @Test
+    fun `a learned context does nothing in a private field or with Learning off`() {
+        rig.type("my ideaa ")
+        assertEquals("my idea ", rig.editor.text)
+        learnPhrase("my ideas", KeyboardPreferences.DEFAULT_LEARN_AFTER_USES)
+        rig.startField(privateField = true)
+        rig.type("my ideaa ")
+        assertEquals("in a private field", "my idea ", rig.editor.text)
+        startWithSwitches(learning = false, heatmap = false)
+        rig.type("my ideaa ")
+        assertEquals("with Learning off", "my idea ", rig.editor.text)
+    }
+
+    @Test
+    fun `a swipe after a learned context writes the word learned there`() {
+        rig.type("she ")
+        rig.swipe("stated")
+        rig.press(' '.code)
+        assertEquals("she started ", rig.editor.text)
+        learnPhrase("she stated", KeyboardPreferences.DEFAULT_LEARN_AFTER_USES)
+        rig.type("she ")
+        rig.swipe("stated")
+        rig.press(' '.code)
+        assertEquals("she stated ", rig.editor.text)
+        rig.startField()
+        rig.type("the ")
+        rig.swipe("stated")
+        rig.press(' '.code)
+        assertEquals("after another word, the word's own uses are not enough", "the states ", rig.editor.text)
     }
 
     @Test
@@ -1606,12 +1848,60 @@ class TypingScenarioTest {
         rig.store.touches.joinToString(" ") { it.code.toChar().toString() }
 
     /** Opens a fresh field with the Learning switch at [learning] and the Heatmap at [heatmap]. */
+    /**
+     * Opens the rig again on English and Romanian, Learning on, the engine answering in Romanian
+     * by preference and the subtype English.
+     */
+    private fun answeringInRomanian() {
+        pipeline.close()
+        pipeline = Pipeline.open(ENGLISH_TAG, ROMANIAN_TAG)
+        pipeline.preferredLanguage(ROMANIAN_TAG)
+        rig = pipeline.typingRig(SMOKE_SETTINGS.copy(learningEnabled = true))
+        rig.host.subtype = ENGLISH_TAG
+        rig.startField()
+    }
+
+    /** The language the latest pair ending in [word] was written under, once the buffer is written. */
+    private fun languageOfPairEndingIn(word: String): String? {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }.lastOrNull { it.word == word }?.language
+    }
+
+    /** A learning flow on the rig's engine and store, in a field that allows learning. */
+    private fun learningFlow(): LearningFlow {
+        val flow = LearningFlow(rig.engine, rig.host, rig.store, rig.clock)
+        flow.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
+        flow.startField(
+            FieldSession(
+                generation = rig.orchestrator.session.generation + 1,
+                policy = FieldPolicy.of(
+                    passwordField = false, privateField = false, learningEnabled = true, heatmapEnabled = false,
+                ),
+                addressField = false,
+                terminalField = false,
+            ),
+        )
+        return flow
+    }
+
     private fun startWithSwitches(learning: Boolean, heatmap: Boolean) {
         rig.orchestrator.applySettings(
             SMOKE_SETTINGS.copy(learningEnabled = learning, heatmapEnabled = heatmap),
         )
         rig.startField()
     }
+
+    /** Writes [phrase] and a space [times] times with Learning on, then opens a fresh field. */
+    private fun learnPhrase(phrase: String, times: Int) {
+        startWithSwitches(learning = true, heatmap = false)
+        repeat(times) { rig.type("$phrase ") }
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        rig.startField()
+    }
+
+    /** The strip's first word other than the letters typed. */
+    private fun firstOffered(): String =
+        rig.host.strip.filterIndexed { index, _ -> index != rig.host.typedIndex }.first().text
 
     /** Switches the ring on, with [liftKeepsOpen], [timeoutDefault] and [trustedWord], anew. */
     private fun ringOn(
@@ -1684,5 +1974,19 @@ class TypingScenarioTest {
         const val ROMANIAN_PHRASE = "acesta trebuie foarte despre pentru"
         const val ENGLISH_PHRASE =
             "through because another thought between however people water number system"
+        val ROMANIAN_WORD = ROMANIAN_PHRASE.substringBefore(' ')
+
+        const val ENGLISH_TAG = "en-US"
+        const val ROMANIAN_TAG = "ro-RO"
+        val ROMANIAN = LanguageTags.primary(ROMANIAN_TAG)
+
+        /** A subtype whose language no open pack answers in. */
+        const val OTHER_SUBTYPE_TAG = "de-DE"
+
+        /** A word no pack spells. */
+        const val UNKNOWN_WORD = "zqxv"
+
+        /** A language no open pack answers in. */
+        const val UNANSWERED_LANGUAGE = "fr"
     }
 }

@@ -11,12 +11,16 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.ime.fx.ParticleSurface
-import com.borderkeys.ime.fx.RoundedRectElement
-import com.borderkeys.theme.ThemePaints
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.halfDown
+import com.borderkeys.geometry.middle
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.predict.Candidate
+import com.borderkeys.theme.ThemePaints
 
 /**
  * The band above the keys: the candidates and the clipboard chip, or a note that nothing is being
@@ -366,7 +370,7 @@ class SuggestionStripView(
 
     /** Fixes each slot's text size so its word fits between the dividers, down to a floor. */
     private fun measureSlots() {
-        val label = paints.labelTextSizePx.takeIf { it > 0f } ?: paints.label.textSize
+        val label = paints.labelSizePx
         val base = label * SLOT_TEXT_SCALE
         val shown = shownCount()
         if (shown <= 0 || width == 0) {
@@ -430,7 +434,7 @@ class SuggestionStripView(
             return
         }
         val slotWidth = width.toFloat() / shown
-        val available = slotWidth - iconSizePx() - CHIP_GAP_PX * 2f - thumbnailWidth(chip)
+        val available = slotWidth - iconSizePx() - bothSides(CHIP_GAP_PX) - thumbnailWidth(chip)
         if (available <= 0f) {
             return
         }
@@ -483,10 +487,10 @@ class SuggestionStripView(
     /** Draws [bitmap] centre-cropped into a square of the strip's height, from [left]. */
     private fun drawThumbnail(canvas: Canvas, bitmap: android.graphics.Bitmap, left: Float) {
         val side = height * CHIP_THUMBNAIL_FRACTION
-        val top = (height - side) / 2f
+        val top = half(height - side)
         val crop = minOf(bitmap.width, bitmap.height)
-        val x = (bitmap.width - crop) / 2
-        val y = (bitmap.height - crop) / 2
+        val x = halfDown(bitmap.width - crop)
+        val y = halfDown(bitmap.height - crop)
         thumbnailSource.set(x, y, x + crop, y + crop)
         thumbnailTarget.set(left, top, left + side, top + side)
         canvas.drawBitmap(bitmap, thumbnailSource, thumbnailTarget, thumbnailPaint)
@@ -602,18 +606,18 @@ class SuggestionStripView(
                 val side = iconSizePx().toInt()
                 var textLeft = chipLeft + CHIP_GAP_PX + previewWidth
                 if (icon != null) {
-                    val top = ((height - side) / 2f).toInt()
+                    val top = half((height - side).toFloat()).toInt()
                     val iconLeft = (chipLeft + CHIP_GAP_PX + previewWidth).toInt()
                     icon.setBounds(iconLeft, top, iconLeft + side, top + side)
                     icon.setTint(paint.color)
                     icon.draw(canvas)
-                    textLeft = chipLeft + CHIP_GAP_PX * 2f + side + previewWidth
+                    textLeft = chipLeft + bothSides(CHIP_GAP_PX) + side + previewWidth
                 }
                 // The lines are centred vertically on the strip.
                 val lineHeight = chipTextSize * CHIP_LINE_SPACING
                 val lineCount = chipLineCount[chip]
-                val first = height / 2f + paints.labelBaselineOffsetPx -
-                    lineHeight * (lineCount - 1) / 2f
+                val first = half(height.toFloat()) + paints.labelBaselineOffsetPx -
+                    half(lineHeight * (lineCount - 1))
                 for (line in 0 until lineCount) {
                     canvas.drawText(
                         chipLines[chip][line], 0, chipLineLength[chip][line],
@@ -668,7 +672,7 @@ class SuggestionStripView(
                     paint.textSize = fitted
                 }
                 // Centred on the strip at the size this word is drawn at.
-                val wordBaseline = height / 2f - (paint.ascent() + paint.descent()) / 2f
+                val wordBaseline = half(height.toFloat()) - middle(paint.ascent(), paint.descent())
                 // A word wider than its slot is clipped to it, drawn from its reading start.
                 if (paint.measureText(chars[index], 0, length) > slotWidth) {
                     val previousAlign = paint.textAlign
@@ -680,7 +684,7 @@ class SuggestionStripView(
                     paint.textAlign = previousAlign
                     canvas.restore()
                 } else {
-                    canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, wordBaseline, paint)
+                    canvas.drawText(chars[index], 0, length, left + half(slotWidth), wordBaseline, paint)
                 }
                 if (fitted != previousSize) {
                     paint.textSize = previousSize
@@ -711,23 +715,23 @@ class SuggestionStripView(
         val previousAlign = togglePaint.textAlign
         togglePaint.textAlign = android.graphics.Paint.Align.CENTER
         val padding = height * PRIVATE_PADDING_FRACTION
-        val toggleWidth = togglePaint.measureText(toggleChars, 0, toggleLength) + 2f * padding
+        val toggleWidth = togglePaint.measureText(toggleChars, 0, toggleLength) + bothSides(padding)
         privateToggleLeft = width - toggleWidth
-        val baseline = height / 2f + paints.secondaryBaselineOffsetPx
+        val baseline = half(height.toFloat()) + paints.secondaryBaselineOffsetPx
         canvas.drawText(
-            toggleChars, 0, toggleLength, privateToggleLeft + toggleWidth / 2f, baseline,
+            toggleChars, 0, toggleLength, privateToggleLeft + half(toggleWidth), baseline,
             togglePaint,
         )
         togglePaint.textAlign = previousAlign
         if (!privateReveal || privateTextLength == 0) {
             canvas.drawText(
-                privateNoticeChars, 0, privateNotice.length, privateToggleLeft / 2f, baseline,
+                privateNoticeChars, 0, privateNotice.length, half(privateToggleLeft), baseline,
                 paints.labelSecondary,
             )
             return
         }
         val textWidth = revealPaint.measureText(privateTextChars, 0, privateTextLength)
-        val room = privateToggleLeft - 2f * padding
+        val room = privateToggleLeft - bothSides(padding)
         val x = if (textWidth <= room) padding else privateToggleLeft - padding - textWidth
         canvas.save()
         canvas.clipRect(0f, 0f, privateToggleLeft, height.toFloat())
@@ -738,18 +742,18 @@ class SuggestionStripView(
     private fun drawNotice(canvas: Canvas, chars: CharArray, length: Int) {
         canvas.drawText(
             chars, 0, length,
-            width / 2f, height / 2f + paints.secondaryBaselineOffsetPx,
+            half(width.toFloat()), half(height.toFloat()) + paints.secondaryBaselineOffsetPx,
             paints.labelSecondary,
         )
     }
 
     /** Holds particles in an undrawn pill around the decoding notice's glyph. */
     private fun syncDecodingAmbient() {
-        val centerX = width / 2f
-        val halfWidth = width * DECODING_GLOW_WIDTH_FRACTION / 2f
+        val centerX = half(width.toFloat())
+        val halfWidth = half(width * DECODING_GLOW_WIDTH_FRACTION)
         val top = height * 0.25f
         val bottom = height * 0.75f
-        decodingNotice.set(centerX - halfWidth, top, centerX + halfWidth, bottom, (bottom - top) / 2f)
+        decodingNotice.set(centerX - halfWidth, top, centerX + halfWidth, bottom, half(bottom - top))
         particles.hold(decodingNotice)
     }
 

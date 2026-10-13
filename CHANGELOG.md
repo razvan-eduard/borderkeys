@@ -12,6 +12,33 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
+## Unreleased
+
+- What you write is remembered per language: the word pairs and three-word runs learned in one
+  language no longer steer suggestions in another, and the keyboard keeps up to 10,000 of each
+  per language, up from 4,096 pairs and 2,048 runs for every language together. When a language
+  or a word's list of followers is full, what has gone unused longest, weighed by how often it
+  was used, makes room, while something new keeps its place long enough to be used again.
+  Spellings that differ only by a capital count as one; spellings that differ by an accent are
+  different words, each with its own phrases (Romanian "masă" and "masa", Spanish "que" and
+  "qué"), and a word typed without its accents still finds them both. The Learned phrases page
+  lists each language's phrases under its name.
+- How often the personal dictionary is cleaned up: daily, weekly or monthly, weekly by default,
+  under Learn from typing's advanced settings; it ran daily until now.
+- Phrases are learned only from words a dictionary knows or that you have used often enough to be
+  learned, so a typo no longer becomes a phrase; the clean-up also deletes the phrases already
+  kept that were used at most twice and hold such a word.
+- A phrase no longer spans a change of language: the words written just after the language
+  changes start a new phrase.
+- Fixed: a word longer than 48 letters could be offered the corrections of the word typed before
+  it.
+- Fixed: with Learned words set above 20,000 and more words learned than that, none of them
+  loaded, and none of the learned phrases either.
+- Fixed: a phrase after a one-letter word or a contraction, such as "a book" or "don't go", was
+  listed under Learned phrases but never suggested.
+- Fixed: the explanation of a word's score could name the wrong language after the enabled
+  languages changed.
+
 ## v0.11.0 — 2026-10-06
 
 - A word typed with several letters on the wrong keys is read from where each tap landed, and
@@ -228,19 +255,22 @@ attestations and the full commit lists are on the
 - Fixed: the notes under Space after punctuation, Space after a picked suggestion, Capitalise
   for me and Swipe typing each ended with the list of fields they skip. Each section now says
   it once, at the top: Suggestions work in every field but a password field, and in private
-  mode offer nothing from what you have written; Correcting as you type and Swipe typing work
-  in free-form text fields and the browser's address bar; Learn from typing never in private
-  mode. In all 22 languages.
-- Fixed: an e-mail, number or phone field is now left as typed, with no swipe, as the swipe
-  note had said all along: autocorrect, the automatic spaces and the swipe acted there like in
-  any text field. Dictionary suggestions are still offered in them. The browser's address bar
-  keeps corrections and swipe, since browsers search from it.
-- The Clipboard screen's switches sit in one card, What is remembered and offered, and the two at
-  its top gate the rest: Remember what you copy off disables everything below it, Offer what you
-  copied off withdraws every chip, screenshot included. Offer a photo or screenshot from the
-  last: Off, 1, 5 or 15 minutes, or 1 hour, for copied photos and screenshots alike; until now a
-  screenshot had a fixed five minutes and a copied photo no limit. Offer it only once now also
-  withdraws the screenshot chip after use or when the keyboard closes.
+  mode offer nothing from what you have written; Correcting as you type works in free-form text
+  fields and the browser's address bar; Learn from typing never in private mode. In all 22
+  languages.
+- Fixed: an e-mail, number or phone field is now left as typed: autocorrect and the automatic
+  spaces acted there like in any text field. Dictionary suggestions and swipe still work in them.
+  The browser's address bar keeps its corrections, since browsers search from it.
+- The Clipboard screen's switches sit in two cards. What is remembered starts with Clipboard history
+  (until now Remember what you copy), which turns every clipboard setting off with it; Offered on the
+  strip starts with Offer what you copied, which withdraws every chip, screenshot included, and holds
+  the settings for the chips. While Clipboard history is off, the keyboard's clipboard panel says
+  so. Offer a photo or screenshot from the last: Off, 1, 5 or 15 minutes, or 1 hour, for copied
+  photos and screenshots alike; until now a screenshot had a fixed five minutes and a copied photo
+  no limit. Offer it only once now also withdraws the screenshot chip after use or when the
+  keyboard closes.
+- Every settings card's title now sits on the card's top line, at the left, with the line open
+  around it.
 - Cascade screenshots, on the Clipboard screen under Offer a photo or screenshot from the last:
   the screenshots taken within that time are offered one after another, the oldest first, each
   paste putting the next on the strip, so a series goes out in the order it was taken. With Offer
@@ -248,15 +278,16 @@ attestations and the full commit lists are on the
   default. Holding the screenshot chip offers Dismiss, as holding a word offers Forget: it
   withdraws that screenshot, or in a series brings up the next.
 - How soon a word or phrase is learned, on the Personal dictionary screen, is now a number of
-  uses: 1, 2, 3, 5 or 10, three by default, in place of Slow, Balanced and Immediate, which carry
-  over as 10, 3 and 1. Every word waits for it, a word the dictionary already has included: until
+  uses: 1, 2, 3, 5, 8 or 13, three by default, in place of Slow, Balanced and Immediate, which carry
+  over as 13, 3 and 1. Every word waits for it, a word the dictionary already has included: until
   then it is only counted and moves nothing on the strip, and from then on it climbs one curve
   the more it is used, whatever the number. Pairs and triples wait for the same number. A word's
   case forms, This at a sentence start and this inside one, count together. The Words and Phrases
   pages list only what is learned.
 - How fast unused words fade, beside it: a word or phrase unused for 7, 14, 30, 90, 180 or 365
   days counts half as much, 90 by default, and is no longer learned once it falls below the
-  number of uses; a word used once goes within 30 days at most. Until now the 90 days were fixed.
+  number of uses. Until now the 90 days were fixed. Under it, how long a word used only once is
+  kept: deleted after 10, 30 or 90 days unused, 30 by default, or kept with Off.
 - A setting that picks a step on a scale is now a slider of nodes: the offer window, correction
   distance, capitals, the language lock and the language switch, haptic strength, the ring's, the
   bar's and the draft box's sizes, the animation mode, how often an effect plays, and the two
@@ -320,9 +351,10 @@ attestations and the full commit lists are on the
   colours, and the notes on that screen no longer spell out what Off does.
 - Scrolling labels, on the Animations screen: a label too long for its button, on the quick
   actions bar or the quick panel, waits two seconds, slides past at a readable pace, waits at
-  the end and starts over; off, it is cut with an ellipsis. Animation speed, below it: one dial
-  from a quarter to four times the default for every animation on that screen, the key press,
-  the photo lamp, the moving colours, the draft box and the word effects, with a reset to 1×.
+  the end and starts over; off, it is cut with an ellipsis. Animation speed, below it: a slider
+  of set speeds from a tenth to four times the default for every animation on that screen, the
+  key press, the photo lamp, the moving colours, the draft box and the word effects, with a
+  reset to 1×.
 - Fixed: the quick actions bar's labels wrapped onto a second line on the phone where the
   settings' preview had room for one. Buttons that fit still share the bar evenly; past that,
   each takes a fixed width from the Size setting and the bar scrolls sideways, a side bar up

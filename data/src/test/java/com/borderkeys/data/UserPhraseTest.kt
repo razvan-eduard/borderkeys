@@ -15,10 +15,10 @@ class UserPhraseTest {
     @Test
     fun `pairs and triples interleave, most used first, then most recent`() {
         val merged = UserPhrase.merged(
-            pairs = listOf(UserBigram("good", "morning", 3, 100), UserBigram("see", "you", 5, 50)),
+            pairs = listOf(UserBigram("en", "good", "morning", 3, 100, 3, 3), UserBigram("en", "see", "you", 5, 50, 5, 8)),
             triples = listOf(
-                UserTrigram("see", "you", "soon", 3, 200),
-                UserTrigram("good", "morning", "all", 1, 300),
+                UserTrigram("en", "see", "you", "soon", 3, 200, 3, 3),
+                UserTrigram("en", "good", "morning", "all", 1, 300, 1, 4),
             ),
         )
         assertEquals(
@@ -30,13 +30,13 @@ class UserPhraseTest {
     @Test
     fun `each phrase keeps its words in order, its count and when it was last written`() {
         val merged = UserPhrase.merged(
-            pairs = listOf(UserBigram("good", "morning", 3, 100)),
-            triples = listOf(UserTrigram("see", "you", "soon", 2, 200)),
+            pairs = listOf(UserBigram("en", "good", "morning", 3, 100, 3, 3)),
+            triples = listOf(UserTrigram("en", "see", "you", "soon", 2, 200, 2, 2)),
         )
         assertEquals(
             listOf(
-                UserPhrase(listOf("good", "morning"), 3, 100),
-                UserPhrase(listOf("see", "you", "soon"), 2, 200),
+                UserPhrase("en", listOf("good", "morning"), 3, 100),
+                UserPhrase("en", listOf("see", "you", "soon"), 2, 200),
             ),
             merged,
         )
@@ -44,8 +44,8 @@ class UserPhraseTest {
 
     @Test
     fun `only a pair after the sentence start opens a sentence`() {
-        assertTrue(UserPhrase(listOf(UserBigram.SENTENCE_START, "hello"), 1, 0).opensSentence)
-        assertFalse(UserPhrase(listOf("say", "hello"), 1, 0).opensSentence)
-        assertFalse(UserPhrase(listOf("say", "hello", "there"), 1, 0).opensSentence)
+        assertTrue(UserPhrase("en", listOf(UserBigram.SENTENCE_START, "hello"), 1, 0).opensSentence)
+        assertFalse(UserPhrase("en", listOf("say", "hello"), 1, 0).opensSentence)
+        assertFalse(UserPhrase("en", listOf("say", "hello", "there"), 1, 0).opensSentence)
     }
 }

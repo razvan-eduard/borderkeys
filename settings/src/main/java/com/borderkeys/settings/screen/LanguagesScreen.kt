@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.BundledDictionaries
@@ -42,6 +41,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.ChoiceSlider
 import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.DefaultableSlider
@@ -49,10 +49,13 @@ import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SectionHeader
-import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -195,24 +198,24 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 },
-                modifier = Modifier.padding(horizontal = 12.dp),
+                modifier = Modifier.padding(horizontal = SPACE_LARGE),
             ) { Text(strings[Keys.LANGUAGES_MORE_OPEN]) }
         }
         SettingsSectionCard(strings[Keys.LANGUAGES_IMPORT_YOUR_OWN]) {
             Button(
                 onClick = { picker.launch(arrayOf("*/*")) },
                 enabled = !importing,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER),
             ) { Text(strings[Keys.LANGUAGES_CHOOSE_A_BKD_FILE]) }
             if (importing) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(SPACE_GUTTER))
             }
             message?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 )
             }
             Explanation(
@@ -374,7 +377,7 @@ private fun PackRow(
     onPreferred: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(modifier = Modifier.padding(vertical = SPACE_XSMALL)) {
         SettingRow(
             title = strings.getString(Keys.LANGUAGES_TEXT, pack.displayName, pack.tag),
             subtitle = buildString {
@@ -400,7 +403,7 @@ private fun PackRow(
         ) { value -> scope.launch { repository.setWeight(pack.id, value) } }
         // Only for a pack that is on.
         if (pack.enabled) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp)) {
+            Row(modifier = Modifier.padding(horizontal = SPACE_LARGE)) {
                 PickerChip(strings[Keys.LANGUAGES_PREFERRED], preferred) {
                     onPreferred(if (preferred) "" else pack.tag)
                 }
@@ -409,7 +412,7 @@ private fun PackRow(
         var confirmingRemove by remember { mutableStateOf(false) }
         TextButton(
             onClick = { confirmingRemove = true },
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = SPACE_LARGE),
         ) { Text(strings[Keys.LANGUAGES_REMOVE]) }
         if (confirmingRemove) {
             // Asked first: removing deletes the file.
@@ -463,14 +466,14 @@ private fun LanguageRow(label: String, selected: Boolean, onPick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onPick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_LARGE),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, onClick = onPick)
         Text(
             label,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 12.dp),
+            modifier = Modifier.padding(start = SPACE_LARGE),
         )
     }
 }

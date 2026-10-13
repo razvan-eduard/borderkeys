@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
 
 /**
  * The theme compiled into paints and sizes for the draw path, recompiled in place when the theme
@@ -37,6 +39,10 @@ class ThemePaints {
      */
     var labelTextSizePx: Float = 0f
         private set
+
+    /** The theme's label size, or [label]'s own before a theme has set one. */
+    val labelSizePx: Float
+        get() = labelTextSizePx.takeIf { it > 0f } ?: label.textSize
     val labelSecondary: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val accent: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
@@ -213,16 +219,16 @@ class ThemePaints {
         showKeyBorders = theme.showKeyBorders
 
         label.getFontMetrics(fontMetrics)
-        labelBaselineOffset = -(fontMetrics.ascent + fontMetrics.descent) / 2f
+        labelBaselineOffset = -middle(fontMetrics.ascent, fontMetrics.descent)
         labelSecondary.getFontMetrics(fontMetrics)
-        secondaryBaselineOffset = -(fontMetrics.ascent + fontMetrics.descent) / 2f
+        secondaryBaselineOffset = -middle(fontMetrics.ascent, fontMetrics.descent)
 
         // The widest of HINT_WIDTH_PROBE, measured.
         var widestHintGlyph = 0f
         for (probe in HINT_WIDTH_PROBE) {
             widestHintGlyph = maxOf(widestHintGlyph, hint.measureText(probe, 0, 1))
         }
-        hintCellHalfWidth = maxOf(widestHintGlyph, hint.textSize) / 2f * HINT_CELL_MARGIN
+        hintCellHalfWidth = half(maxOf(widestHintGlyph, hint.textSize)) * HINT_CELL_MARGIN
         hint.getFontMetrics(fontMetrics)
         hintCellTopInset = -fontMetrics.ascent * HINT_CELL_MARGIN
 

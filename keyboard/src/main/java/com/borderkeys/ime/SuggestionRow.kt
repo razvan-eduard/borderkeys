@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.geometry.halfDown
 import com.borderkeys.predict.Candidate
 
 /**
@@ -65,7 +66,7 @@ internal class SuggestionRow {
             return row
         }
         // The correction goes in the middle; a one-slot row shows none.
-        val middle = (cap / 2).coerceAtMost(row.size.coerceAtLeast(2) - 1)
+        val middle = halfDown(cap).coerceAtMost(row.size.coerceAtLeast(2) - 1)
         if (middle < 1) {
             return row
         }

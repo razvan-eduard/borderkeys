@@ -4,6 +4,7 @@
 package com.borderkeys.predict
 
 import com.borderkeys.ime.LanguageSwitchCorrector
+import com.borderkeys.language.LanguageTags
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,11 +20,14 @@ class LanguageSwitchPipelineTest {
     private lateinit var pipeline: Pipeline
     private lateinit var corrector: LanguageSwitchCorrector
 
+    /** The slots the two packs were loaded into. */
+    private val romanianPack: Int get() = pipeline.packOf(ROMANIAN_TAG)
+    private val englishPack: Int get() = pipeline.packOf(ENGLISH_TAG)
+
     @Before
     fun open() {
         Pipeline.require()
-        // Slot 0 is ro-RO, slot 1 en-US.
-        pipeline = Pipeline.open("ro-RO", "en-US")
+        pipeline = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         corrector = LanguageSwitchCorrector()
     }
 
@@ -38,23 +42,23 @@ class LanguageSwitchPipelineTest {
     @Test
     fun `the verdict moves when the language does, and this is what it costs`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
-        assertEquals("undecided before a word is written", -1, pipeline.dominantPack())
+        assertEquals("undecided before a word is written", NativePredictor.NO_PACK, pipeline.dominantPack())
 
         val romanian = verdictTrail(ROMANIAN)
-        assertEquals("Romanian words settle on the Romanian pack", ROMANIAN_PACK, romanian.last())
+        assertEquals("Romanian words settle on the Romanian pack", romanianPack, romanian.last())
 
         val english = verdictTrail(ENGLISH)
         assertEquals(
             "the verdict should move when the language does -- if it stops moving, the revert " +
                 "can never fire and every test below is vacuous",
-            ENGLISH_PACK, english.last(),
+            englishPack, english.last(),
         )
         assertEquals(
             "six English words to overturn a settled Romanian verdict. If this grows " +
                 "past LanguageSwitchCorrector.MAX_TRACKED the correction is forgotten before " +
                 "the verdict turns, and the feature stops working without anything failing. " +
                 "Verdict after each English word: $english",
-            5, english.indexOfFirst { it == ENGLISH_PACK },
+            5, english.indexOfFirst { it == englishPack },
         )
     }
 
@@ -64,8 +68,8 @@ class LanguageSwitchPipelineTest {
         verdictTrail(ROMANIAN)
         val english = verdictTrail(ENGLISH)
 
-        val lastRomanian = english.indexOfLast { it == ROMANIAN_PACK }
-        val firstEnglish = english.indexOfFirst { it == ENGLISH_PACK }
+        val lastRomanian = english.indexOfLast { it == romanianPack }
+        val firstEnglish = english.indexOfFirst { it == englishPack }
         assertTrue("both verdicts should appear in one run", lastRomanian in 0 until firstEnglish)
         assertTrue(
             "there should be an undecided stretch between the two verdicts, not a jump",
@@ -86,28 +90,50 @@ class LanguageSwitchPipelineTest {
         assertFalse("nor three times", corrector.observeDominantPack(settled))
     }
 
+    @Test
+    fun `the pairs read are the verdict's language, else the heaviest pack's`() {
+        pipeline.languageLock(BALANCED_EVIDENCE)
+        pipeline.commitPhrase(ENGLISH)
+        assertEquals("English has to be the verdict for this to mean anything",
+                     englishPack, pipeline.dominantPack())
+        assertEquals("the verdict's pairs are read", LanguageTags.primary(ENGLISH_TAG), pipeline.answerLanguage(""))
+
+        pipeline.languageLock(LOCK_OFF)
+        assertEquals("undecided with the lock off", NativePredictor.NO_PACK, pipeline.dominantPack())
+        assertEquals("the first of the equally weighted packs is read, whatever the evidence",
+                     LanguageTags.primary(ROMANIAN_TAG), pipeline.answerLanguage(""))
+    }
+
+    @Test
+    fun `a swipe's decode names the language whose pairs it read`() {
+        pipeline.preferredLanguage(ENGLISH_TAG)
+        assertEquals(LanguageTags.primary(ENGLISH_TAG), pipeline.swipeLanguage(ROMANIAN_WORD))
+        pipeline.preferredLanguage(ROMANIAN_TAG)
+        assertEquals(LanguageTags.primary(ROMANIAN_TAG), pipeline.swipeLanguage(ROMANIAN_WORD))
+    }
+
     /** What autocorrect reads in the letters as English, while the verdict stays Romanian. */
     @Test
     fun `answering as a language reads the letters as that language's autocorrect does`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
         pipeline.commitPhrase(ROMANIAN)
         assertEquals("Romanian has to be the verdict for this to mean anything",
-                     ROMANIAN_PACK, pipeline.dominantPack())
+                     romanianPack, pipeline.dominantPack())
 
-        val slip = pipeline.answerAs(ENGLISH_PACK, "makw")
+        val slip = pipeline.answerAs(englishPack, "makw")
         assertNotNull("an active pack answers", slip)
         assertEquals("English autocorrect's first choice for the slip",
                      "make", slip!!.corrections.first().text)
-        assertTrue("English spells in exactly", pipeline.answerAs(ENGLISH_PACK, "in")!!.knownWordExact)
+        assertTrue("English spells in exactly", pipeline.answerAs(englishPack, "in")!!.knownWordExact)
         assertEquals("answering as English leaves the verdict Romanian",
-                     ROMANIAN_PACK, pipeline.dominantPack())
+                     romanianPack, pipeline.dominantPack())
         assertNull("a slot with no pack answers nothing", pipeline.answerAs(EMPTY_SLOT, "in"))
     }
 
     @Test
     fun `a pack that agrees proposes no replacement`() {
         val flags = listOf(
-            LanguageSwitchCorrector.Flag("care", "care", startOffset = 0, endOffset = 4, madeUnder = ROMANIAN_PACK),
+            LanguageSwitchCorrector.Flag("care", "care", startOffset = 0, endOffset = 4, madeUnder = romanianPack),
         )
         assertTrue(corrector.resolve(flags, listOf("care")).isEmpty())
         // Nor one that differs only in case.
@@ -116,10 +142,10 @@ class LanguageSwitchPipelineTest {
 
     @Test
     fun `a new field forgets what it was tracking`() {
-        corrector.startUnder(ROMANIAN_PACK)
+        corrector.startUnder(romanianPack)
         corrector.recordCorrection("in", "în", startOffset = 0, endOffset = 2)
         corrector.reset()
-        assertTrue("nothing is tracked across fields", corrector.snapshot(ENGLISH_PACK).isEmpty())
+        assertTrue("nothing is tracked across fields", corrector.snapshot(englishPack).isEmpty())
         assertTrue("and the verdict is undecided again, so the next one counts as a change",
                    corrector.observeDominantPack(0))
     }
@@ -137,14 +163,19 @@ class LanguageSwitchPipelineTest {
         /** The Languages screen's default. */
         const val BALANCED_EVIDENCE = 1.8f
 
-        /** Slots, in Pipeline.open's argument order, and one with no pack in it. */
-        const val ROMANIAN_PACK = 0
-        const val ENGLISH_PACK = 1
+        /** A lock minimum that never locks. */
+        const val LOCK_OFF = 0f
+
+        const val ROMANIAN_TAG = "ro-RO"
+        const val ENGLISH_TAG = "en-US"
+
+        /** A slot with no pack in it. */
         const val EMPTY_SLOT = 3
 
         // Words only one of the two shipped packs holds.
         const val ROMANIAN = "acesta trebuie foarte despre pentru"
         const val ENGLISH =
             "through because another thought between however people water number system"
+        val ROMANIAN_WORD = ROMANIAN.substringBefore(' ')
     }
 }

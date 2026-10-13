@@ -3,10 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.SettingLabel
-
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,23 +29,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.AssistModelRepository
 import com.borderkeys.data.DataGraph
-import androidx.compose.material3.FilterChip
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.CautionNote
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LinkedText
-import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -125,7 +125,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 SettingRow(
                     title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
                     trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(SPACE_XSMALL)) {
                             // Only for a model that is not active.
                             if (!model.active) {
                                 TextButton(onClick = { scope.launch { repository.activate(model) } }) {
@@ -182,10 +182,10 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
             Button(
                 onClick = { picker.launch(arrayOf("*/*")) },
                 enabled = !importing,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER),
             ) { Text(strings[Keys.ASSISTANT_CHOOSE_A_GGUF_FILE]) }
             if (importing) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(SPACE_GUTTER))
                 Explanation(strings[Keys.ASSISTANT_COPYING_AND_HASHING_A_MODEL_IS])
             }
             message?.let {
@@ -193,7 +193,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 )
             }
         }
@@ -244,7 +244,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
             Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
           }
@@ -320,9 +320,9 @@ private fun ModelForCategoryRow(
     onPick: (String) -> Unit,
     activeLabel: String,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM)) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
             FilterChip(
                 selected = selectedFile.isBlank(),
                 onClick = { onPick("") },

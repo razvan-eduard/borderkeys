@@ -3,6 +3,10 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.geometry.centreOfSlot
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
+
 /**
  * A compiled layout, in parallel arrays indexed by key: where every key is, what it types, and
  * which key a touch belongs to.
@@ -83,7 +87,7 @@ class KeyboardGeometry {
         val altBuilder = StringBuilder()
         val flickBuilder = StringBuilder()
         val heightUnit = height / layout.totalHeightScale
-        val halfGap = gapPx / 2f
+        val halfGap = half(gapPx)
 
         var index = 0
         var y = 0f
@@ -100,8 +104,8 @@ class KeyboardGeometry {
                 keyCode[index] = key.code
                 keyFlags[index] = key.flags
                 rowOfKey[index] = rowIndex
-                centerX[index] = (keyLeft[index] + keyRight[index]) / 2f
-                centerY[index] = (keyTop[index] + keyBottom[index]) / 2f
+                centerX[index] = middle(keyLeft[index], keyRight[index])
+                centerY[index] = middle(keyTop[index], keyBottom[index])
 
                 labelOffset[index] = labelBuilder.length
                 labelLength[index] = key.label.length
@@ -146,10 +150,10 @@ class KeyboardGeometry {
             gridKey = IntArray(cells)
         }
         for (row in 0 until gridRows) {
-            val sampleY = (row + 0.5f) * gridCellHeight
+            val sampleY = centreOfSlot(row, gridCellHeight)
             for (column in 0 until gridColumns) {
                 gridKey[row * gridColumns + column] =
-                    nearestKey((column + 0.5f) * gridCellWidth, sampleY)
+                    nearestKey(centreOfSlot(column, gridCellWidth), sampleY)
             }
         }
     }

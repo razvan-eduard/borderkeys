@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import com.borderkeys.geometry.halfDown
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.KeyStore
@@ -117,7 +118,7 @@ class ClipMediaStore(context: Context) : ClipMediaFiles {
         val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
         val side = minOf(decoded.width, decoded.height)
         val square = Bitmap.createBitmap(
-            decoded, (decoded.width - side) / 2, (decoded.height - side) / 2, side, side,
+            decoded, halfDown(decoded.width - side), halfDown(decoded.height - side), side, side,
         )
         val scaled = Bitmap.createScaledBitmap(square, ClipMedia.THUMBNAIL_PX, ClipMedia.THUMBNAIL_PX, true)
         var quality = 80

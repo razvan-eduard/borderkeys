@@ -54,7 +54,7 @@ fun DebugStatsLine(expanded: Boolean, onToggle: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = SPACE_XLARGE, vertical = SPACE_SMALL),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -101,7 +101,7 @@ fun DebugStatsPanel(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_LARGE),
     ) {
         Text(
             strings[Keys.DEBUG_STATS_LEGEND],
@@ -110,12 +110,12 @@ fun DebugStatsPanel(modifier: Modifier = Modifier) {
         )
         RatingLegend(strings)
         for (row in rows) {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = SPACE_LARGE)) {
                 Text(row.label, style = MaterialTheme.typography.titleSmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (row.rating != null) {
                         RatingDot(row.rating)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(SPACE_MEDIUM))
                     }
                     Text(
                         row.value,
@@ -128,12 +128,12 @@ fun DebugStatsPanel(modifier: Modifier = Modifier) {
                         row.hint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
+                        modifier = Modifier.padding(top = SPACE_TINY),
                     )
                 }
             }
         }
-        Row(modifier = Modifier.padding(top = 12.dp)) {
+        Row(modifier = Modifier.padding(top = SPACE_LARGE)) {
             TextButton(onClick = { KeyboardStats.reset(); tick++ }) {
                 Text(strings[Keys.DEBUG_STATS_RESET])
             }
@@ -202,7 +202,7 @@ private class StatRow(
 private fun RatingDot(rating: KeyboardStats.Rating) {
     Box(
         modifier = Modifier
-            .size(10.dp)
+            .size(RATING_DOT_SIZE)
             .clip(CircleShape)
             .background(
                 when (rating) {
@@ -216,19 +216,19 @@ private fun RatingDot(rating: KeyboardStats.Rating) {
 
 @Composable
 private fun RatingLegend(strings: LanguageManager) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = SPACE_XSMALL)) {
         for ((rating, key) in listOf(
             KeyboardStats.Rating.GOOD to Keys.DEBUG_STATS_RATING_GOOD,
             KeyboardStats.Rating.FAIR to Keys.DEBUG_STATS_RATING_FAIR,
             KeyboardStats.Rating.POOR to Keys.DEBUG_STATS_RATING_POOR,
         )) {
             RatingDot(rating)
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(SPACE_XSMALL))
             Text(
                 strings[key],
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 12.dp),
+                modifier = Modifier.padding(end = SPACE_LARGE),
             )
         }
     }
@@ -367,3 +367,6 @@ private val FAIR_COLOUR = Color(0xFFFFB300)
 private val POOR_COLOUR = Color(0xFFE53935)
 private const val COLLAPSED_GLYPH = "▲"
 private const val EXPANDED_GLYPH = "▼"
+
+/** A rating's dot. */
+private val RATING_DOT_SIZE = 10.dp

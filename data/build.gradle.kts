@@ -30,14 +30,34 @@ android {
         dataBinding = false
     }
 
+    // The in-memory phrase tables the data and keyboard tests share.
+    testFixtures {
+        enable = true
+    }
+
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
             all {
-                // The engine header the pack limit test reads from disk: a change to it reruns them.
+                // The host build of the native library, whose text rules PhraseKey calls.
+                it.systemProperty(
+                    "java.library.path",
+                    rootProject.layout.projectDirectory.dir("native-tests/build").asFile.path,
+                )
+                it.inputs.files(
+                    rootProject.fileTree("native-tests/build") { include("libborderkeys.*") },
+                ).withPropertyName("hostLibrary").withPathSensitivity(PathSensitivity.NONE)
+                // The engine headers the tests read from disk: a change to one reruns them.
                 it.inputs.file(
                     rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/engine.hpp"),
                 ).withPropertyName("engineHeader").withPathSensitivity(PathSensitivity.NONE)
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/user_model.hpp"),
+                ).withPropertyName("userModelHeader").withPathSensitivity(PathSensitivity.NONE)
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/bkd_format.hpp"),
+                ).withPropertyName("packFormatHeader").withPathSensitivity(PathSensitivity.NONE)
             }
         }
     }
@@ -56,6 +76,8 @@ ksp {
 }
 
 dependencies {
+    implementation(project(":geometry"))
+    implementation(project(":language"))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -71,8 +93,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
+    testFixturesImplementation(libs.kotlinx.coroutines.android)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
+    testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
 }

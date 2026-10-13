@@ -696,26 +696,58 @@ memory and flush when the buffer is old enough, full enough, or the field ends
 (`LearningFlow.onFieldFinished`). `LearningBuffer` is free of Android and of coroutines — a
 counter with a clock passed in — so the debounce and the eviction are testable on the JVM.
 
-**Structure.** `UserModel` is a node-per-character trie with a sorted child list. Insertion is
+**Structure.** `UserModel` is a node-per-character trie with a sorted child list, keyed by
+folded letters, each node holding one entry per spelling that folds to it, case aside. Insertion is
 off the hot path by construction; prefix lookup is on it, and is a binary search per character
 over a list almost always one or two entries long. A mutable double-array trie would have to be
-rebuilt on nearly every insertion.
+rebuilt on nearly every insertion. The pairs and triples sit beside it, one store per language:
+each store keys its links by their entries in hash maps, with every context's links and its
+total, so a count, a total or a context's successors is one lookup however many are held.
 
-**Caps and eviction.** `kMaxBigrams = 4096`, `kMaxTrigrams = 2048` — half, because a triple is
-both rarer and narrower, firing only when the last two words match. When full, the least-used
-entry is dropped, so a phrase typed once years ago does not hold a slot against one typed daily.
+**One store per language.** A pair or triple belongs to the language it was written in, its
+primary subtag (`ro`, `en`, `es`): the pack the engine answers in when the word is committed,
+else the preferred language's pack, else the heaviest active one (`Engine::personalLanguagePack`).
+Every answer names that language (`NativePredictor.TEXT_LANGUAGE`), `LearningFlow` files the
+next pairs and triples under it, and the engine reads only that language's store. The words
+themselves stay in one table for every language. Words and links are keyed in lower case with
+their marks kept, in the database and in the engine alike: `masă` and `masa` are two words with
+pairs of their own. The engine's trie is walked by folded letters, so a prefix typed without its
+marks still reaches both spellings.
+
+**The budget** (`PhraseBudget`, `PhraseRecorder` in `:data`). The database is the store; the
+engine holds what it loads and mirrors what the store gives up.
+
+| Rule | Pairs | Triples |
+|---|---|---|
+| Established links a context keeps | 20 | 10 |
+| Places for newcomers on top | 4 | 3 |
+| Established from | `DEFAULT_LEARN_AFTER_USES` uses | the same |
+| A link's age in its context | halves its score every 100 times the context is seen | the same |
+| Links a language keeps | 10,000 (`LANGUAGE_CAP`, `UserModel::kMaxBigrams`) | 10,000 |
+| Past the cap | pruned to 9,000 by count × ½^(links recorded since ÷ 10,000) | the same |
+
+The link just recorded never goes. While a context's newcomers outnumber their places, the
+newcomer seen longest ago goes; otherwise the established link with the lowest aged score. A
+restore, with nothing just recorded, lets every link compete on its aged score. A context's
+total counts every use, those of links it gave up included, so a share stays a share of what
+followed; forgetting a word takes its uses out. Each link carries the context's total and the
+language's clock when it was last seen (`contextSeen`, `languageSeen`); `user_pair_contexts`,
+`user_triple_contexts` and `user_phrase_clocks` hold the totals and clocks. A flush applies the
+budget and hands what it gave up to `EnginePort.dropLinks`. The wall-clock fade below halves
+stale counts and stale totals alike.
+
 Words are capped by the *Words kept* setting (`learnedWordLimit`, 20,000 by default, 1,000 to
-50,000): the daily sweep deletes the words past that many, by count and then recency, with the
-phrases they are in, and the engine loads the same words in the same order. Lowering the setting
-below the words already learned asks first, then deletes them at once (`keepWords`).
-`PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
+50,000): the daily sweep deletes the words past that many, by count and then recency, and the
+engine loads the same words in the same order. A word's phrases go when no case of it is left.
+Lowering the setting below the words already learned asks first, then deletes them at once
+(`keepWords`). `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
 
 **Deliberate capitals.** A word the user capitalised *themselves* — shift physically pressed for
 that letter, never auto-capitalise's doing — is treated as a name from then on, regardless of how
 it is typed next time (`UserModel::deliberateCapitals`).
 
-**Learning speed** (`setLearningSpeed`) multiplies raw counts into effective counts. It is the
-same number `kMinPersonalEvidence` is measured against, not a separate knob.
+**Learn after** (`setLearnAfterUses`, `KeyboardPreferences.learnAfter`) is how many uses a word,
+pair or triple needs before it counts; below it, it carries no weight.
 
 ### The heatmap
 

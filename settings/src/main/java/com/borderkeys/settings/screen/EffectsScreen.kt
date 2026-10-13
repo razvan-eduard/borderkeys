@@ -3,9 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -29,13 +26,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.BuiltInEffectsPreset
@@ -53,21 +49,28 @@ import com.borderkeys.data.theme.CustomEffectsPresetEntry
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.data.theme.ParticleFillLayer
 import com.borderkeys.data.theme.ParticleOutlineLayer
-import com.borderkeys.data.theme.ParticleRegionSettings
 import com.borderkeys.data.theme.ParticleRegionLook
+import com.borderkeys.data.theme.ParticleRegionSettings
 import com.borderkeys.data.theme.withPresetType
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.ParticleChipPreview
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberParticleEffectsUpdater
 import com.borderkeys.settings.rememberThemeUpdater
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Effects, the particles: [MyPresetsCard], whose presets apply to every region at once, then one
@@ -159,7 +162,7 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
             preview = {
                 SuggestionStripPreview(
                     appearance,
-                    Modifier.padding(vertical = 8.dp),
+                    Modifier.padding(vertical = SPACE_MEDIUM),
                     previewParticles = particleEffects.strip,
                 )
             },
@@ -188,7 +191,7 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
             Text(
                 presetNotice,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             )
         }
     }
@@ -314,8 +317,8 @@ private fun MyPresetsCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
         ) {
             for (preset in BuiltInEffectsPresets.ALL) {
                 val name = strings[builtInPresetNameKey(preset.id)]
@@ -328,8 +331,8 @@ private fun MyPresetsCard(
 
         val active = (baseline as? Baseline.Saved)?.entry
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = presetActions.onSave) { Text(strings[Keys.PARTICLE_EFFECTS_SAVE_PRESET]) }
@@ -356,7 +359,7 @@ private fun MyPresetsCard(
             Text(
                 strings[Keys.PARTICLE_EFFECTS_OFF_LOCKED_NOTE],
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             )
         }
     }
@@ -487,7 +490,7 @@ private fun RegionCardContent(
 private fun LayerSectionHeader(title: String, custom: Boolean) {
     val strings = LocalStrings.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -565,8 +568,8 @@ private fun OutlineLayerSection(
 
     LayerSectionHeader(strings[Keys.PARTICLE_EFFECTS_OUTLINE], custom)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
     ) {
         PreviewedChip(strings[Keys.PARTICLE_OUTLINE_NONE], selected = false, onClick = {
             onChange { it.copy(type = ParticleEffectsSettings.OUTLINE_NONE) }
@@ -583,8 +586,8 @@ private fun OutlineLayerSection(
         ) { onChange { it.withPresetType(ParticleEffectsSettings.OUTLINE_PULSE) } }
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
     ) {
         OutlineTypeChip(
             strings[Keys.PARTICLE_OUTLINE_SPARKLE],
@@ -664,8 +667,8 @@ private fun FillLayerSection(
 
     LayerSectionHeader(strings[Keys.PARTICLE_EFFECTS_FILL], custom)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
     ) {
         PreviewedChip(strings[Keys.PARTICLE_PRESET_NONE], selected = false, onClick = {
             onChange { it.copy(type = ParticleEffectsSettings.FILL_NONE) }
@@ -682,8 +685,8 @@ private fun FillLayerSection(
         ) { onChange { it.withPresetType(ParticleEffectsSettings.FILL_GLOW) } }
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
     ) {
         FillTypeChip(
             strings[Keys.PARTICLE_PRESET_WAVES],
@@ -793,8 +796,8 @@ private fun ParticleSavePresetDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(top = 6.dp, bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(top = SPACE_SMALL, bottom = SPACE_LARGE),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     for (slot in regionSlots) {
                         PickerChip(slot.title, slot.key == selectedKey) { selectedKey = slot.key }

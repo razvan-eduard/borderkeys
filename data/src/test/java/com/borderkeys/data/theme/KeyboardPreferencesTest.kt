@@ -12,6 +12,15 @@ import org.junit.Test
 class KeyboardPreferencesTest {
 
     @Test
+    fun `animations play always when on, never when off, and as Android says otherwise`() {
+        for (systemAnimated in listOf(true, false)) {
+            assertFalse(EffectsSettings.plays(EffectsSettings.MODE_OFF, systemAnimated))
+            assertTrue(EffectsSettings.plays(EffectsSettings.MODE_ON, systemAnimated))
+            assertEquals(systemAnimated, EffectsSettings.plays(EffectsSettings.MODE_SYSTEM, systemAnimated))
+        }
+    }
+
+    @Test
     fun animationsFollowTheirModeAndAFileFromBeforeKeepsWhatItHad() {
         val fresh = EffectsSettings()
         assertEquals(EffectsSettings.MODE_SYSTEM, fresh.animationMode)
@@ -27,19 +36,36 @@ class KeyboardPreferencesTest {
             KeyboardPreferences(effects = EffectsSettings(mode = 7)).sanitised().effects.mode,
         )
         assertEquals(
-            0.25f,
-            KeyboardPreferences(effects = EffectsSettings(speed = 0.01f)).sanitised().effects.speed,
+            EffectsSettings.MIN_SPEED,
+            KeyboardPreferences(effects = EffectsSettings(speed = 0f)).sanitised().effects.speed,
             0f,
         )
     }
 
     @Test
+    fun `animation speed defaults to a stop, and a stored speed between stops lands on the nearest`() {
+        val stops = EffectsSettings.SPEED_STOPS
+        assertTrue(EffectsSettings.DEFAULT_SPEED in stops)
+        fun read(speed: Float) = KeyboardPreferences(effects = EffectsSettings(speed = speed)).sanitised().effects.speed
+        for ((below, above) in stops.zipWithNext()) {
+            val gap = above - below
+            assertEquals(below, read(below + gap * NEAR_A_STOP), 0f)
+            assertEquals(above, read(above - gap * NEAR_A_STOP), 0f)
+        }
+        assertEquals("a speed past every stop", stops.last(), read(Float.MAX_VALUE), 0f)
+    }
+
+    @Test
     fun theImageOfferWindowIsOneOfItsSteps() {
-        assertEquals(5, KeyboardPreferences().imageOfferMinutes)
-        assertEquals(0, KeyboardPreferences(imageOfferMinutes = 0).sanitised().imageOfferMinutes)
-        assertEquals(60, KeyboardPreferences(imageOfferMinutes = 60).sanitised().imageOfferMinutes)
-        assertEquals(5, KeyboardPreferences(imageOfferMinutes = 7).sanitised().imageOfferMinutes)
-        assertEquals(5, KeyboardPreferences(imageOfferMinutes = -1).sanitised().imageOfferMinutes)
+        fun offered(minutes: Int) = KeyboardPreferences(imageOfferMinutes = minutes).sanitised().imageOfferMinutes
+        val steps = KeyboardPreferences.IMAGE_OFFER_STEPS
+        val default = KeyboardPreferences.DEFAULT_IMAGE_OFFER_MINUTES
+        assertEquals(default, KeyboardPreferences().imageOfferMinutes)
+        for (stop in steps) {
+            assertEquals(stop, offered(stop))
+        }
+        assertEquals(default, offered(steps.last() + 1))
+        assertEquals(default, offered(steps.first() - 1))
     }
 
     @Test
@@ -190,29 +216,71 @@ class KeyboardPreferencesTest {
         )
     }
 
+    @Test
+    fun `every stepped setting's default is one of its stops`() {
+        val defaults = KeyboardPreferences()
+        val stepped = mapOf(
+            "learn after" to (KeyboardPreferences.LEARN_AFTER_USES_STEPS to defaults.learnAfter),
+            "fade" to (KeyboardPreferences.UNLEARN_HALF_LIFE_STEPS to defaults.unlearnHalfLifeDays),
+            "single use" to (KeyboardPreferences.UNCONFIRMED_LIFE_STEPS to defaults.unconfirmedLifeDays),
+            "clean-up" to (KeyboardPreferences.CLEAN_UP_STEPS to defaults.cleanUpIntervalDays),
+            "retention" to (KeyboardPreferences.RETENTION_STEPS to defaults.clipboardRetentionMinutes),
+            "history size" to (KeyboardPreferences.HISTORY_SIZE_STEPS to defaults.clipboardMaxEntries),
+            "image size" to (KeyboardPreferences.IMAGE_SIZE_STEPS to defaults.clipboardImageMaxMb),
+            "offer window" to (KeyboardPreferences.IMAGE_OFFER_STEPS to defaults.imageOfferMinutes),
+        )
+        for ((name, setting) in stepped) {
+            val (stops, default) = setting
+            assertTrue("$name: $default is not one of $stops", default in stops)
+        }
+    }
+
     /** A file from before the uses setting keeps what its learning speed asked for. */
     @Test
     fun anOldLearningSpeedBecomesItsNumberOfUses() {
         fun usesFor(speed: Int) = KeyboardPreferences(learningSpeed = speed).sanitised().learnAfter
-        assertEquals(10, usesFor(KeyboardPreferences.LEARNING_CAUTIOUS))
-        assertEquals(3, usesFor(KeyboardPreferences.LEARNING_BALANCED))
-        assertEquals(1, usesFor(KeyboardPreferences.LEARNING_IMMEDIATE))
+        val steps = KeyboardPreferences.LEARN_AFTER_USES_STEPS
+        assertEquals(steps.last(), usesFor(KeyboardPreferences.LEARNING_CAUTIOUS))
+        assertEquals(KeyboardPreferences.DEFAULT_LEARN_AFTER_USES, usesFor(KeyboardPreferences.LEARNING_BALANCED))
+        assertEquals(steps.first(), usesFor(KeyboardPreferences.LEARNING_IMMEDIATE))
         assertEquals(
             "a chosen number wins over the old speed",
-            5,
-            KeyboardPreferences(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS, learnAfterUses = 5)
+            steps.first(),
+            KeyboardPreferences(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS, learnAfterUses = steps.first())
                 .sanitised().learnAfter,
         )
     }
 
     @Test
     fun theUsesAndTheFadeLandOnTheirStops() {
-        assertEquals(5, KeyboardPreferences(learnAfterUses = 7).sanitised().learnAfterUses)
-        assertEquals(10, KeyboardPreferences(learnAfterUses = 99).sanitised().learnAfterUses)
-        assertEquals(1, KeyboardPreferences(learnAfterUses = -2).sanitised().learnAfterUses)
-        assertEquals(90, KeyboardPreferences(unlearnHalfLifeDays = 100).sanitised().unlearnHalfLifeDays)
-        assertEquals(7, KeyboardPreferences(unlearnHalfLifeDays = 0).sanitised().unlearnHalfLifeDays)
-        assertEquals(365, KeyboardPreferences(unlearnHalfLifeDays = 5000).sanitised().unlearnHalfLifeDays)
+        val steps = KeyboardPreferences.LEARN_AFTER_USES_STEPS
+        assertEquals(steps.last(), KeyboardPreferences(learnAfterUses = steps.last() - 1).sanitised().learnAfterUses)
+        assertEquals(steps.last(), KeyboardPreferences(learnAfterUses = steps.last() + 1).sanitised().learnAfterUses)
+        assertEquals(steps.first(), KeyboardPreferences(learnAfterUses = steps.first() - 1).sanitised().learnAfterUses)
+        fun fade(days: Int) = KeyboardPreferences(unlearnHalfLifeDays = days).sanitised().unlearnHalfLifeDays
+        val fadeSteps = KeyboardPreferences.UNLEARN_HALF_LIFE_STEPS
+        val fadeDefault = KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS
+        assertEquals(fadeDefault, fade(fadeDefault + 1))
+        assertEquals(fadeSteps.first(), fade(fadeSteps.first() - 1))
+        assertEquals(fadeSteps.last(), fade(fadeSteps.last() + 1))
+    }
+
+    @Test
+    fun aWordUsedOnceIsKeptForItsStopOrWithOffForever() {
+        fun kept(days: Int) = KeyboardPreferences(unconfirmedLifeDays = days).sanitised().unconfirmedLifeDays
+        val steps = KeyboardPreferences.UNCONFIRMED_LIFE_STEPS
+        assertEquals(KeyboardPreferences.DEFAULT_UNCONFIRMED_LIFE_DAYS, KeyboardPreferences().unconfirmedLifeDays)
+        assertEquals(KeyboardPreferences.UNCONFIRMED_LIFE_OFF, kept(KeyboardPreferences.UNCONFIRMED_LIFE_OFF))
+        assertEquals(KeyboardPreferences.UNCONFIRMED_LIFE_OFF, kept(KeyboardPreferences.UNCONFIRMED_LIFE_OFF - 1))
+        assertEquals(steps.last(), kept(steps.last() - 1))
+        assertEquals(steps.last(), kept(steps.last() + 1))
+    }
+
+    @Test
+    fun `the clean-up runs weekly by default, and a stored interval lands on its nearest stop`() {
+        fun kept(days: Int) = KeyboardPreferences(cleanUpIntervalDays = days).sanitised().cleanUpIntervalDays
+        assertEquals(KeyboardPreferences.CLEAN_UP_WEEKLY, KeyboardPreferences().cleanUpIntervalDays)
+        assertEquals(KeyboardPreferences.CLEAN_UP_WEEKLY, kept(KeyboardPreferences.CLEAN_UP_WEEKLY + 1))
     }
 
     @Test
@@ -257,8 +325,8 @@ class KeyboardPreferencesTest {
         assertEquals(0f, defaults.bottomOffsetDp, 0f)
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
         assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
-        assertEquals(3, defaults.learnAfter)
-        assertEquals(90, defaults.unlearnHalfLifeDays)
+        assertEquals(KeyboardPreferences.DEFAULT_LEARN_AFTER_USES, defaults.learnAfter)
+        assertEquals(KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS, defaults.unlearnHalfLifeDays)
         assertEquals(KeyboardPreferences.DEFAULT_SUGGESTIONS, defaults.suggestionCount)
         assertFalse(defaults.phraseSuggestions)
         assertTrue(defaults.edgeArrows)
@@ -1042,3 +1110,6 @@ class KeyboardPreferencesTest {
         )
     }
 }
+
+/** How far a speed sits from the stop it lands on, as a share of the gap to the next. */
+private const val NEAR_A_STOP = 0.25f

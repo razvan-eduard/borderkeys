@@ -28,13 +28,6 @@ namespace {
 
 // Scoring constants, in natural log units.
 
-// What one key width of finger error costs. The build may set it for a sweep.
-#ifdef BORDERKEYS_EDIT_PENALTY
-constexpr float kEditPenalty = static_cast<float>(BORDERKEYS_EDIT_PENALTY);
-#else
-constexpr float kEditPenalty = 25.0f;
-#endif
-
 // What an inserted letter costs, in key widths.
 constexpr float kInsertCost = 0.85f;
 
@@ -97,38 +90,21 @@ constexpr int kMaxShownCompletions = 4;
 // Stupid backoff's factor.
 constexpr float kBackoffLogFactor = -0.9162907f;  // ln(0.4)
 
-constexpr float kMaxUserBoost = 3.0f;
-
-// A flat cost for any candidate reached with an edit, on top of the per-edit cost. The build
-// may set it for a sweep.
-#ifdef BORDERKEYS_CORRECTION_SURCHARGE
-constexpr float kCorrectionSurcharge = static_cast<float>(BORDERKEYS_CORRECTION_SURCHARGE);
-#else
-constexpr float kCorrectionSurcharge = 3.0f;
-#endif
-
-// The range setCorrectionStrictness() clamps to, a multiplier on kEditPenalty and
-// kCorrectionSurcharge.
-constexpr float kMinCorrectionStrictness = 0.5f;
-constexpr float kMaxCorrectionStrictness = 2.0f;
-
-// A personal word reached by the cheapest edit, at the most lenient strictness, cannot tie or
-// beat a correctly typed word. kMinSubstitutionCost is the floor after kSlipScale; a mark
-// insertion is below the margin, and the personal dictionary is offered to the strip only.
-static_assert(
-    kMinCorrectionStrictness *
-            (kEditPenalty * KeyGeometry::kMinSubstitutionCost + kCorrectionSurcharge) >
-        kMaxUserBoost,
-    "the correction-vs-personal-word safety margin has eroded -- see the comment above");
+// A word one cheapest edit from the typed letters cannot pass a correctly typed word on its word
+// boost alone at any strictness, nor on its word boost and context bonus from the default
+// strictness up.
+static_assert(Engine::kMinCorrectionStrictness * Engine::kCheapestEditCost >
+                  PersonalScore::kMaxUserBoost,
+              "the word boost can lift a one-edit word over a correctly typed one");
+static_assert(Engine::kDefaultCorrectionStrictness * Engine::kCheapestEditCost >
+                  PersonalScore::kMaxPersonalScore,
+              "the personal score can lift a one-edit word over a correctly typed one");
+static_assert(Engine::kMinCorrectionStrictness <= Engine::kDefaultCorrectionStrictness &&
+                  Engine::kDefaultCorrectionStrictness <= Engine::kMaxCorrectionStrictness,
+              "the default strictness lies outside the range it is clamped to");
 
 // The log-probability of a word only the personal dictionary holds, before its boost.
 constexpr float kUserOnlyLogProb = -8.0f;
-
-/** Smoothing for a personal pair, in observations: its share is `count / (total + prior)`. */
-constexpr float kUserBigramPrior = 4.0f;
-
-/** The most a personal pair may add to a word that was already being suggested. */
-constexpr float kMaxUserBigramBoost = 2.5f;
 
 /**
  * The most a phrase this person writes may outrank what the corpus says follows, scaled by a
@@ -233,16 +209,6 @@ constexpr float kGrammarWeight = 0.75f;
 // The reserved context for "a sentence began here"; see NgramModel::kSentenceStartContext.
 constexpr uint32_t kSentenceStartIndex = NgramModel::kSentenceStartContext;
 
-// The personal model's context word for "a sentence began here", as Kotlin records it; no key
-// types its first byte.
-constexpr char kUserSentenceStart[] = "\x02start";
-constexpr size_t kUserSentenceStartLength = sizeof(kUserSentenceStart) - 1;
-
-static bool isUserSentenceStart(const char* word, size_t length) {
-    return word != nullptr && length == kUserSentenceStartLength &&
-           std::memcmp(word, kUserSentenceStart, kUserSentenceStartLength) == 0;
-}
-
 // How many of a context word's successors are scored in full when nothing has been typed:
 // the strongest by their pair value, chosen in one pass over the list.
 constexpr int kSuccessorWalk = 64;
@@ -253,27 +219,6 @@ constexpr float kLogProbScale = 10.0f;
 
 // The longest blocked spelling, in bytes.
 constexpr int kMaxBlockedBytes = 256;
-
-// [text] with every code point lowered by lowerCodePoint, into [out]; its byte count, or -1 when
-// [text] is not valid UTF-8 or does not fit.
-int lowerUtf8(const char* text, size_t length, char* out, int outBytes) {
-    const char* cursor = text;
-    const char* const end = text + length;
-    int written = 0;
-    while (cursor < end) {
-        uint32_t codePoint = 0;
-        cursor = utf8Decode(cursor, end, &codePoint);
-        if (cursor == nullptr || written + 4 > outBytes) {
-            return -1;
-        }
-        const int bytes = utf8Encode(lowerCodePoint(codePoint), out + written);
-        if (bytes <= 0) {
-            return -1;
-        }
-        written += bytes;
-    }
-    return written;
-}
 
 // The order the blocked spellings are kept and searched in.
 bool blockedBefore(const std::string& entry, std::string_view value) {
@@ -663,14 +608,14 @@ bool Engine::warmSwipeModel() {
 
 int Engine::packIndexForTag(const char* tag) const {
     if (tag == nullptr) {
-        return -1;
+        return kNoPack;
     }
     for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && std::strcmp(packs_[i].tag(), tag) == 0) {
             return i;
         }
     }
-    return -1;
+    return kNoPack;
 }
 
 int32_t Engine::loadLanguage(const char* tag, int fd, int64_t offset, int64_t length,
@@ -723,10 +668,10 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
             contextWord2_[i] = -1;
             contextTag1_[i] = LanguagePack::kNoPosTag;
             if (dominantPack_ == i) {
-                dominantPack_ = -1;
+                dominantPack_ = kNoPack;
             }
             if (answeringPack_ == i) {
-                answeringPack_ = -1;
+                answeringPack_ = kNoPack;
             }
         }
     }
@@ -788,7 +733,7 @@ void Engine::setLanguageLock(float minimumEvidence, bool strict) {
 }
 
 void Engine::resolvePreferredPack() {
-    preferredPack_ = -1;
+    preferredPack_ = kNoPack;
     if (preferredTag_[0] == '\0') {
         return;
     }
@@ -813,7 +758,7 @@ void Engine::resetLanguageEvidence() {
     for (int i = 0; i < kMaxPacks; ++i) {
         languageEvidence_[i] = 0.0f;
     }
-    dominantPack_ = -1;
+    dominantPack_ = kNoPack;
     // The de-duplication guard is reset too.
     lastObservedWord_ = 0;
 }
@@ -1016,8 +961,8 @@ float Engine::packWeightLog(int packIndex) const {
     return std::log(normalisedWeight_[packIndex]);
 }
 
-float Engine::userBoost(const char* text, uint32_t length) const {
-    return userBoostFor(text, length);
+float Engine::personalScore(const char* text, uint32_t length) const {
+    return personal_.scoreFor(text, length);
 }
 
 int32_t Engine::offeredSpelling(int packIndex, uint32_t firstIndex) const {
@@ -1185,20 +1130,20 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
     uint32_t folded[kMaxComposing];
 
     int length1 = -1;
-    userContext1_ = -1;
-    userContext2_ = -1;
+    int32_t userContext1 = -1;
+    int32_t userContext2 = -1;
     if (previous1 != nullptr && previous1Length > 0) {
         length1 = foldUtf8(previous1, previous1Length, folded, kMaxComposing);
-        if (personalModelEnabled_) {
-            userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
+        if (personal_.enabled()) {
+            userContext1 = userModel_.entryIndexFor(previous1, previous1Length);
         }
-    } else if (personalModelEnabled_) {
+    } else if (personal_.enabled()) {
         // A sentence began here: the words this person opens sentences with are its successors.
-        userContext1_ = userModel_.entryIndexFor(kUserSentenceStart, kUserSentenceStartLength);
+        userContext1 = userModel_.entryIndexFor(kUserSentenceStart, kUserSentenceStartLength);
     }
     // Left at -1 while the personal model is off, which turns every personal-context path off.
-    if (personalModelEnabled_ && previous2 != nullptr && previous2Length > 0) {
-        userContext2_ = userModel_.entryIndexFor(previous2, previous2Length);
+    if (personal_.enabled() && previous2 != nullptr && previous2Length > 0) {
+        userContext2 = userModel_.entryIndexFor(previous2, previous2Length);
     }
     for (int i = 0; i < kMaxPacks; ++i) {
         contextWord1_[i] = -1;
@@ -1229,6 +1174,17 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
             hasContext2_ = true;
         }
     }
+
+    resolveLanguage();
+    const int32_t store =
+        personal_.enabled()
+            ? userModel_.findStore(personalLanguage_.data(), personalLanguage_.size())
+            : -1;
+    personal_.resolve(store, userContext1, userContext2);
+}
+
+void Engine::resolveLanguage() {
+    personalLanguage_ = currentPersonalLanguage();
 }
 
 float Engine::contextLogProb(int packIndex, uint32_t wordIndex) const {
@@ -1283,51 +1239,31 @@ float Engine::contextLogProb(int packIndex, uint32_t wordIndex) const {
     return score;
 }
 
-float Engine::userBoostForCount(uint32_t count) const {
-    if (count == 0) {
-        return 0.0f;
-    }
-    // Logarithmic and capped.
-    const float boost = 0.9f * std::log(1.0f + static_cast<float>(count));
-    return (boost > kMaxUserBoost) ? kMaxUserBoost : boost;
-}
-
-void Engine::loadUserTrigrams(const char* const* previous2, const size_t* previous2Lengths,
+void Engine::loadUserTrigrams(const char* const* languages, const size_t* languageLengths,
+                              const char* const* previous2, const size_t* previous2Lengths,
                               const char* const* previous1, const size_t* previous1Lengths,
                               const char* const* next, const size_t* nextLengths,
-                              const int32_t* counts, int count) {
+                              const int32_t* counts, int count, const uint64_t* contextSeen,
+                              const uint64_t* languageSeen) {
     if (!created_) {
         return;
     }
-    userModel_.bulkLoadTrigrams(previous2, previous2Lengths, previous1, previous1Lengths, next,
-                                nextLengths, counts, count);
+    userModel_.bulkLoadTrigrams(languages, languageLengths, previous2, previous2Lengths, previous1,
+                                previous1Lengths, next, nextLengths, counts, count, contextSeen,
+                                languageSeen);
 }
 
 void Engine::setLearnAfterUses(int uses) {
-    if (uses < 1) {
-        learnAfterUses_ = kDefaultLearnAfterUses;
-        return;
-    }
-    learnAfterUses_ = std::min(static_cast<uint32_t>(uses), kMaxLearnAfterUses);
+    const uint32_t clamped = std::min(static_cast<uint32_t>(uses), kMaxLearnAfterUses);
+    personal_.setLearnAfterUses(uses < 1 ? kDefaultLearnAfterUses : clamped);
 }
 
 void Engine::setCorrectionStrictness(float scale) {
     if (!(scale > 0.0f)) {
-        correctionStrictness_ = 1.0f;
+        correctionStrictness_ = kDefaultCorrectionStrictness;
         return;
     }
     correctionStrictness_ = std::clamp(scale, kMinCorrectionStrictness, kMaxCorrectionStrictness);
-}
-
-float Engine::userBoostFor(const char* text, uint32_t length) const {
-    if (!personalModelEnabled_ || userModel_.size() == 0 || text == nullptr || length == 0) {
-        return 0.0f;
-    }
-    const int32_t entry = userModel_.entryIndexFor(text, length);
-    if (entry < 0 || !personalWordEstablished(static_cast<uint32_t>(entry))) {
-        return 0.0f;
-    }
-    return userBoostForCount(userModel_.entryCount(static_cast<uint32_t>(entry)));
 }
 
 void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
@@ -1357,13 +1293,13 @@ void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int 
                              uint32_t wordIndex, float score, float editCost, int edits,
                              int runOn, int slips) const {
     // Skipped when even the largest boost cannot reach the heap's floor.
-    if (score + kMaxUserBoost <= heap.worstScore()) {
+    if (score + personal_.ceiling() <= heap.worstScore()) {
         return;
     }
     uint32_t textLength = 0;
     const char* const text = trie.wordText(wordIndex, &textLength);
     if (text != nullptr && textLength != 0) {
-        score += userBoostFor(text, textLength);
+        score += personal_.scoreFor(text, textLength);
         Candidate candidate{packIndex, static_cast<int32_t>(wordIndex), score};
         candidate.editCost = editCost;
         candidate.edits = static_cast<uint8_t>(edits);
@@ -1628,7 +1564,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                 if (commits(currentPass_) && takesRespellingTier(reading) && text != nullptr &&
                     textLength != 0 && !isBlocked(text, textLength)) {
                     // Boosted as offerScoredWord boosts, without a frequency floor.
-                    const float boosted = score + userBoostFor(text, textLength);
+                    const float boosted = score + personal_.scoreFor(text, textLength);
                     if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
                         bestRespelling_ =
                             Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
@@ -1830,8 +1766,8 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
 
         float score = weightLog + contextLogProb(packIndex, wordIndex) -
                       kCompletionPenalty * static_cast<float>(extra);
-        if (score + kMaxUserBoost > heap.worstScore()) {
-            score += userBoostFor(text, textLength);
+        if (score + personal_.ceiling() > heap.worstScore()) {
+            score += personal_.scoreFor(text, textLength);
             Candidate candidate{packIndex, frequent[i], score};
             candidate.runOn = static_cast<uint8_t>(extra);
             offerCandidate(heap, candidate, text, textLength);
@@ -1839,61 +1775,46 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
     }
 }
 
-float Engine::userBigramBonusFor(uint32_t entryIndex) const {
-    if (userContext1_ < 0) {
-        return 0.0f;
-    }
-    const uint32_t pair = userModel_.bigramCount(userContext1_, static_cast<int32_t>(entryIndex));
-    if (pair < learnAfterUses_) {
-        return 0.0f;
-    }
-    const uint32_t total = userModel_.successorTotal(userContext1_);
-    if (total == 0u) {
-        return 0.0f;
-    }
-    // The smoothed share, as a bounded bonus.
-    const float share = static_cast<float>(pair) / (static_cast<float>(total) + kUserBigramPrior);
-    const float bonus = kMaxUserBigramBoost * share;
-    return bonus;
-}
-
 void Engine::searchUserPhrases(TopK<Candidate>& heap) {
-    if (!phraseSuggestions_ || userContext1_ < 0 || userModel_.size() == 0) {
+    if (!phraseSuggestions_ || personal_.context1() < 0 || userModel_.size() == 0) {
         return;
     }
-    const uint32_t firstTotal = userModel_.successorTotal(userContext1_);
+    const uint32_t firstTotal = userModel_.successorTotal(personal_.store(), personal_.context1());
     if (firstTotal == 0u) {
         return;
     }
 
     constexpr int kMaxFirst = 3;
     UserModel::Successor first[kMaxFirst];
-    const int firstCount = userModel_.successors(userContext1_, first, kMaxFirst);
+    const int firstCount =
+        userModel_.successors(personal_.store(), personal_.context1(), first, kMaxFirst);
 
     for (int i = 0; i < firstCount && phraseCount_ < kMaxPhrases; ++i) {
         // Each link has to be learned.
-        if (first[i].count < learnAfterUses_) {
+        if (!personal_.learned(first[i].count)) {
             continue;
         }
         const float firstShare = static_cast<float>(first[i].count) /
-                                 (static_cast<float>(firstTotal) + kUserBigramPrior);
+                                 (static_cast<float>(firstTotal) + PersonalScore::kUserBigramPrior);
         if (firstShare < kPhraseMinShare) {
             continue;
         }
 
         const int32_t middle = static_cast<int32_t>(first[i].entryIndex);
-        const uint32_t secondTotal = userModel_.successorTotal(middle);
+        const uint32_t secondTotal = userModel_.successorTotal(personal_.store(), middle);
         if (secondTotal == 0u) {
             continue;
         }
         UserModel::Successor second[1];
-        if (userModel_.successors(middle, second, 1) != 1 || second[0].count < learnAfterUses_) {
+        if (userModel_.successors(personal_.store(), middle, second, 1) != 1 ||
+            !personal_.learned(second[0].count)) {
             continue;
         }
         // The second link is smoothed against a larger prior.
         const float secondShare =
             static_cast<float>(second[0].count) /
-            (static_cast<float>(secondTotal) + kUserBigramPrior * kPhraseSecondLinkFactor);
+            (static_cast<float>(secondTotal) +
+             PersonalScore::kUserBigramPrior * kPhraseSecondLinkFactor);
         if (secondShare < kPhraseMinShare) {
             continue;
         }
@@ -1910,10 +1831,10 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
             continue;
         }
         // Both words have to be established, or a pack's own.
-        if (!personalWordEstablished(first[i].entryIndex) && !anyPackKnows(firstText, firstLength)) {
+        if (!personal_.established(first[i].entryIndex) && !anyPackKnows(firstText, firstLength)) {
             continue;
         }
-        if (!personalWordEstablished(second[0].entryIndex) &&
+        if (!personal_.established(second[0].entryIndex) &&
             !anyPackKnows(secondText, secondLength)) {
             continue;
         }
@@ -1942,7 +1863,7 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
 }
 
 void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
-    if (userContext1_ < 0 || userModel_.size() == 0) {
+    if (personal_.context1() < 0 || userModel_.size() == 0) {
         return;
     }
 
@@ -1951,28 +1872,30 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
     UserModel::Successor successors[kMaxSuccessors];
     int found = 0;
     uint32_t total = 0u;
-    if (userContext2_ >= 0) {
-        total = userModel_.trigramTotal(userContext2_, userContext1_);
+    if (personal_.context2() >= 0) {
+        total = userModel_.trigramTotal(personal_.store(), personal_.context2(),
+                                        personal_.context1());
         if (total > 0u) {
-            found = userModel_.trigramSuccessors(userContext2_, userContext1_, successors,
-                                                 kMaxSuccessors);
+            found = userModel_.trigramSuccessors(personal_.store(), personal_.context2(),
+                                                 personal_.context1(), successors, kMaxSuccessors);
         }
     }
     if (found == 0) {
-        total = userModel_.successorTotal(userContext1_);
+        total = userModel_.successorTotal(personal_.store(), personal_.context1());
         if (total == 0u) {
             return;
         }
-        found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
+        found = userModel_.successors(personal_.store(), personal_.context1(), successors,
+                                      kMaxSuccessors);
     }
     for (int i = 0; i < found; ++i) {
         // A pair or triple is offered once learned.
-        if (successors[i].count < learnAfterUses_) {
+        if (!personal_.learned(successors[i].count)) {
             continue;
         }
         // A smoothed conditional probability plus the preference.
         const float count = static_cast<float>(successors[i].count);
-        const float share = count / (static_cast<float>(total) + kUserBigramPrior);
+        const float share = count / (static_cast<float>(total) + PersonalScore::kUserBigramPrior);
         const float confidence = count / (count + kUserChainHalfLife);
         const float score = std::log(share) + kUserChainPreference * confidence;
         uint32_t textLength = 0;
@@ -1983,43 +1906,104 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
             continue;
         }
         // The word itself has to be established, or a pack's own.
-        if (!personalWordEstablished(successors[i].entryIndex) && !anyPackKnows(text, textLength)) {
+        if (!personal_.established(successors[i].entryIndex) && !anyPackKnows(text, textLength)) {
             continue;
         }
         offerCandidate(heap, candidate, text, textLength);
     }
 }
 
-bool Engine::personalWordEstablished(uint32_t entryIndex) const {
-    if (userModel_.asserted(entryIndex) > 0) {
-        return true;
-    }
-    return userModel_.entryCount(entryIndex) >= learnAfterUses_;
-}
-
 int32_t Engine::establishedPersonalEntry(const char* word, size_t length) const {
-    const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
-    return (entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry))) ? entry : -1;
+    const int32_t entry = personal_.enabled() ? userModel_.entryIndexFor(word, length) : -1;
+    return (entry >= 0 && personal_.established(static_cast<uint32_t>(entry))) ? entry : -1;
 }
 
 bool Engine::anyPackKnows(const char* text, uint32_t length) const {
     uint32_t folded[kMaxComposing];
     const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
-    if (foldedLength <= 0) {
-        return false;
-    }
+    return foldedLength > 0 && anyPackKnowsFolded(folded, foldedLength);
+}
+
+bool Engine::anyPackKnowsFolded(const uint32_t* folded, int length) const {
     for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && packs_[i].active &&
-            firstUnblockedSpelling(packs_[i].trie(),
-                                   knownIn(packs_[i].trie(), folded, foldedLength)) >= 0) {
+            firstUnblockedSpelling(packs_[i].trie(), knownIn(packs_[i].trie(), folded, length)) >=
+                0) {
             return true;
         }
     }
     return false;
 }
 
+bool Engine::anyPackActive() const {
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (packs_[i].isOpen() && packs_[i].active) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Engine::learnable(const char* word, size_t length) const {
+    if (word == nullptr || length == 0) {
+        return false;
+    }
+    if (length == kUserSentenceStartLength && std::memcmp(word, kUserSentenceStart, length) == 0) {
+        return true;
+    }
+    if (!anyPackActive()) {
+        return true;
+    }
+    const int32_t entry = userModel_.entryIndexFor(word, length);
+    if (entry >= 0 && personal_.established(static_cast<uint32_t>(entry))) {
+        return true;
+    }
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    if (anyPackKnowsFolded(folded, foldedLength)) {
+        return true;
+    }
+    // Without its apostrophes.
+    uint32_t bare[kMaxComposing];
+    int bareLength = 0;
+    for (int i = 0; i < foldedLength; ++i) {
+        if (folded[i] != kApostrophe) {
+            bare[bareLength++] = folded[i];
+        }
+    }
+    if (bareLength > 0 && bareLength < foldedLength && anyPackKnowsFolded(bare, bareLength)) {
+        return true;
+    }
+    // The word before a final possessive.
+    const int stemLength = foldedLength - kPossessiveEndingLength;
+    if (stemLength > 0 &&
+        std::equal(kPossessiveEnding, kPossessiveEnding + kPossessiveEndingLength,
+                   folded + stemLength) &&
+        anyPackKnowsFolded(folded, stemLength)) {
+        return true;
+    }
+    // Every part between its hyphens.
+    if (std::find(folded, folded + foldedLength, kHyphen) == folded + foldedLength) {
+        return false;
+    }
+    int partStart = 0;
+    for (int i = 0; i <= foldedLength; ++i) {
+        if (i < foldedLength && folded[i] != kHyphen) {
+            continue;
+        }
+        if (i == partStart || !anyPackKnowsFolded(folded + partStart, i - partStart)) {
+            return false;
+        }
+        partStart = i + 1;
+    }
+    return true;
+}
+
 void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap) {
-    if (!personalModelEnabled_ || userModel_.size() == 0) {
+    if (!personal_.enabled() || userModel_.size() == 0) {
         return;
     }
     const size_t mark = arena_.used();
@@ -2032,12 +2016,12 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
     const int found =
         userModel_.completions(folded, foldedLength, completions, kMaxUserCompletions);
     for (int i = 0; i < found; ++i) {
-        if (!personalWordEstablished(completions[i].entryIndex)) {
+        if (!personal_.established(completions[i].entryIndex)) {
             continue;
         }
-        // kUserOnlyLogProb plus the boost a dictionary word would get, plus the pair bonus.
-        const float score = kUserOnlyLogProb + userBoostForCount(completions[i].count) +
-                            userBigramBonusFor(completions[i].entryIndex);
+        // kUserOnlyLogProb plus the boost a dictionary word would get, plus its context bonus.
+        const float score = kUserOnlyLogProb + personal_.wordBoostForCount(completions[i].count) +
+                            personal_.contextBonus(completions[i].entryIndex);
         const Candidate candidate{Candidate::kUserPack,
                                   static_cast<int32_t>(completions[i].entryIndex), score};
         uint32_t textLength = 0;
@@ -2148,9 +2132,27 @@ int Engine::preferredPack() const {
         return active;
     }
     if (bestIndex < 0 || total < kPreferredEvidenceMinimum) {
-        return -1;
+        return kNoPack;
     }
-    return (best >= total * kLanguageDominanceShare) ? bestIndex : -1;
+    return (best >= total * kLanguageDominanceShare) ? bestIndex : kNoPack;
+}
+
+std::string Engine::currentPersonalLanguage() const {
+    const int pack = personalLanguagePack();
+    const char* const tag = pack >= 0 ? packs_[pack].tag() : nullptr;
+    return primaryLanguageOf(tag, tag != nullptr ? std::strlen(tag) : 0);
+}
+
+int Engine::restrictedPack() const {
+    if (answeringPack_ >= 0) {
+        return answeringPack_;
+    }
+    return (dominantPack_ >= 0) ? dominantPack_ : preferredPack_;
+}
+
+int Engine::personalLanguagePack() const {
+    const int restricted = restrictedPack();
+    return (restricted >= 0) ? restricted : heaviestPack();
 }
 
 bool Engine::exactSpelling(const char* word, size_t length, int* packOut,
@@ -2341,16 +2343,16 @@ bool Engine::vouchesForStem(const char* word, size_t length, const char* tag) co
             return true;
         }
     }
-    if (!personalModelEnabled_ || isBlocked(word, static_cast<uint32_t>(length))) {
+    if (!personal_.enabled() || isBlocked(word, static_cast<uint32_t>(length))) {
         return false;
     }
     const int32_t entry = userModel_.entryIndexFor(word, length);
-    return entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry));
+    return entry >= 0 && personal_.established(static_cast<uint32_t>(entry));
 }
 
 bool Engine::answerAs(int packIndex) {
-    if (packIndex == -1) {
-        answeringPack_ = -1;
+    if (packIndex == kNoPack) {
+        answeringPack_ = kNoPack;
         return true;
     }
     if (packIndex < 0 || packIndex >= kMaxPacks || !packs_[packIndex].isOpen() ||
@@ -2376,9 +2378,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         return 0;
     }
     arena_.reset();
-    // The phrase slots and the decoder's word belong to this request.
+    // The phrase slots, the decoder's word and the settled corrections belong to this request.
     phraseCount_ = 0;
     forgetDecoded();
+    forgetSettled();
 
     uint32_t folded[kMaxComposing];
     int source[kMaxComposing];
@@ -2387,6 +2390,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         foldedLength = foldUtf8(composing, composingLength, folded, kMaxComposing, source);
         // Malformed or overlong input gets no suggestions.
         if (foldedLength < 0) {
+            resolveLanguage();
             return 0;
         }
     }
@@ -2413,15 +2417,11 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     TopK<Candidate> heap;
     heap.reset(heapStorage_, kMaxCandidates);
     correctionHeap_.reset(correctionStorage_, kMaxCorrections);
-    hasBestCorrection_ = false;
-    hasBestRespelling_ = false;
 
-    // The search is restricted to the pack answerAs names, else the detected language, else the
-    // preferred one, else, when strict, the heaviest; otherwise every pack answers.
-    const int restrictTo = (answeringPack_ >= 0)  ? answeringPack_
-                           : (dominantPack_ >= 0)  ? dominantPack_
-                           : (preferredPack_ >= 0) ? preferredPack_
-                                                   : (strictLanguage_ ? heaviestPack() : -1);
+    // The search is restricted to [restrictedPack], else, when strict, the heaviest; otherwise
+    // every pack answers.
+    const int restricted = restrictedPack();
+    const int restrictTo = (restricted >= 0) ? restricted : (strictLanguage_ ? heaviestPack() : -1);
     primaryReached_ = false;
     typedText_ = composing;
     typedTextLength_ = static_cast<uint32_t>(composingLength);
@@ -2491,6 +2491,14 @@ void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLen
             searchUserPhrases(heap);
             break;
     }
+}
+
+void Engine::forgetSettled() {
+    settledCount_ = 0;
+    hasBestCorrection_ = false;
+    hasBestRespelling_ = false;
+    hasTypedSpelling_ = false;
+    typedKnown_ = false;
 }
 
 void Engine::settleCorrection(const char* composing, size_t composingLength) {
@@ -2608,24 +2616,37 @@ bool Engine::continuesTyped(const Candidate& candidate, const uint32_t* folded,
     return true;
 }
 
-void Engine::learn(const char* word, size_t wordLength, const char* previous1,
-                   size_t previous1Length, const char* previous2, size_t previous2Length,
-                   bool deliberateCapital, bool asserted) {
+Engine::Learned Engine::learn(const char* word, size_t wordLength, const char* previous1,
+                              size_t previous1Length, const char* previous2,
+                              size_t previous2Length, bool deliberateCapital, bool asserted,
+                              const char* language, size_t languageLength, bool tally) {
+    Learned learned;
     if (!created_ || word == nullptr || wordLength == 0) {
-        return;
+        return learned;
     }
-    // Learns the word, its pair with the word before and its triple with the two before.
-    const int32_t wordIndex = userModel_.learn(word, wordLength, deliberateCapital, asserted);
-    if (previous1 != nullptr && previous1Length > 0) {
-        const int32_t index1 = isUserSentenceStart(previous1, previous1Length)
-            ? userModel_.reserve(previous1, previous1Length)
-            : userModel_.entryIndexFor(previous1, previous1Length);
-        userModel_.learnBigram(index1, wordIndex);
-        if (previous2 != nullptr && previous2Length > 0) {
-            const int32_t index2 = userModel_.entryIndexFor(previous2, previous2Length);
-            userModel_.learnTrigram(index2, index1, wordIndex);
-        }
+    // Counts the word, then learns its pair with the word before and its triple with the two
+    // before in the store of the language it was written in, each when its words are learnable.
+    const int32_t counted =
+        tally ? userModel_.learn(word, wordLength, deliberateCapital, asserted) : -1;
+    const bool pairs = previous1 != nullptr && previous1Length > 0 &&
+                       learnable(word, wordLength) && learnable(previous1, previous1Length);
+    if (!pairs) {
+        return learned;
     }
+    const bool named = language != nullptr && languageLength > 0;
+    const std::string current = named ? std::string() : currentPersonalLanguage();
+    const int32_t store = named ? userModel_.storeFor(language, languageLength)
+                                : userModel_.storeFor(current.data(), current.size());
+    // A word not counted, and the words before, are held as contexts, never counted or offered for
+    // it.
+    const int32_t wordIndex = tally ? counted : userModel_.reserve(word, wordLength);
+    const int32_t index1 = userModel_.reserve(previous1, previous1Length);
+    learned.pair = userModel_.learnBigram(store, index1, wordIndex);
+    if (previous2 != nullptr && previous2Length > 0 && learnable(previous2, previous2Length)) {
+        const int32_t index2 = userModel_.reserve(previous2, previous2Length);
+        learned.triple = userModel_.learnTrigram(store, index2, index1, wordIndex);
+    }
+    return learned;
 }
 
 void Engine::loadUserWords(const char* const* words, const size_t* lengths,
@@ -2639,20 +2660,129 @@ void Engine::loadUserWords(const char* const* words, const size_t* lengths,
     userModel_.reserve(kUserSentenceStart, kUserSentenceStartLength);
 }
 
-void Engine::loadUserBigrams(const char* const* previous, const size_t* previousLengths,
+void Engine::loadUserBigrams(const char* const* languages, const size_t* languageLengths,
+                             const char* const* previous, const size_t* previousLengths,
                              const char* const* next, const size_t* nextLengths,
-                             const int32_t* counts, int count) {
+                             const int32_t* counts, int count, const uint64_t* contextSeen,
+                             const uint64_t* languageSeen) {
     if (!created_) {
         return;
     }
-    userModel_.bulkLoadBigrams(previous, previousLengths, next, nextLengths, counts, count);
+    userModel_.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
+                               nextLengths, counts, count, contextSeen, languageSeen);
+}
+
+void Engine::loadUserPairTotals(const char* const* languages, const size_t* languageLengths,
+                                const char* const* previous, const size_t* previousLengths,
+                                const uint32_t* totals, int count, const uint64_t* seen) {
+    if (!created_) {
+        return;
+    }
+    userModel_.loadPairTotals(languages, languageLengths, previous, previousLengths, totals, count,
+                              seen);
+}
+
+void Engine::loadUserTripleTotals(const char* const* languages, const size_t* languageLengths,
+                                  const char* const* previous2, const size_t* previous2Lengths,
+                                  const char* const* previous1, const size_t* previous1Lengths,
+                                  const uint32_t* totals, int count, const uint64_t* seen) {
+    if (!created_) {
+        return;
+    }
+    userModel_.loadTripleTotals(languages, languageLengths, previous2, previous2Lengths, previous1,
+                                previous1Lengths, totals, count, seen);
+}
+
+void Engine::loadUserClocks(const char* const* languages, const size_t* languageLengths,
+                            const uint64_t* pairClocks, const uint64_t* tripleClocks, int count) {
+    if (!created_) {
+        return;
+    }
+    userModel_.loadClocks(languages, languageLengths, pairClocks, tripleClocks, count);
+}
+
+int Engine::userContextLinks(const char* language, size_t languageLength, const char* previous2,
+                             size_t previous2Length, const char* previous1, size_t previous1Length,
+                             UserModel::ContextLink* out, int maxOut,
+                             UserModel::ContextCount* context) const {
+    if (context != nullptr) {
+        *context = UserModel::ContextCount{0u, 0u};
+    }
+    if (!created_) {
+        return 0;
+    }
+    const int32_t store = userModel_.findStore(language, languageLength);
+    const int32_t index1 = userModel_.entryIndexFor(previous1, previous1Length);
+    if (previous2 == nullptr || previous2Length == 0) {
+        return userModel_.pairsAfter(store, index1, out, maxOut, context);
+    }
+    const int32_t index2 = userModel_.entryIndexFor(previous2, previous2Length);
+    return userModel_.triplesAfter(store, index2, index1, out, maxOut, context);
+}
+
+int Engine::userLinksHeld(const char* language, size_t languageLength, bool triples) const {
+    if (!created_) {
+        return 0;
+    }
+    const int32_t store = userModel_.findStore(language, languageLength);
+    return triples ? userModel_.triplesHeld(store) : userModel_.pairsHeld(store);
+}
+
+bool Engine::userLinkAt(const char* language, size_t languageLength, bool triples, int index,
+                        StoredLink* out) const {
+    if (!created_ || out == nullptr) {
+        return false;
+    }
+    const int32_t store = userModel_.findStore(language, languageLength);
+    const int held = triples ? userModel_.triplesHeld(store) : userModel_.pairsHeld(store);
+    if (index < 0 || index >= held) {
+        return false;
+    }
+    *out = StoredLink{-1, -1, -1, 0u, 0u, 0u};
+    if (triples) {
+        userModel_.tripleAt(store, index, &out->previous2Index, &out->previous1Index,
+                            &out->nextIndex, &out->count, &out->languageSeen, &out->contextTotal);
+    } else {
+        userModel_.pairAt(store, index, &out->previous1Index, &out->nextIndex, &out->count,
+                          &out->languageSeen, &out->contextTotal);
+    }
+    return true;
+}
+
+const char* Engine::userEntryKey(uint32_t entryIndex, uint32_t* lengthOut) const {
+    return created_ ? userModel_.entryKey(entryIndex, lengthOut) : nullptr;
+}
+
+void Engine::dropUserPairs(const char* const* languages, const size_t* languageLengths,
+                           const char* const* previous, const size_t* previousLengths,
+                           const char* const* next, const size_t* nextLengths, int count) {
+    if (!created_) {
+        return;
+    }
+    userModel_.dropBigrams(languages, languageLengths, previous, previousLengths, next, nextLengths,
+                           count);
+}
+
+void Engine::dropUserTriples(const char* const* languages, const size_t* languageLengths,
+                             const char* const* previous2, const size_t* previous2Lengths,
+                             const char* const* previous1, const size_t* previous1Lengths,
+                             const char* const* next, const size_t* nextLengths, int count) {
+    if (!created_) {
+        return;
+    }
+    userModel_.dropTrigrams(languages, languageLengths, previous2, previous2Lengths, previous1,
+                            previous1Lengths, next, nextLengths, count);
 }
 
 const char* Engine::dominantLanguageTag() const {
-    if (dominantPack_ < 0 || dominantPack_ >= kMaxPacks || !packs_[dominantPack_].isOpen()) {
+    return packTag(dominantPack_);
+}
+
+const char* Engine::packTag(int slot) const {
+    if (slot < 0 || slot >= kMaxPacks || !packs_[slot].isOpen()) {
         return nullptr;
     }
-    return packs_[dominantPack_].tag();
+    return packs_[slot].tag();
 }
 
 const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOut) const {
@@ -2793,12 +2923,15 @@ bool Engine::explainScore(const char* typed, size_t typedLength, const char* can
             out->languageModel = contextLogProb(results[i].packIndex,
                                                 static_cast<uint32_t>(results[i].wordIndex));
         } else if (results[i].packIndex == Candidate::kUserPack) {
-            out->personal = userBoostFor(candidate, static_cast<uint32_t>(candidateLength));
             out->languageModel = kUserOnlyLogProb;
         }
+        const int32_t entry = personal_.entryFor(candidate, static_cast<uint32_t>(candidateLength));
+        if (entry >= 0) {
+            out->personal = personal_.scoreForEntry(static_cast<uint32_t>(entry));
+            out->context = personal_.contextBonus(static_cast<uint32_t>(entry));
+        }
 
-        // The rest of the total: the edit cost and the completion penalty together, and the
-        // boost of a pack word the personal dictionary also holds.
+        // The rest of the total: the edit cost and the completion penalty together.
         out->rest = out->total - out->packWeight - out->languageModel - out->personal;
         out->editCost = results[i].editCost;
         out->edits = results[i].edits;

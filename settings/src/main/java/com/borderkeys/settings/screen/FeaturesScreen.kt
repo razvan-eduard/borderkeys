@@ -43,9 +43,24 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.geometry.centreOfSlot
+import com.borderkeys.geometry.half
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.settings.BORDER_WIDTH
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SMALL_ICON_SIZE
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_LARGE_PLUS
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_MEDIUM_PLUS
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_TINY_PLUS
+import com.borderkeys.settings.SPACE_XLARGE
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.SPACE_XSMALL_PLUS
 import com.borderkeys.settings.Screen
 
 /**
@@ -58,10 +73,10 @@ fun FeaturesScreen(modifier: Modifier = Modifier, hasAssistant: Boolean, open: (
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = SPACE_XLARGE),
     ) {
         FeatureTour(hasAssistant, open)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(SPACE_XLARGE))
     }
 }
 
@@ -80,7 +95,7 @@ internal fun FeatureTour(hasAssistant: Boolean, open: (Screen) -> Unit) {
         strings[Keys.FEATURES_INTRO],
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        modifier = Modifier.padding(top = SPACE_LARGE, bottom = SPACE_XSMALL),
     )
     for (group in groups) {
         val accent = group.accent()
@@ -88,7 +103,7 @@ internal fun FeatureTour(hasAssistant: Boolean, open: (Screen) -> Unit) {
             group.title,
             style = MaterialTheme.typography.titleMedium,
             color = accent,
-            modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
+            modifier = Modifier.padding(top = SPACE_GUTTER, bottom = SPACE_SMALL),
         )
         for (feature in group.features) {
             FeatureCard(feature, accent, open)
@@ -277,14 +292,14 @@ private fun FeatureCard(feature: Feature, accent: Color, open: (Screen) -> Unit)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
+            .padding(vertical = SPACE_XSMALL_PLUS)
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(SPACE_LARGE))
             .background(accent.copy(alpha = 0.07f))
             .then(if (target != null) Modifier.clickable { open(target) } else Modifier),
     ) {
-        Box(modifier = Modifier.width(4.dp).fillMaxHeight().background(accent))
-        Column(modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Box(modifier = Modifier.width(ACCENT_BAR_WIDTH).fillMaxHeight().background(accent))
+        Column(modifier = Modifier.weight(1f).padding(horizontal = SPACE_LARGE_PLUS, vertical = SPACE_MEDIUM_PLUS)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     feature.title,
@@ -296,17 +311,17 @@ private fun FeatureCard(feature: Feature, accent: Color, open: (Screen) -> Unit)
                     style = MaterialTheme.typography.labelSmall,
                     color = accent,
                     modifier = Modifier
-                        .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(50))
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                        .border(BORDER_WIDTH, accent.copy(alpha = 0.5f), RoundedCornerShape(50))
+                        .padding(horizontal = SPACE_MEDIUM, vertical = SPACE_TINY),
                 )
             }
-            Box(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)) { feature.preview(accent) }
+            Box(modifier = Modifier.padding(top = SPACE_MEDIUM, bottom = SPACE_SMALL)) { feature.preview(accent) }
             Text(feature.text, style = MaterialTheme.typography.bodySmall)
             Text(
                 if (target != null) feature.where + OPENS_GLYPH else feature.where,
                 style = MaterialTheme.typography.labelSmall,
                 color = if (target != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = SPACE_XSMALL),
             )
         }
     }
@@ -341,8 +356,8 @@ internal const val SAMPLE_SEPARATOR = "|"
 private fun KeyCap(label: String, accent: Color, highlighted: Boolean = false, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .height(30.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .height(KEY_CAP_HEIGHT)
+            .clip(RoundedCornerShape(SPACE_SMALL))
             .background(if (highlighted) accent.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
@@ -352,7 +367,7 @@ private fun KeyCap(label: String, accent: Color, highlighted: Boolean = false, m
 
 @Composable
 internal fun KeyCapsPreview(caps: List<String>, accent: Color, highlighted: Set<Int> = emptySet()) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.spacedBy(SPACE_XSMALL), modifier = Modifier.fillMaxWidth()) {
         caps.forEachIndexed { index, cap ->
             KeyCap(cap, accent, index in highlighted, Modifier.weight(1f))
         }
@@ -366,7 +381,7 @@ internal fun SwipePreview(accent: Color) {
         modifier = Modifier.fillMaxWidth().drawWithContent {
             drawContent()
             val step = size.width / caps.size
-            fun centre(index: Int) = Offset(step * (index + 0.5f), size.height / 2f)
+            fun centre(index: Int) = Offset(centreOfSlot(index, step), half(size.height))
             val path = Path().apply {
                 moveTo(centre(4).x, centre(4).y)
                 quadraticTo(centre(6).x, size.height * 0.05f, centre(8).x, centre(8).y)
@@ -385,33 +400,33 @@ private fun Chip(label: String, accent: Color, outlined: Boolean = false) {
         style = MaterialTheme.typography.labelMedium,
         modifier = Modifier
             .then(
-                if (outlined) Modifier.border(1.5.dp, accent, RoundedCornerShape(50))
+                if (outlined) Modifier.border(OUTLINED_BORDER_WIDTH, accent, RoundedCornerShape(50))
                 else Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
             )
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .padding(horizontal = SPACE_LARGE, vertical = SPACE_XSMALL_PLUS),
     )
 }
 
 @Composable
 internal fun ChipsPreview(labels: List<String>, accent: Color, outlined: Int = -1) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         labels.forEachIndexed { index, label -> Chip(label, accent, outlined = index == outlined) }
     }
 }
 
 @Composable
 internal fun CorrectionPreview(typo: String, fixed: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         Text(typo, style = MaterialTheme.typography.bodyMedium, textDecoration = TextDecoration.LineThrough)
         Text(ARROW_GLYPH, style = MaterialTheme.typography.bodyMedium, color = accent)
         Chip(fixed, accent, outlined = true)
-        KeyCap(SPACE_GLYPH, accent, modifier = Modifier.width(56.dp))
+        KeyCap(SPACE_GLYPH, accent, modifier = Modifier.width(SPACE_KEY_CAP_WIDTH))
     }
 }
 
 @Composable
 internal fun ArrowPreview(from: String, to: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         Chip(from, accent)
         Text(ARROW_GLYPH, style = MaterialTheme.typography.bodyMedium, color = accent)
         Text(to, style = MaterialTheme.typography.bodyMedium)
@@ -423,29 +438,29 @@ private fun PopupPreview(key: String, popup: List<String>, accent: Color) {
     Column(horizontalAlignment = Alignment.Start) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(SPACE_SMALL))
                 .background(accent.copy(alpha = 0.2f))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = SPACE_SMALL, vertical = SPACE_TINY_PLUS),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
         ) {
             for (item in popup) {
                 Text(item, style = MaterialTheme.typography.titleMedium)
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        KeyCap(key, accent, modifier = Modifier.width(40.dp))
+        Spacer(modifier = Modifier.height(SPACE_XSMALL))
+        KeyCap(key, accent, modifier = Modifier.width(KEY_CAP_WIDTH))
     }
 }
 
 @Composable
 private fun IconRowPreview(accent: Color) {
     val actions = listOf(QuickAction.COPY_ALL, QuickAction.PASTE, QuickAction.SELECT_ALL, QuickAction.UNDO, QuickAction.CURSOR_LEFT)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(SPACE_SMALL)) {
         for (action in actions) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .size(ACTION_PREVIEW_SIZE)
+                    .clip(RoundedCornerShape(SPACE_SMALL))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
@@ -453,7 +468,7 @@ private fun IconRowPreview(accent: Color) {
                     painter = painterResource(iconFor(action)),
                     contentDescription = null,
                     tint = accent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(SMALL_ICON_SIZE),
                 )
             }
         }
@@ -462,15 +477,15 @@ private fun IconRowPreview(accent: Color) {
 
 @Composable
 private fun CardsPreview(accent: Color) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SPACE_XSMALL)) {
         for (width in listOf(0.7f, 0.5f)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(width)
-                    .height(18.dp)
-                    .clip(RoundedCornerShape(5.dp))
+                    .height(LINE_PREVIEW_HEIGHT)
+                    .clip(RoundedCornerShape(SPACE_XSMALL_PLUS))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(5.dp)),
+                    .border(BORDER_WIDTH, accent.copy(alpha = 0.35f), RoundedCornerShape(SPACE_XSMALL_PLUS)),
             )
         }
     }
@@ -481,13 +496,13 @@ private fun TextBoxPreview(accent: Color) {
     Column(
         modifier = Modifier
             .fillMaxWidth(0.8f)
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .clip(RoundedCornerShape(SPACE_MEDIUM))
+            .border(BORDER_WIDTH, accent.copy(alpha = 0.5f), RoundedCornerShape(SPACE_MEDIUM))
+            .padding(SPACE_MEDIUM),
+        verticalArrangement = Arrangement.spacedBy(SPACE_XSMALL),
     ) {
         for (width in listOf(0.9f, 0.6f)) {
-            Box(modifier = Modifier.fillMaxWidth(width).height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
+            Box(modifier = Modifier.fillMaxWidth(width).height(BAR_PREVIEW_HEIGHT).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
         }
     }
 }
@@ -502,16 +517,16 @@ private fun SwatchesPreview(accent: Color) {
         MaterialTheme.colorScheme.surfaceVariant,
         accent,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(SPACE_SMALL)) {
         for (colour in colours) {
-            Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(colour))
+            Box(modifier = Modifier.size(COLOUR_DOT_SIZE).clip(CircleShape).background(colour))
         }
     }
 }
 
 @Composable
 private fun DotsPreview(show: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         Text(DOTS_GLYPHS, style = MaterialTheme.typography.titleMedium)
         Chip(show, accent, outlined = true)
     }
@@ -526,3 +541,16 @@ private fun MonoPreview(text: String, accent: Color) {
         color = accent,
     )
 }
+
+/** A feature card's accent bar, and an outlined card's border. */
+private val ACCENT_BAR_WIDTH = 4.dp
+private val OUTLINED_BORDER_WIDTH = 1.5.dp
+
+/** The previews' key caps, the space bar's, a quick action's button, a text line, a bar and a colour. */
+private val KEY_CAP_HEIGHT = 30.dp
+private val KEY_CAP_WIDTH = 40.dp
+private val SPACE_KEY_CAP_WIDTH = 56.dp
+private val ACTION_PREVIEW_SIZE = 34.dp
+private val LINE_PREVIEW_HEIGHT = 18.dp
+private val BAR_PREVIEW_HEIGHT = 6.dp
+private val COLOUR_DOT_SIZE = 22.dp

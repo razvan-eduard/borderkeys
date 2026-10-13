@@ -3,12 +3,25 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.dao.LearnedBigram
+import com.borderkeys.data.dao.LearnedTrigram
+import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.dao.TripleStep
+import com.borderkeys.data.entity.UserBigram
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LearningBufferTest {
+
+    /** A pair use the engine recorded at [at], with nothing dropped after it. */
+    private fun pair(previous: String, word: String, at: Long = 0L) =
+        PairStep(LearnedBigram("en", previous, word, 1, at))
+
+    /** A triple use the engine recorded at [at], with nothing dropped after it. */
+    private fun triple(previous2: String, previous1: String, word: String, at: Long = 0L) =
+        TripleStep(LearnedTrigram("en", previous2, previous1, word, 1, at))
 
     @Test
     fun `repeated words accumulate into one update`() {
@@ -66,6 +79,48 @@ class LearningBufferTest {
     }
 
     @Test
+    fun `a full table of pairs, or of triples, makes the buffer due with no word waiting`() {
+        val most = 4
+        val pairs = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
+        repeat(most) { index -> pairs.recordSteps(listOf(pair("w$index", "next")), emptyList(), 0L) }
+        assertEquals("no word waits", 0, pairs.size)
+        assertTrue(pairs.isDue(0L))
+        val triples = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
+        repeat(most) { index -> triples.recordSteps(emptyList(), listOf(triple("v$index", "word", "next")), 0L) }
+        assertEquals("no word waits", 0, triples.size)
+        assertTrue(triples.isDue(0L))
+    }
+
+    @Test
+    fun `past its bound a table lets its oldest use go and keeps the engine's drops in front`() {
+        val most = 2
+        val firstDrop = UserBigram("en", "the", "dog", 1, 0L, 0L, 0L)
+        val secondDrop = UserBigram("en", "the", "fox", 1, 0L, 0L, 0L)
+        val first = pair("the", "cat").copy(dropped = listOf(firstDrop))
+        val second = pair("the", "cow").copy(dropped = listOf(secondDrop))
+        val three = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
+        three.recordSteps(listOf(first, second, pair("the", "owl")), emptyList(), 0L)
+        assertEquals(listOf(PairStep(null, listOf(firstDrop)), second, pair("the", "owl")), three.drainPairs())
+        val four = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
+        four.recordSteps(listOf(first, second, pair("the", "owl")), emptyList(), 0L)
+        four.recordSteps(listOf(pair("the", "bat")), emptyList(), 0L)
+        assertEquals(
+            listOf(PairStep(null, listOf(firstDrop, secondDrop)), pair("the", "owl"), pair("the", "bat")),
+            four.drainPairs(),
+        )
+    }
+
+    @Test
+    fun `a pair alone starts the debounce clock`() {
+        val debounce = 4_000L
+        val at = 1_000L
+        val buffer = LearningBuffer(debounceMillis = debounce)
+        buffer.recordSteps(listOf(pair("the", "cat", at)), emptyList(), at)
+        assertFalse(buffer.isDue(at + debounce - 1))
+        assertTrue(buffer.isDue(at + debounce))
+    }
+
+    @Test
     fun `draining empties the buffer and resets the clock`() {
         val buffer = LearningBuffer(debounceMillis = 4_000)
         buffer.record("word", "en-US", 1_000)
@@ -99,8 +154,8 @@ class LearningBufferTest {
         buffer.setRefusedWords(RefusedWords.of(setOf("mașina"), emptySet()))
         assertFalse(buffer.record("Mașina", "ro-RO", 1_000))
         assertFalse(buffer.record("MAȘINA", "ro-RO", 1_000))
-        assertFalse(buffer.recordPair("vreau", "Mașina", 1_000))
-        assertFalse(buffer.recordTriple("Mașina", "e", "gata", 1_000))
+        assertFalse(buffer.acceptsPair("vreau", "Mașina"))
+        assertFalse(buffer.acceptsTriple("Mașina", "este", "gata"))
         assertTrue(buffer.isEmpty())
     }
 
@@ -110,7 +165,7 @@ class LearningBufferTest {
         buffer.setRefusedWords(RefusedWords.of(setOf("maine"), emptySet()))
         assertFalse(buffer.record("Maine", "ro-RO", 1_000))
         assertTrue(buffer.record("mâine", "ro-RO", 1_000))
-        assertTrue(buffer.recordPair("pe", "mâine", 1_000))
+        assertTrue(buffer.acceptsPair("pe", "mâine"))
     }
 
     @Test
@@ -140,32 +195,37 @@ class LearningBufferTest {
     }
 
     @Test
-    fun pairsAreBufferedAndDrainedSeparately() {
+    fun `each pair use is buffered on its own and drained in order`() {
         val buffer = LearningBuffer()
-        assertTrue(buffer.recordPair("vreau", "sa", 0L))
-        assertTrue(buffer.recordPair("sa", "ma", 0L))
-        assertTrue(buffer.recordPair("vreau", "sa", 10L))
+        val uses = listOf(pair("vreau", "sa", 0L), pair("sa", "ma", 0L), pair("vreau", "sa", 10L))
+        buffer.recordSteps(uses, emptyList(), 0L)
 
-        val pairs = buffer.drainPairs()
-        assertEquals(2, pairs.size)
-        val repeated = pairs.first { it.previousWord == "vreau" }
-        assertEquals(2, repeated.delta)
-        assertEquals(10L, repeated.lastUsedAt)
+        assertEquals(uses, buffer.drainPairs())
+        assertTrue(buffer.drain().isEmpty())
         assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    @Test
+    fun `a pair or triple after a one-letter word is taken`() {
+        val buffer = LearningBuffer()
+        assertTrue(buffer.acceptsPair("a", "book"))
+        assertTrue(buffer.acceptsTriple("I", "read", "books"))
     }
 
     @Test
     fun aWordIsNotPairedWithItself() {
         val buffer = LearningBuffer()
-        assertFalse(buffer.recordPair("da", "da", 0L))
-        assertTrue(buffer.drainPairs().isEmpty())
+        assertFalse(buffer.acceptsPair("da", "da"))
+        assertFalse("nor with its own capitalised form", buffer.acceptsPair("Da", "da"))
+        assertFalse("nor in a triple", buffer.acceptsTriple("eu", "Da", "da"))
     }
 
     @Test
     fun disabledLearningRecordsNoPairs() {
         val buffer = LearningBuffer()
         buffer.enabled = false
-        assertFalse(buffer.recordPair("vreau", "sa", 0L))
+        assertFalse(buffer.acceptsPair("vreau", "sa"))
+        buffer.recordSteps(listOf(pair("vreau", "sa")), emptyList(), 0L)
         assertTrue(buffer.drainPairs().isEmpty())
     }
 
@@ -173,15 +233,14 @@ class LearningBufferTest {
     fun aBlockedWordIsNotPairedOnEitherSide() {
         val buffer = LearningBuffer()
         buffer.setRefusedWords(RefusedWords.of(setOf("naspa"), emptySet()))
-        assertFalse(buffer.recordPair("vreau", "naspa", 0L))
-        assertFalse(buffer.recordPair("naspa", "sa", 0L))
-        assertTrue(buffer.drainPairs().isEmpty())
+        assertFalse(buffer.acceptsPair("vreau", "naspa"))
+        assertFalse(buffer.acceptsPair("naspa", "sa"))
     }
 
     @Test
     fun discardingDropsThePairsToo() {
         val buffer = LearningBuffer()
-        buffer.recordPair("vreau", "sa", 0L)
+        buffer.recordSteps(listOf(pair("vreau", "sa")), emptyList(), 0L)
         buffer.discard()
         assertTrue(buffer.drainPairs().isEmpty())
     }
@@ -225,13 +284,20 @@ class LearningBufferTest {
         buffer.record("This", "en-US", 1_000)
         buffer.record("this", "en-US", 2_000)
         buffer.record("make", "en-US", 3_000)
-        buffer.recordPair("make", "this", 3_000)
-        buffer.recordPair("go", "home", 3_000)
-        buffer.recordTriple("I", "make", "this", 3_000)
+        val dropped = UserBigram("en", "make", "that", 1, 0L, 0L, 0L)
+        buffer.recordSteps(
+            listOf(pair("make", "this").copy(dropped = listOf(dropped)), pair("go", "home")),
+            listOf(triple("we", "make", "this")),
+            3_000,
+        )
 
         assertTrue(buffer.forget("THIS"))
         assertEquals(listOf("make"), buffer.drain().map { it.word })
-        assertEquals(listOf("go" to "home"), buffer.drainPairs().map { it.previousWord to it.word })
+        assertEquals(
+            "the engine's drop stays",
+            listOf(PairStep(null, listOf(dropped)), pair("go", "home")),
+            buffer.drainPairs(),
+        )
         assertTrue(buffer.drainTriples().isEmpty())
         assertFalse("nothing left of it to drop", buffer.forget("this"))
     }

@@ -403,4 +403,65 @@ void runGestureTests() {
                   "the top 3");
         }
     }
+
+    section("a learned context reaches a swipe");
+    {
+        TestLayout layout;
+        const auto openPack = [&layout](Engine& engine) {
+            engine.create();
+            struct stat info {};
+            stat(BORDERKEYS_TEST_PACK, &info);
+            const int fd = ::open(BORDERKEYS_TEST_PACK, O_RDONLY);
+            engine.loadLanguage("ro-RO", fd, 0, info.st_size, 1.0f);
+            ::close(fd);
+            const char* tags[1] = {"ro-RO"};
+            const float weights[1] = {1.0f};
+            engine.setActiveLanguages(tags, weights, 1);
+            engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count,
+                                  layout.keyWidth, layout.keyHeight);
+        };
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        const char word[] = "timer";
+        const auto learnAfter = [&word](Engine& engine, const char* previous) {
+            for (uint32_t i = 0; i < uses; ++i) {
+                engine.learn(previous, std::strlen(previous), nullptr, 0, nullptr, 0);
+                engine.learn(word, std::strlen(word), previous, std::strlen(previous), nullptr, 0);
+            }
+        };
+        // One word learned after one context in one engine, and after another in the other.
+        Engine learned;
+        Engine elsewhere;
+        openPack(learned);
+        openPack(elsewhere);
+        learnAfter(learned, "the");
+        learnAfter(elsewhere, "border");
+
+        Random random(20260904u);
+        std::vector<float> xs;
+        std::vector<float> ys;
+        std::vector<int64_t> times;
+        synthesiseGesture(layout, "time", 0.f, random, xs, ys, times);
+        const auto swipedScore = [&](Engine& engine) {
+            Candidate out[Engine::kMaxCandidates];
+            const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                   static_cast<int>(xs.size()), "the", 3,
+                                                   nullptr, 0, out, Engine::kMaxCandidates);
+            for (int i = 0; i < found; ++i) {
+                uint32_t length = 0;
+                const char* const text = engine.candidateText(out[i], &length);
+                if (text != nullptr && length == std::strlen(word) &&
+                    std::memcmp(text, word, length) == 0) {
+                    return out[i].score;
+                }
+            }
+            return 0.0f;
+        };
+        const float learnedSwipe = swipedScore(learned);
+        const float elsewhereSwipe = swipedScore(elsewhere);
+        check(learnedSwipe != 0.0f && elsewhereSwipe != 0.0f, "a swipe offers the word in both");
+        check(learnedSwipe > elsewhereSwipe,
+              "after the word it was learned after, a swipe offers the word higher");
+        checkRise(learned.personalScore(word, std::strlen(word)), elsewhere.personalScore(word, std::strlen(word)),
+                  personalShareOf(uses, uses), "its personal score rising by its share");
+    }
 }

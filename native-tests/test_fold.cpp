@@ -168,6 +168,26 @@ void runFoldTests() {
         check(everyPairAgrees, "every capital in Latin Extended-A folds like its lowercase");
     }
 
+    section("a word lowers as the engine keys it");
+    {
+        const auto lowered = [](const std::string& text) {
+            char out[64];
+            const int bytes = lowerUtf8(text.data(), text.size(), out, sizeof(out));
+            return bytes < 0 ? std::string() : std::string(out, static_cast<size_t>(bytes));
+        };
+        check(lowered("İSTANBUL") == "istanbul", "the dotted capital I lowers to the plain i");
+        check(lowered("ΟΔΟΣ") == "οδος", "a capital sigma that ends a word lowers to the final sigma");
+        check(lowered("ΣΑΣ") == "σας", "and one inside it to the sigma");
+        check(lowered("Σ") == "σ", "a sigma alone is not a word's end");
+        check(lowered("DON’T") == "don't", "the curly apostrophe lowers to the straight one");
+        check(sameSpellingIgnoringCase("ΟΔΟΣ", std::string("ΟΔΟΣ").size(), "οδος",
+                                       std::string("οδος").size()),
+              "a word in capitals and in lower case are one spelling, its final sigma included");
+        check(sameSpellingIgnoringCase("İstanbul", std::string("İstanbul").size(), "istanbul",
+                                       std::string("istanbul").size()),
+              "and so are İstanbul and istanbul");
+    }
+
     section("character folding agrees with tools/build_dict.py");
     {
         // The pack compiler folds in Python and the engine in C++: the two tables are diffed

@@ -3,7 +3,7 @@
 
 package com.borderkeys.ime.fx
 
-import kotlin.math.PI
+import com.borderkeys.geometry.FULL_TURN
 import kotlin.math.exp
 import kotlin.math.sin
 
@@ -42,7 +42,7 @@ object ParticleMotion {
 
     /** Oscillates around the spawn point. */
     fun pulseInPlaceY(spawnY: Float, ageSeconds: Float, amplitudePx: Float, frequencyHz: Float): Float =
-        spawnY + amplitudePx * sin(ageSeconds * frequencyHz * TWO_PI)
+        spawnY + amplitudePx * sin(ageSeconds * frequencyHz * FULL_TURN)
 
     /** A travelling wave, its phase from [spawnX]. */
     fun waveDriftY(
@@ -56,11 +56,10 @@ object ParticleMotion {
         if (wavelengthPx == 0f) {
             return spawnY
         }
-        val phase = (spawnX / wavelengthPx) * TWO_PI + ageSeconds * speedRadPerSecond
+        val phase = (spawnX / wavelengthPx) * FULL_TURN + ageSeconds * speedRadPerSecond
         return spawnY + amplitudePx * sin(phase)
     }
 
     // Static flicker stays at the spawn point; only its colour moves.
 
-    private val TWO_PI = (2.0 * PI).toFloat()
 }

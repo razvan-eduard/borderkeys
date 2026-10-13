@@ -34,6 +34,37 @@ def translate(word, table):
     return "".join(table.get(c, c) for c in word)
 
 
+def normalised(word, known, name=False):
+    """[word] as the list keeps it, with whether a Romanian-only rule kept a substitution back.
+
+    Returns `(spelling, foreign, no_twin)`: the cedilla folded to comma-below and the tilde to the
+    breve when that spelling is in [known]; `foreign` when the word holds a letter Romanian does
+    not use, or is a [name] whose comma-below twin is not [known]; `no_twin` when a tilde stayed
+    for want of its twin.
+    """
+    if not any(ch in word for ch in SUBSTITUTIONS):
+        return word, False, False
+    # Foreignness is decided on the word as written, with the substitution characters
+    # excused: a letter that is neither Romanian nor one of them marks a word foreign.
+    if not set(word) - SUBSTITUTIONS <= ROMANIAN:
+        return word, True, False
+    foreign = False
+    folded = translate(word, CEDILLA)
+    # A name's cedilla is folded only when its comma-below twin is already known.
+    if folded != word and name and folded not in known:
+        foreign = True
+        folded = word
+    # The tilde needs positive evidence too; an ordinary word's cedilla does not.
+    no_twin = False
+    tilded = translate(folded, TILDE)
+    if tilded != folded:
+        if tilded in known:
+            folded = tilded
+        else:
+            no_twin = True
+    return folded, foreign, no_twin
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -71,26 +102,9 @@ def main():
             continue
         word, count, flag = entry
 
-        # Foreignness is decided on the word as written, with the substitution characters
-        # excused: a letter that is neither Romanian nor one of them marks a word foreign.
-        if not any(ch in word for ch in SUBSTITUTIONS):
-            continue
-        if not set(word) - SUBSTITUTIONS <= ROMANIAN:
-            kept_foreign += 1
-            continue
-        folded = translate(word, CEDILLA)
-        # A name's cedilla is folded only when its comma-below twin is already known.
-        if folded != word and flag == "name" and folded not in known:
-            kept_foreign += 1
-            folded = word
-        # The tilde needs positive evidence too; an ordinary word's cedilla does not.
-        tilded = translate(folded, TILDE)
-        if tilded != folded:
-            if tilded in known:
-                folded = tilded
-            else:
-                kept_no_twin += 1
-
+        folded, foreign, no_twin = normalised(word, known, flag == "name")
+        kept_foreign += foreign
+        kept_no_twin += no_twin
         if folded == word:
             continue
 

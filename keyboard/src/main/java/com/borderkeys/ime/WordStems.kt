@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.language.LanguageTags
 import java.text.Normalizer
 
 /**
@@ -50,7 +51,7 @@ internal object WordStems {
     private const val VOWELS = "aeiou"
 
     private fun endingsFor(languageTag: String): List<Ending> =
-        when (languageTag.substringBefore('-').lowercase()) {
+        when (LanguageTags.primary(languageTag)) {
             "en" -> ENGLISH
             "ro" -> ROMANIAN
             else -> emptyList()

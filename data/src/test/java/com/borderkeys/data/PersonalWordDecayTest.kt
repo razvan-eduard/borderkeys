@@ -4,13 +4,17 @@
 package com.borderkeys.data
 
 import com.borderkeys.data.entity.UserWord
+import com.borderkeys.data.theme.KeyboardPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class PersonalWordDecayTest {
 
-    private val halfLife = PersonalWordDecay.halfLifeMillis(90)
+    private val halfLife = PersonalWordDecay.halfLifeMillis(KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS)
 
     @Test
     fun `nothing has elapsed, nothing decays`() {
@@ -66,21 +70,53 @@ class PersonalWordDecayTest {
     }
 
     @Test
-    fun `an unconfirmed word is given a month at most, a confirmed one is only ever halved`() {
-        val month = 30L * 24 * 60 * 60 * 1000
-        assertEquals(month, PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS)
-        assertEquals("a month under a longer half-life", month, PersonalWordDecay.unconfirmedLifeMillis(halfLife))
-        val week = PersonalWordDecay.halfLifeMillis(7)
-        assertEquals("the half-life when it is shorter", week, PersonalWordDecay.unconfirmedLifeMillis(week))
+    fun `an unconfirmed word is kept its set days, or for good with Off, a confirmed one is only ever halved`() {
+        for (days in KeyboardPreferences.UNCONFIRMED_LIFE_STEPS - KeyboardPreferences.UNCONFIRMED_LIFE_OFF) {
+            assertEquals(PersonalWordDecay.halfLifeMillis(days), PersonalWordDecay.unconfirmedLifeMillis(days))
+        }
+        assertNull(PersonalWordDecay.unconfirmedLifeMillis(KeyboardPreferences.UNCONFIRMED_LIFE_OFF))
 
         // Halving floors at one.
         assertEquals(1, PersonalWordDecay.decayed(1, lastUsedAt = 0, now = halfLife, halfLifeMillis = halfLife))
     }
 
     @Test
+    fun `the clean-up is due once its interval has passed`() {
+        for (days in KeyboardPreferences.CLEAN_UP_STEPS) {
+            val interval = TimeUnit.DAYS.toMillis(days.toLong())
+            assertFalse(PersonalWordDecay.sweepDue(lastSweep = 0L, now = interval - 1, intervalDays = days))
+            assertTrue(PersonalWordDecay.sweepDue(lastSweep = 0L, now = interval, intervalDays = days))
+        }
+    }
+
+    @Test
     fun `a shorter half-life fades a word faster`() {
-        val month = PersonalWordDecay.halfLifeMillis(30)
-        assertEquals(25, PersonalWordDecay.decayed(count = 100, lastUsedAt = 0, now = 2 * month, halfLifeMillis = month))
-        assertEquals(63, PersonalWordDecay.decayed(count = 100, lastUsedAt = 0, now = 2 * month, halfLifeMillis = halfLife))
+        val shorter = PersonalWordDecay.halfLifeMillis(KeyboardPreferences.UNLEARN_HALF_LIFE_STEPS.first())
+        val count = 100
+        val faded = PersonalWordDecay.decayed(count = count, lastUsedAt = 0, now = 2 * shorter, halfLifeMillis = shorter)
+        assertEquals(count / PersonalWordDecay.HALVING / PersonalWordDecay.HALVING, faded)
+        assertTrue(PersonalWordDecay.decayed(count = count, lastUsedAt = 0, now = 2 * shorter, halfLifeMillis = halfLife) > faded)
+    }
+
+    @Test
+    fun `each half-life leaves one halving's share`() {
+        val halving = PersonalWordDecay.HALVING.toDouble()
+        assertEquals(1.0, PersonalWordDecay.remaining(0.0), 0.0)
+        assertEquals(1 / halving, PersonalWordDecay.remaining(1.0), 0.0)
+        assertEquals(1 / (halving * halving), PersonalWordDecay.remaining(2.0), 0.0)
+    }
+
+    @Test
+    fun `a context's total decays as a count does, past what an Int holds`() {
+        val count = 100
+        assertEquals(
+            PersonalWordDecay.decayed(count, lastUsedAt = 0, now = halfLife, halfLifeMillis = halfLife).toLong(),
+            PersonalWordDecay.decayed(count.toLong(), lastUsedAt = 0, now = halfLife, halfLifeMillis = halfLife),
+        )
+        val total = Int.MAX_VALUE.toLong() * PersonalWordDecay.HALVING
+        assertEquals(
+            total / PersonalWordDecay.HALVING,
+            PersonalWordDecay.decayed(total, lastUsedAt = 0, now = halfLife, halfLifeMillis = halfLife),
+        )
     }
 }

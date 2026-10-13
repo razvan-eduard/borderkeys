@@ -10,11 +10,12 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.predict.LanguagePackInspector
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /** The rare-words setting's step names, indexed by step. */
 internal val RARE_WORDS_STEP_KEYS = listOf(
@@ -23,6 +24,9 @@ internal val RARE_WORDS_STEP_KEYS = listOf(
     Keys.CORRECTIONS_RARE_WORDS_MANY,
     Keys.CORRECTIONS_RARE_WORDS_ALL,
 )
+
+/** The rare-words setting's steps, in order. */
+internal val RARE_WORDS_STEPS = (KeyboardPreferences.RARE_WORDS_LISTED..KeyboardPreferences.RARE_WORDS_ALL).toList()
 
 /** An enabled dictionary by its shown name, and whether it carries rare words to count. */
 internal class PackReach(val name: String, val holdsRareWords: Boolean)

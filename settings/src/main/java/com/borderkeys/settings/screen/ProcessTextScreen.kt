@@ -8,11 +8,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.runtime.State
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -70,11 +65,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,8 +79,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -94,6 +91,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -109,11 +107,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
@@ -124,34 +124,47 @@ import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.ComposerBar
 import com.borderkeys.data.theme.ComposerBarItem
-import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.CustomAction
+import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.geometry.half
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.Composer
 import com.borderkeys.keyboard.R
+import com.borderkeys.settings.COMPACT_ICON_SIZE
+import com.borderkeys.settings.DISABLED_ALPHA
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.openKeyboardPicker
-import com.borderkeys.settings.rememberBorderKeysDefaultState
 import com.borderkeys.settings.RingBackground
-import com.borderkeys.settings.rememberRingShift
+import com.borderkeys.settings.SMALL_ICON_SIZE
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.SPACE_XXLARGE
+import com.borderkeys.settings.millisAtSpeed
+import com.borderkeys.settings.motionMillis
+import com.borderkeys.settings.openKeyboardPicker
 import com.borderkeys.settings.rememberAnimationSpeed
+import com.borderkeys.settings.rememberBorderKeysDefaultState
 import com.borderkeys.settings.rememberDraftBoxMotion
+import com.borderkeys.settings.rememberRingShift
 import com.borderkeys.settings.ringBackground
 import com.borderkeys.settings.ringBorder
 import com.borderkeys.settings.ringBrush
 import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
-import kotlin.math.PI
-import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * The draft box, reached from a selection in any application through `ACTION_PROCESS_TEXT`, and
@@ -459,7 +472,7 @@ fun ProcessTextScreen(
 
     // A box resting against the bottom of the screen, lifted by imePadding above whatever
     // keyboard rises.
-    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    val shape = RoundedCornerShape(topStart = SPACE_GUTTER, topEnd = SPACE_GUTTER)
     val ringShift = rememberRingShift()
     val motion = rememberDraftBoxMotion()
     val speed = rememberAnimationSpeed()
@@ -506,7 +519,7 @@ fun ProcessTextScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .imePadding()
-                .heightIn(max = 480.dp)
+                .heightIn(max = SHEET_MAX_HEIGHT)
                 // Before the clip, so the shadow falls outside the rounded corners.
                 .shadow(elevation = BOX_ELEVATION, shape = shape)
                 .clip(shape)
@@ -554,7 +567,7 @@ fun ProcessTextScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = 4.dp),
+                    .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = SPACE_XSMALL),
             ) {
                 Text(
                     strings[Keys.COMPOSER_TITLE],
@@ -589,7 +602,7 @@ fun ProcessTextScreen(
                 Column {
                     Box(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = 2.dp, bottom = 4.dp)
+                            .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = SPACE_TINY, bottom = SPACE_XSMALL)
                             .weight(1f, fill = false)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
                             .border(
@@ -621,9 +634,9 @@ fun ProcessTextScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(
-                                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                                    modifier = Modifier.weight(1f).padding(start = SPACE_LARGE),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                                 ) {
                                     // Bold and italic, drawn as a styled B and I.
                                     FormatToggle(
@@ -654,7 +667,7 @@ fun ProcessTextScreen(
                                         Icon(
                                             painter = painterResource(R.drawable.bk_composer_bullets),
                                             contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
+                                            modifier = Modifier.size(COMPACT_ICON_SIZE),
                                         )
                                     }
                                 }
@@ -679,7 +692,7 @@ fun ProcessTextScreen(
                                     Icon(
                                         painter = painterResource(R.drawable.bk_action_copy_all),
                                         contentDescription = strings[Keys.ASSIST_COPY],
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(SMALL_ICON_SIZE),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
@@ -687,7 +700,7 @@ fun ProcessTextScreen(
 
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                thickness = 0.5.dp,
+                                thickness = DIVIDER_THICKNESS,
                             )
 
                             // The scroll viewport, which the keyboard swipe excludes, measured
@@ -701,7 +714,7 @@ fun ProcessTextScreen(
                                     .verticalScroll(scrollState)
                                     .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
                                     .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE)
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
                             ) {
                                 BasicRichTextEditor(
                                     state = richTextState,
@@ -760,7 +773,7 @@ fun ProcessTextScreen(
                         Box(
                             Modifier
                                 .matchParentSize()
-                                .padding(top = FORMAT_BAR_HEIGHT + 4.dp, bottom = 4.dp, end = 4.dp),
+                                .padding(top = FORMAT_BAR_HEIGHT + SPACE_XSMALL, bottom = SPACE_XSMALL, end = SPACE_XSMALL),
                         ) {
                             VerticalScrollbar(
                                 scrollState = scrollState,
@@ -782,7 +795,7 @@ fun ProcessTextScreen(
                                     initialValue = 1f,
                                     targetValue = 0.35f,
                                     animationSpec = infiniteRepeatable(
-                                        animation = tween((WORKING_PULSE_MILLIS / speed).toInt().coerceAtLeast(1), easing = LinearEasing),
+                                        animation = tween(millisAtSpeed(WORKING_PULSE_MILLIS, speed), easing = LinearEasing),
                                         repeatMode = RepeatMode.Reverse,
                                     ),
                                 )
@@ -807,7 +820,7 @@ fun ProcessTextScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier
                                         .align(Alignment.Center)
-                                        .padding(horizontal = 24.dp)
+                                        .padding(horizontal = SPACE_XXLARGE)
                                         .graphicsLayer { alpha = workingAlpha.value },
                                 )
                                 Button(
@@ -816,7 +829,7 @@ fun ProcessTextScreen(
                                         requestId = -1
                                         notice = ""
                                     },
-                                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(SPACE_MEDIUM),
                                 ) { Text(strings[Keys.ASSISTANT_CANCEL]) }
                             }
                         }
@@ -826,7 +839,7 @@ fun ProcessTextScreen(
                         VersionRail(
                             rail = rail,
                             onSelect = { index -> goTo { composer.goTo(index) } },
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                         )
                     }
 
@@ -875,7 +888,7 @@ fun ProcessTextScreen(
 
                 if (promptOpen) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
@@ -909,7 +922,7 @@ fun ProcessTextScreen(
             // anchors the menu externalCustomPickerOpen opens.
             Box {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_XSMALL, vertical = SPACE_XSMALL),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { goTo { composer.back() } }, enabled = rail.canBack) {
@@ -920,7 +933,7 @@ fun ProcessTextScreen(
                 }
                 Row(
                     modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_TINY),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (assistAvailable) {
@@ -1169,7 +1182,7 @@ private fun NotDefaultKeyboardBox(
         ) {
             Column {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -1187,7 +1200,7 @@ private fun NotDefaultKeyboardBox(
                 Explanation(strings[Keys.PROCESS_TEXT_NEEDS_BORDERKEYS_AS_THE_KEYBOARD])
                 Button(
                     onClick = onChooseKeyboard,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
             }
         }
@@ -1370,7 +1383,7 @@ private fun VerticalScrollbar(
             color = color.copy(alpha = SCROLLBAR_ALPHA * visibility.value),
             topLeft = Offset(0f, top),
             size = Size(size.width, thumbHeight),
-            cornerRadius = CornerRadius(size.width / 2f),
+            cornerRadius = CornerRadius(half(size.width)),
         )
     }
 }
@@ -1442,11 +1455,6 @@ private fun SwipeUpHint(
 
 /** Where the swipe hint stands without motion: half its rise, at full alpha. */
 private const val SWIPE_HINT_STILL_PROGRESS = 0.5f
-
-/** [millis], or no time at all without motion. */
-/** [millis] at the animation [speed] while the draft box moves, else none. */
-private fun motionMillis(motion: Boolean, speed: Float, millis: Int): Int =
-    if (motion) (millis / speed).toInt().coerceAtLeast(1) else 0
 
 /** The field's side gap inside the card. */
 private val FIELD_SIDE_GAP = 12.dp
@@ -1549,7 +1557,7 @@ private fun AssistMenu(
         modifier = Modifier.ringBorder(ringShift, MENU_BORDER_WIDTH, shape),
         shape = shape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp,
+        tonalElevation = BAR_ELEVATION,
         shadowElevation = MENU_SHADOW_ELEVATION,
         content = content,
     )
@@ -1559,7 +1567,7 @@ private fun AssistMenu(
 @Composable
 private fun AssistMenuDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 12.dp),
+        modifier = Modifier.padding(horizontal = SPACE_LARGE),
         thickness = Dp.Hairline,
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
     )
@@ -1576,8 +1584,8 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Bool
     Column(
         modifier = Modifier
             .clickable(enabled = !disabled, onClick = onClick)
-            .padding(vertical = 4.dp)
-            .widthIn(min = 52.dp),
+            .padding(vertical = SPACE_XSMALL)
+            .widthIn(min = ACTION_MIN_WIDTH),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
@@ -1585,14 +1593,14 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Bool
                 painter = painterResource(icon),
                 contentDescription = null,
                 tint = LocalContentColor.current.copy(alpha = alpha),
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(ACTION_ICON_SIZE),
             )
             // A dot marks a custom action, as on QuickActionsView's bar.
             if (custom) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .size(6.dp)
+                        .size(CUSTOM_DOT_SIZE)
                         .background(MaterialTheme.colorScheme.primary, CircleShape),
                 )
             }
@@ -1603,13 +1611,11 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Bool
             color = LocalContentColor.current.copy(alpha = alpha),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = SPACE_TINY),
         )
     }
 }
 
-/** Matches the alpha Compose's own `IconButton` uses for a disabled icon. */
-private const val DISABLED_ALPHA = 0.38f
 
 /**
  * The dots between the two arrows: one per version, the current one larger, the ends coloured
@@ -1617,7 +1623,7 @@ private const val DISABLED_ALPHA = 0.38f
  */
 @Composable
 private fun VersionRail(rail: Rail, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(SPACE_SMALL)) {
         for (index in 0 until rail.size) {
             val current = index == rail.index
             val edge = index == 0 || index == rail.size - 1
@@ -1628,7 +1634,7 @@ private fun VersionRail(rail: Rail, onSelect: (Int) -> Unit, modifier: Modifier 
             }
             Box(
                 modifier = Modifier
-                    .size(if (current) 12.dp else 9.dp)
+                    .size(if (current) CURRENT_STEP_DOT_SIZE else STEP_DOT_SIZE)
                     .clip(CircleShape)
                     .background(color)
                     .clickable { onSelect(index) },
@@ -1650,7 +1656,7 @@ private fun SavePromptRow(
 ) {
     val strings = LocalStrings.current
     var pickingIcon by remember { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box {
                 IconButton(onClick = { pickingIcon = true }) {
@@ -1676,7 +1682,7 @@ private fun SavePromptRow(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onSave) { Text(strings[Keys.COMPOSER_SAVE_PROMPT]) }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(SPACE_XSMALL))
             TextButton(onClick = onSkip) { Text(strings[Keys.COMPOSER_PROMPT_DISMISS]) }
         }
         // Pins the saved action to the bar in the same step.
@@ -1764,3 +1770,17 @@ private val TONE_TASKS = listOf(
     AssistTask.REWRITE_CASUAL,
     AssistTask.REWRITE_DIRECT,
 )
+
+/** The draft box's tallest, its toolbar's divider and elevation. */
+private val SHEET_MAX_HEIGHT = 480.dp
+private val DIVIDER_THICKNESS = 0.5.dp
+private val BAR_ELEVATION = 2.dp
+
+/** An action's least width, its icon, and the dot that marks a custom one. */
+private val ACTION_MIN_WIDTH = 52.dp
+private val ACTION_ICON_SIZE = 22.dp
+private val CUSTOM_DOT_SIZE = 6.dp
+
+/** A step's dot, and the current step's. */
+private val STEP_DOT_SIZE = 9.dp
+private val CURRENT_STEP_DOT_SIZE = 12.dp

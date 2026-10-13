@@ -184,7 +184,7 @@ class SettingsIndexTest {
 
     @Test
     fun `a row inside an Advanced fold carries the fold's summary, one outside it none`() {
-        val inside = SettingsSearch.find(text(Keys.CORRECTIONS_CLIPBOARD_ONCE), ::text).first { it.screen == Screen.Clipboard }
+        val inside = SettingsSearch.find(text(Keys.CLIPBOARD_CLEAR_ON_CLOSE), ::text).first { it.screen == Screen.Clipboard }
         assertEquals(text(Keys.CLIPBOARD_ADVANCED_NOTE), inside.advancedSummary)
         val outside = SettingsSearch.find(text(Keys.CLIPBOARD_REMEMBER_IMAGES), ::text).first { it.screen == Screen.Clipboard }
         assertEquals(null, outside.advancedSummary)

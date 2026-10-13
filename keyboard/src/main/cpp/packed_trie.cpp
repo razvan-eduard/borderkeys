@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 #include "packed_trie.hpp"
+#include "halves.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -93,7 +94,7 @@ int PackedTrie::symbolFor(uint32_t foldedCodePoint) const {
     uint32_t low = 0;
     uint32_t high = alphabetCount_;
     while (low < high) {
-        const uint32_t mid = low + (high - low) / 2;
+        const uint32_t mid = midpoint(low, high);
         const uint32_t value = alphabet_[mid];
         if (value == foldedCodePoint) {
             return static_cast<int>(mid + 1);

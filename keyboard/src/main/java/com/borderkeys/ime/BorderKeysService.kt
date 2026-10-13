@@ -9,14 +9,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.inputmethodservice.InputMethodService
 import android.graphics.Matrix
+import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.util.Size
 import android.view.View
 import android.view.inputmethod.CursorAnchorInfo
-import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputConnection
@@ -25,31 +25,39 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import com.borderkeys.data.ClipboardExclusions
 import com.borderkeys.data.DataGraph
-import com.borderkeys.data.PersonalWordDecay
-import com.borderkeys.data.DirectBoot
-import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.DirectBoot
 import com.borderkeys.data.KeyboardStats
+import com.borderkeys.data.KeyboardSubtypes
+import com.borderkeys.data.PersonalWordDecay
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
+import com.borderkeys.data.entity.ClipEntry
+import com.borderkeys.data.entity.KeyTouch
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
-import com.borderkeys.effects.EffectStyle
-import com.borderkeys.data.theme.QuickAction
-import com.borderkeys.data.theme.QuickTile
 import com.borderkeys.data.theme.Feature
-import com.borderkeys.data.ClipboardExclusions
-import java.time.ZonedDateTime
-import com.borderkeys.data.theme.TimestampPattern
-import com.borderkeys.data.theme.QuickActionBar
-import com.borderkeys.data.theme.QuickActionBarItem
-import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyFlick
+import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
+import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickActionBar
+import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.data.theme.QuickTile
+import com.borderkeys.data.theme.TimestampPattern
+import com.borderkeys.effects.EffectStyle
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.halfDown
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.ime.fx.applyParticleLayer
+import com.borderkeys.language.LanguageTags
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.PredictionEngine
@@ -70,18 +78,20 @@ import com.borderkeys.typing.TypingHost
 import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.hypot
-import com.borderkeys.i18n.LanguageManager
-import com.borderkeys.i18n.Keys
+import java.time.ZonedDateTime
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.math.hypot
 
 /**
  * The input method. Owns the [InputConnection]; dictionaries, scoring and database writes run on
@@ -167,11 +177,8 @@ class BorderKeysService :
 
     private fun enabledSubtypeTags(): List<String> {
         subtypeTags?.let { return it }
-        val manager = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-        val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == packageName }
-        val enabled = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty().map { it.languageTag }
-        val current = manager?.currentInputMethodSubtype?.languageTag
-        val tags = (listOfNotNull(current) + enabled).filter { it.isNotEmpty() }.distinct()
+        val current = inputMethodManager()?.currentInputMethodSubtype?.languageTag?.takeIf { it.isNotEmpty() }
+        val tags = (listOfNotNull(current) + KeyboardSubtypes.enabledTags(this)).distinct()
         subtypeTags = tags
         return tags
     }
@@ -481,9 +488,14 @@ class BorderKeysService :
 
     /** The personal dictionary, as what the typing flow learns is written to it. */
     private val learningStore = object : LearningStore {
-        override fun persist(batch: LearningBatch) {
+        override fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit) {
             learningScope.launch {
                 runCatching { persistLearning(batch) }
+                    .onSuccess { (pairs, triples) ->
+                        if (pairs.isNotEmpty() || triples.isNotEmpty()) {
+                            withContext(Dispatchers.Main) { onDropped(pairs, triples) }
+                        }
+                    }
                     .onFailure { error ->
                         android.util.Log.e("BorderKeys", "learning flush failed", error)
                     }
@@ -885,8 +897,7 @@ class BorderKeysService :
                 closeDebugRing()
             }
             syncDebugRing()
-            view.keyboard.swipeEnabled = orchestrator.session.policy.on(Feature.SWIPE, newPreferences)
-            view.suggestionStripEnabled = orchestrator.session.policy.on(Feature.STRIP, newPreferences)
+            applyFeatureGates(view)
             showPage(page)
             if (view.quickSettingsVisible) {
                 pushQuickSettingsState(view)
@@ -977,7 +988,7 @@ class BorderKeysService :
         view.keyboard.listener = this
         view.onPhotoLampChanged = { refreshTouchableArea() }
         applyHaptics(view, preferences)
-        view.keyboard.swipeEnabled = preferences.swipeEnabled
+        applyFeatureGates(view)
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.keyPopupEnabled = preferences.keyPopup
         view.keyboard.pressAnimated = preferences.effects.keyPress
@@ -1030,13 +1041,12 @@ class BorderKeysService :
 
         val session = FieldSession(
             generation = orchestrator.session.generation + 1,
-            policy = FieldPolicy.of(
+            policy = FieldPolicy.ofField(
                 passwordField = info != null && PrivateMode.isPasswordField(info.inputType),
                 privateField = PrivateMode.isPrivate(info),
-                learningEnabled = preferences.learningEnabled,
-                heatmapEnabled = preferences.heatmapEnabled,
                 userUnlocked = unlocked,
-                verbatimField = info != null && AddressField.isVerbatim(info.inputType),
+                verbatimField = info != null &&
+                    (AddressField.isEmail(info.inputType) || AddressField.isNumberOrPhone(info.inputType)),
             ),
             addressField = info != null && AddressField.isAddress(info.inputType),
             terminalField = TerminalField.isTerminal(info, preferences.terminalPackages),
@@ -1046,8 +1056,6 @@ class BorderKeysService :
             described = info != null,
             contentMimeTypes = info?.contentMimeTypes?.toList().orEmpty(),
         )
-        engine.setLearnAfterUses(preferences.learnAfter)
-        engine.setCorrectionStrictness(preferences.correctionStrictness)
         engine.setKnownWordReach(KeyboardPreferences.rareWordsMinLogProb(preferences.rareWords))
         engine.setLanguageLock(
             KeyboardPreferences.languageLockEvidence(preferences.languageLock),
@@ -1060,24 +1068,23 @@ class BorderKeysService :
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
 
         privateReveal = false
-        // The new field's policy as the orchestrator will hold it, the hand switch applied.
-        val policy = session.policy.byHand(orchestrator.featuresByHand)
         host?.let { view ->
-            view.suggestionStrip.privateMode = policy.fieldIsPrivate
+            view.suggestionStrip.privateMode = session.policy.fieldIsPrivate
             view.suggestionStrip.privateReveal = false
             view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
             applyHaptics(view, preferences)
-            view.keyboard.swipeEnabled = policy.on(Feature.SWIPE, preferences)
-            view.suggestionStripEnabled = policy.on(Feature.STRIP, preferences)
             view.keyboard.soundEnabled = preferences.keySound
             view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
             applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
         orchestrator.startField(session)
-        // The bar follows each field, so a field it was hidden or dimmed in never carries over.
+        host?.let(::applyFeatureGates)
+        // The bar is shown, hidden or dimmed as each new field allows.
         host?.let(::applyQuickActions)
+        // An open panel's tiles follow the field.
+        host?.takeIf { it.quickSettingsVisible }?.let(::pushQuickSettingsState)
         // Posted, to run after the first layout.
         host?.post { syncDebugRing() }
 
@@ -1520,7 +1527,7 @@ class BorderKeysService :
         val y = view.keyboard.top.toFloat()
         return when (preferences.radialMenuAnchor) {
             KeyboardPreferences.RADIAL_ANCHOR_CENTER ->
-                x + view.keyboard.width / 2f to y + view.keyboard.height / 2f
+                x + half(view.keyboard.width.toFloat()) to y + half(view.keyboard.height.toFloat())
             KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT -> x to y + lastGestureY
             KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT ->
                 x + view.keyboard.width.toFloat() to y + lastGestureY
@@ -1546,8 +1553,8 @@ class BorderKeysService :
             return
         }
         debugRingOpen = true
-        val x = view.keyboard.left + view.keyboard.width / 2f
-        val y = view.keyboard.top + view.keyboard.height / 2f
+        val x = view.keyboard.left + half(view.keyboard.width.toFloat())
+        val y = view.keyboard.top + half(view.keyboard.height.toFloat())
         view.radialSuggestionMenu.show(x, y, words)
         view.radialSuggestionMenu.acceptsOwnTouches = true
         view.setRadialMenuVisible(true)
@@ -1595,8 +1602,8 @@ class BorderKeysService :
         view?.setRadialMenuVisible(false)
     }
 
-    override fun onGestureCandidates(candidates: List<Candidate>) =
-        orchestrator.onGestureCandidates(candidates)
+    override fun onGestureCandidates(candidates: List<Candidate>, language: String?) =
+        orchestrator.onGestureCandidates(candidates, language)
 
     override fun onKeyRepeat(code: Int) = orchestrator.onKeyRepeat(code)
 
@@ -1709,7 +1716,7 @@ class BorderKeysService :
      * its chooser, and enter or the settings key open the quick panel.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
-        if (code == ' '.code) {
+        if (code == KeyCodes.SPACE) {
             switchLanguage()
             return true
         }
@@ -1867,7 +1874,7 @@ class BorderKeysService :
         val manager = getSystemService(Context.INPUT_METHOD_SERVICE)
             as? android.view.inputmethod.InputMethodManager
         val tag = manager?.currentInputMethodSubtype?.languageTag
-        return if (tag.isNullOrBlank()) "und" else tag
+        return if (tag.isNullOrBlank()) LanguageTags.UNKNOWN else tag
     }
 
     /**
@@ -1877,11 +1884,12 @@ class BorderKeysService :
     private fun layoutIdFromSubtype(subtype: android.view.inputmethod.InputMethodSubtype?): String =
         LayoutChoice.layoutIdOf(subtype?.extraValue)
 
-    /** Loads the letter layout the new subtype names and redraws the current page. */
+    /** Loads the letter layout the new subtype names and redraws the current page; the flows hear of it. */
     override fun onCurrentInputMethodSubtypeChanged(subtype: android.view.inputmethod.InputMethodSubtype?) {
         super.onCurrentInputMethodSubtypeChanged(subtype)
         subtypeLayoutId = layoutIdFromSubtype(subtype)
         subtypeTags = null
+        orchestrator.onSubtypeChanged()
         scope.launch(Dispatchers.IO) {
             val layout = resolveLetterLayout()
             withContext(Dispatchers.Main) {
@@ -1899,9 +1907,9 @@ class BorderKeysService :
      */
     private fun switchLanguage() {
         val manager = inputMethodManager()
-        val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == packageName }
-        val subtypes = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty()
-        if (ours == null || subtypes.size < 2) {
+        val ours = KeyboardSubtypes.enabledMethod(this)
+        val subtypes = KeyboardSubtypes.enabled(this)
+        if (manager == null || ours == null || subtypes.size < 2) {
             switchToNextInputMethod(true)
             return
         }
@@ -1991,11 +1999,17 @@ class BorderKeysService :
     private fun pushQuickSettingsState(view: KeyboardHostView) {
         val tiles = QuickTile.fromIds(preferences.quickTiles)
         view.quickSettings.setState(
-            tiles = tiles.map { QuickSettingsView.TileState(it, tileOn(it)) },
+            tiles = tiles.map { QuickSettingsView.TileState(it, tileOn(it), tileEnabled(it)) },
             available = QuickTile.entries.filterNot { it in tiles },
             fullSettings = unlocked,
             alignRight = preferences.positionMode != KeyboardPreferences.MODE_ONE_HANDED_LEFT,
         )
+    }
+
+    /** Whether [tile] may be used in this field: its own requirement met and its feature's gate open. */
+    private fun tileEnabled(tile: QuickTile): Boolean {
+        val policy = orchestrator.session.policy
+        return policy.allows(tile.requires) && (tile.feature?.let { policy.canSwitch(it, preferences) } ?: true)
     }
 
     /** Whether [tile] is drawn on: its switch set, or its position the current one. */
@@ -2153,22 +2167,21 @@ class BorderKeysService :
      * line per term, in the catalogue's words, or the one line saying the word is not offered.
      */
     private fun explainWord(query: String, word: String) {
-        val languages = orchestrator.languageTags
         engine.explain(query, word) { explanation ->
             val view = host ?: return@explain
             val lines = if (explanation == null) {
                 listOf(strings.getString(Keys.STRIP_NOT_OFFERED, word))
             } else {
-                explanationLines(explanation, languages)
+                explanationLines(explanation)
             }
             view.explainPanel.show(strings.getString(Keys.STRIP_EXPLAIN_TITLE, word, query), lines)
             view.setExplainPanelVisible(true)
         }
     }
 
-    private fun explanationLines(explanation: ScoreExplanation, languages: List<String>): List<String> {
+    private fun explanationLines(explanation: ScoreExplanation): List<String> {
         fun number(value: Float): String = String.format(Locale.ROOT, "%+.1f", value)
-        val language = languages.getOrNull(explanation.packIndex)
+        val language = explanation.packTag
             ?.let { Locale.forLanguageTag(it).displayLanguage }
             .orEmpty()
         return listOf(
@@ -2221,8 +2234,10 @@ class BorderKeysService :
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
+        language: String?,
     ) = orchestrator.onSuggestions(
         candidates, knownWord, knownWordExact, knownWordIsName, query, possessive, corrections,
+        language,
     )
 
     // The words each event has shown an effect for, for this run only.
@@ -2245,28 +2260,39 @@ class BorderKeysService :
         host?.effects?.playWord(word, style, setting.colour.takeIf { it != 0 })
     }
 
-    private suspend fun persistLearning(batch: LearningBatch) {
+    /** Writes [batch]; returns the pairs and triples the store gave up under its budget. */
+    private suspend fun persistLearning(batch: LearningBatch): Pair<List<UserBigram>, List<UserTrigram>> {
         DataGraph.dictionary.applyLearned(batch.updates)
-        DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
-        DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
+        val droppedPairs = DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
+        val droppedTriples = DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
         DataGraph.dictionary.applyTouches(batch.touches, batch.touchHalfLifeMillis)
         maybeDecayPersonalDictionary()
+        return droppedPairs to droppedTriples
     }
 
-    /** Runs [DictionaryRepository.decayStaleEntries] at most once a day. */
+    /**
+     * Runs [DictionaryRepository.decayStaleEntries], then [DictionaryRepository.purgeUnlearnable]
+     * with the engine's verdicts, at most once per [KeyboardPreferences.cleanUpIntervalDays]; the
+     * engine drops what the purge deleted.
+     */
     private suspend fun maybeDecayPersonalDictionary() {
         val prefs = getSharedPreferences(DECAY_PREFS, MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastSweep = prefs.getLong(DECAY_LAST_SWEEP_AT, 0L)
-        if (now - lastSweep < DECAY_SWEEP_INTERVAL_MILLIS) {
+        val settings = DataGraph.themes.preferences.first()
+        if (!PersonalWordDecay.sweepDue(lastSweep, now, settings.cleanUpIntervalDays)) {
             return
         }
-        val settings = DataGraph.themes.preferences.first()
         DataGraph.dictionary.decayStaleEntries(
             settings.learnedWordLimit,
             PersonalWordDecay.halfLifeMillis(settings.unlearnHalfLifeDays),
+            PersonalWordDecay.unconfirmedLifeMillis(settings.unconfirmedLifeDays),
             now,
         )
+        val purged = DataGraph.dictionary.purgeUnlearnable { words ->
+            suspendCancellableCoroutine { verdicts -> engine.learnableWords(words) { verdicts.resume(it) } }
+        }
+        engine.dropLinks(purged.pairs, purged.triples)
         prefs.edit().putLong(DECAY_LAST_SWEEP_AT, now).apply()
     }
 
@@ -2375,6 +2401,12 @@ class BorderKeysService :
         }
     }
 
+    /** Swipe and the suggestion strip, as the field's policy and the settings allow them now. */
+    private fun applyFeatureGates(view: KeyboardHostView) {
+        view.keyboard.swipeEnabled = orchestrator.session.policy.on(Feature.SWIPE, preferences)
+        view.suggestionStripEnabled = orchestrator.session.policy.on(Feature.STRIP, preferences)
+    }
+
     /**
      * The Enabled/Disabled quick action: everything off by hand, or everything back on. The
      * strip hides or returns, and the chips, the swipe and the button follow at once.
@@ -2389,8 +2421,7 @@ class BorderKeysService :
             view.suggestionStrip.privateReveal = false
             view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
-            view.suggestionStripEnabled = orchestrator.session.policy.on(Feature.STRIP, preferences)
-            view.keyboard.swipeEnabled = orchestrator.session.policy.on(Feature.SWIPE, preferences)
+            applyFeatureGates(view)
             view.quickActions.featuresOff = off
             view.quickActions.refreshAllowed()
         }
@@ -2417,8 +2448,9 @@ class BorderKeysService :
             QuickAction.COPY_ALL -> copyToClipboard(
                 connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString().orEmpty(),
             )
-            // In a private field the system clipboard goes straight to the field: no chip, no history.
-            QuickAction.PASTE -> if (orchestrator.session.policy.fieldIsPrivate) {
+            // Where the keyboard may not read the clipboard, the system clipboard goes straight to
+            // the field: no chip, no history.
+            QuickAction.PASTE -> if (orchestrator.session.policy.pastesFromSystem) {
                 orchestrator.resetComposing()
                 connection.performContextMenuAction(android.R.id.paste)
             } else {
@@ -2620,15 +2652,29 @@ class BorderKeysService :
         }
         scope.launch {
             val view = host ?: return@launch
-            val (entries, thumbnails) = withContext(Dispatchers.IO) {
+            view.clipboardPanel.query = searchWordAtCaret()
+            view.clipboardPanel.takesPhoto = { mimeType -> orchestrator.session.takesPhoto(mimeType) }
+            fillClipboardPanel(view)
+            view.setClipboardPanelVisible(true)
+        }
+    }
+
+    /**
+     * Fills the clipboard panel with the history, read and decoded off the main thread, or with no
+     * card while Clipboard history is off.
+     */
+    private suspend fun fillClipboardPanel(view: KeyboardHostView) {
+        val historyOn = orchestrator.session.policy.on(Feature.CLIPBOARD_HISTORY, preferences)
+        val (entries, thumbnails) = if (historyOn) {
+            withContext(Dispatchers.IO) {
                 val recent = DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
                 recent to view.clipboardPanel.decodeThumbnails(recent)
             }
-            view.clipboardPanel.query = searchWordAtCaret()
-            view.clipboardPanel.takesPhoto = { mimeType -> orchestrator.session.takesPhoto(mimeType) }
-            view.clipboardPanel.setEntries(entries, thumbnails)
-            view.setClipboardPanelVisible(true)
+        } else {
+            emptyList<ClipEntry>() to emptyMap()
         }
+        view.clipboardPanel.historyOn = historyOn
+        view.clipboardPanel.setEntries(entries, thumbnails)
     }
 
     override fun onClipEdited(entry: com.borderkeys.data.entity.ClipEntry) {
@@ -2741,13 +2787,7 @@ class BorderKeysService :
         if (!view.clipboardPanelVisible) {
             return
         }
-        scope.launch {
-            val (entries, thumbnails) = withContext(Dispatchers.IO) {
-                val recent = DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
-                recent to view.clipboardPanel.decodeThumbnails(recent)
-            }
-            view.clipboardPanel.setEntries(entries, thumbnails)
-        }
+        scope.launch { fillClipboardPanel(view) }
     }
 
     /** Selects the word the cursor is inside, so the next action can act on it. */
@@ -2882,7 +2922,7 @@ class BorderKeysService :
         val text = when {
             description.hasMimeType("image/*") ->
                 strings[Keys.CLIP_PHOTO].takeIf {
-                    orchestrator.session.policy.on(Feature.PHOTOS, preferences) &&
+                    orchestrator.session.policy.on(Feature.PHOTO_OFFER, preferences) &&
                         orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*") &&
                         withinOfferWindow(description.timestamp)
                 }
@@ -2961,7 +3001,7 @@ class BorderKeysService :
      * offer window, or any age when the window is off. A missing time counts as young.
      */
     private fun withinOfferWindow(millis: Long): Boolean {
-        val window = preferences.imageOfferMinutes * 60_000L
+        val window = TimeUnit.MINUTES.toMillis(preferences.imageOfferMinutes.toLong())
         return window == 0L || millis == 0L || System.currentTimeMillis() - millis <= window
     }
 
@@ -3107,7 +3147,7 @@ class BorderKeysService :
             return
         }
         val metrics = resources.displayMetrics
-        val size = android.util.Size(metrics.widthPixels / 2, metrics.heightPixels / 2)
+        val size = android.util.Size(halfDown(metrics.widthPixels), halfDown(metrics.heightPixels))
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 runCatching { contentResolver.loadThumbnail(uri, size, null) }.getOrNull()
@@ -3250,7 +3290,7 @@ class BorderKeysService :
 
         val density = resources.displayMetrics.density
         val chipHeight = (effectiveTheme().rowHeightDp * 0.78f * density).toInt().coerceAtLeast(1)
-        val chipWidth = (view.width / 2).coerceAtLeast(MIN_CHIP_WIDTH_DP)
+        val chipWidth = halfDown(view.width).coerceAtLeast(MIN_CHIP_WIDTH_DP)
         val size = Size(chipWidth, chipHeight)
         val inflated = ArrayList<android.widget.inline.InlineContentView>(suggestions.size)
         var remaining = suggestions.size
@@ -3318,9 +3358,6 @@ class BorderKeysService :
 
         /** The preferences file holding the language evidence, a float per language tag. */
         const val LANGUAGE_EVIDENCE_PREFS = "language_evidence"
-
-        /** The shortest interval between two [maybeDecayPersonalDictionary] runs. */
-        const val DECAY_SWEEP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
 
         const val CONTEXT_WINDOW_CHARS = 64
 

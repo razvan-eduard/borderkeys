@@ -37,6 +37,9 @@ data class BackupPayload(
     val words: List<BackupWord> = emptyList(),
     val bigrams: List<BackupBigram> = emptyList(),
     val trigrams: List<BackupTrigram> = emptyList(),
+    val pairContexts: List<BackupPairContext> = emptyList(),
+    val tripleContexts: List<BackupTripleContext> = emptyList(),
+    val phraseClocks: List<BackupPhraseClock> = emptyList(),
     val blocked: List<String> = emptyList(),
     val clips: List<BackupClip> = emptyList(),
     /**
@@ -48,6 +51,7 @@ data class BackupPayload(
     /** Whether this carries the dictionary or the clipboard, which ask for encryption. */
     val isSensitive: Boolean
         get() = words.isNotEmpty() || bigrams.isNotEmpty() || trigrams.isNotEmpty() ||
+            pairContexts.isNotEmpty() || tripleContexts.isNotEmpty() || phraseClocks.isNotEmpty() ||
             clips.isNotEmpty()
 }
 
@@ -79,16 +83,60 @@ data class BackupWord(
     val asserted: Int = 0,
 )
 
+/**
+ * One learned pair. [language] is the primary language subtag it was written in; a file without
+ * it reads as unknown, and a restore takes the language its word was learned under.
+ * [lastUsedAt], [contextSeen] and [languageSeen] are the link's stamps
+ * ([com.borderkeys.data.entity.UserBigram]); a file without them reads them as 0, unknown.
+ */
 @Serializable
-data class BackupBigram(val previous: String, val word: String, val count: Int)
+data class BackupBigram(
+    val previous: String,
+    val word: String,
+    val count: Int,
+    val language: String = "",
+    val lastUsedAt: Long = 0L,
+    val contextSeen: Long = 0L,
+    val languageSeen: Long = 0L,
+)
 
+/** One learned triple; its fields as for [BackupBigram]. */
 @Serializable
 data class BackupTrigram(
     val previous2: String,
     val previous1: String,
     val word: String,
     val count: Int,
+    val language: String = "",
+    val lastUsedAt: Long = 0L,
+    val contextSeen: Long = 0L,
+    val languageSeen: Long = 0L,
 )
+
+/** One previous word's uses in a language ([com.borderkeys.data.entity.UserPairContext]). */
+@Serializable
+data class BackupPairContext(
+    val language: String,
+    val previous: String,
+    val total: Long,
+    val seen: Long,
+    val lastUsedAt: Long,
+)
+
+/** Two previous words' uses in a language ([com.borderkeys.data.entity.UserTripleContext]). */
+@Serializable
+data class BackupTripleContext(
+    val language: String,
+    val previous2: String,
+    val previous1: String,
+    val total: Long,
+    val seen: Long,
+    val lastUsedAt: Long,
+)
+
+/** A language's two commit clocks ([com.borderkeys.data.entity.UserPhraseClock]). */
+@Serializable
+data class BackupPhraseClock(val language: String, val pairs: Long, val triples: Long)
 
 @Serializable
 data class BackupClip(
@@ -128,7 +176,7 @@ object BackupFile {
         }
     }
 
-    const val FORMAT = 2
+    const val FORMAT = 3
 
     /** The first format whose header is authenticated with the ciphertext. */
     private const val HEADER_BOUND_FORMAT = 2

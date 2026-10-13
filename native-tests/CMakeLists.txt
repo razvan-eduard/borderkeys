@@ -24,6 +24,7 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/packed_trie.cpp
     ${ENGINE_DIR}/ngram_model.cpp
     ${ENGINE_DIR}/user_model.cpp
+    ${ENGINE_DIR}/personal_score.cpp
     ${ENGINE_DIR}/proximity.cpp
     ${ENGINE_DIR}/touch_model.cpp
     ${ENGINE_DIR}/gesture/resample.cpp
@@ -107,6 +108,7 @@ add_custom_target(test_folds DEPENDS ${TEST_FOLDS})
 
 add_executable(borderkeys_tests
     main.cpp
+    allocation_count.cpp
     test_format.cpp
     test_engine.cpp
     test_gesture.cpp

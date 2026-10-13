@@ -21,7 +21,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupFile
@@ -31,11 +30,13 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.BackupPartSwitches
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SettingsSectionCard
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Another application asking for this one's settings, shown instead of the settings when the
@@ -94,11 +95,11 @@ fun TransferScreen(
                         )
                     }
                 },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.TRANSFER_SEND]) }
             TextButton(
                 onClick = { finish(Activity.RESULT_CANCELED) },
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER),
             ) { Text(strings[Keys.TRANSFER_REFUSE]) }
         }
     }

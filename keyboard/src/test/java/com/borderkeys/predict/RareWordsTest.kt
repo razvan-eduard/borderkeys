@@ -57,7 +57,7 @@ class RareWordsTest {
 
     /** How many rows of corpus [name] the keyboard answers as the corpus expects. */
     private fun right(pipeline: Pipeline, name: String): Int =
-        File(CORPUS_DIRECTORY, name).readLines()
+        File(Pipeline.CORPUS_DIRECTORY, name).readLines()
             .filter { it.isNotBlank() && !it.startsWith("#") }
             .count { line ->
                 val typed = line.substringBefore('\t')
@@ -67,7 +67,6 @@ class RareWordsTest {
             }
 
     private companion object {
-        const val CORPUS_DIRECTORY = "../native-tests/data"
         const val UNKNOWN = "autocorrect_unknown_en.tsv"
         val CORPORA = listOf(
             UNKNOWN, "autocorrect_unlisted_en.tsv", "autocorrect_real_en.tsv",

@@ -26,7 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupFile
 import com.borderkeys.data.backup.BackupPayload
@@ -36,6 +35,8 @@ import com.borderkeys.settings.BackupPartSwitches
 import com.borderkeys.settings.BackupReviewChecklist
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SettingsSectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -145,7 +146,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 keyboardOptions = KeyboardOptions(
                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
                 ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             )
         }
 
@@ -154,7 +155,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 // The private parts are never written without a passphrase.
                 enabled = parts.any && (!private || passphrase.isNotEmpty()),
                 onClick = { write.launch(BackupFile.SUGGESTED_NAME) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.BACKUP_WRITE]) }
         }
 
@@ -162,7 +163,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.BACKUP_IMPORT_NOTE])
             Button(
                 onClick = { read.launch(arrayOf("*/*")) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.BACKUP_CHOOSE]) }
             if (notice.isNotEmpty()) {
                 Explanation(notice)

@@ -3,9 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,22 +18,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
 import com.borderkeys.data.assist.AssistProtocol
+import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.ICON_SIZE
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE_PLUS
+import com.borderkeys.settings.SPACE_XLARGE
 import com.borderkeys.settings.Screen
+import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSearch
 import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
 import com.borderkeys.settings.rememberResumedCount
@@ -130,8 +130,7 @@ fun HomeScreen(
                     open(Screen.Assistant)
                 }
             }
-            // In both builds, after the assistant whose model its buttons need; the screen says
-            // which of them do.
+            // In both builds, after the assistant.
             SettingRow(
                 strings[Keys.SCREEN_DRAFT_BOX],
                 strings[Keys.HOME_DRAFT_BOX],
@@ -188,12 +187,12 @@ fun HomeScreen(
 @Composable
 private fun ShortcutRow(icon: Int?, text: String) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_LARGE_PLUS),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(16.dp))
+            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(ICON_SIZE))
+            Spacer(Modifier.width(SPACE_XLARGE))
         }
         Text(text, style = MaterialTheme.typography.bodyLarge)
     }

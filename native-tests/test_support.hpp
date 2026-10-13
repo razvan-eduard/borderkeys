@@ -4,13 +4,17 @@
 #ifndef BORDERKEYS_TEST_SUPPORT_HPP
 #define BORDERKEYS_TEST_SUPPORT_HPP
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
+
+#include "personal_score.hpp"
 
 // The whole test framework: a counter, a macro and a name.
 
@@ -163,6 +167,35 @@ inline void synthesiseGesture(const TestLayout& layout, const char* word, float 
     ys.push_back(anchorY.back());
     times.push_back(time + 10);
 }
+
+/** The bonus PersonalScore gives a link used `count` times in a context seen `total` times. */
+inline float personalShareOf(uint32_t count, uint32_t total) {
+    return borderkeys::PersonalScore::shareBonus(count, total);
+}
+
+/** The roundings a rise checked by checkRise carries: the sum that adds it and the difference that reads it. */
+inline constexpr float kRiseRoundings = 2.0f;
+
+/** Whether `with` is `without` raised by `rise`, within kRiseRoundings roundings of the larger score. */
+inline void checkRise(float with, float without, float rise, const char* what) {
+    const float scale = std::max(std::fabs(with), std::fabs(without));
+    check(std::fabs((with - without) - rise) <= kRiseRoundings * std::numeric_limits<float>::epsilon() * scale,
+          what);
+}
+
+/**
+ * Counts the heap allocations made through `new` while it lives (allocation_count.cpp replaces the
+ * global allocation functions in the test binary); one at a time.
+ */
+class AllocationCount {
+public:
+    AllocationCount();
+    ~AllocationCount();
+    AllocationCount(const AllocationCount&) = delete;
+    AllocationCount& operator=(const AllocationCount&) = delete;
+
+    long count() const;
+};
 
 }  // namespace borderkeys_test
 

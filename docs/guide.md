@@ -174,11 +174,13 @@ ships.
   offers the same from the keyboard, and a "Why?": the engine's own account of the word's score,
   term by term, in plain words. Forget removes the word in every case it was learned in, This
   and this alike, with what is still waiting to be saved. How soon a word or phrase is learned
-  is a number of uses, 1, 2, 3, 5 or 10, three by default, or one pick from the strip: until then
+  is a number of uses, 1, 2, 3, 5, 8 or 13, three by default, or one pick from the strip: until then
   it is only counted and moves nothing, a dictionary word included, and from then on it climbs
   the more you use it. How fast unused words fade sits beside it: a word or phrase unused for that
   many days, a week to a year, counts half as much, and is no longer learned once it falls below
-  the number of uses. The two pages list only what is learned.
+  the number of uses. A word used only once is deleted after 10, 30 or 90 days unused, 30 by
+  default, or kept with Off. The clean-up that fades and deletes runs daily, weekly or monthly,
+  weekly by default. The two pages list only what is learned.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/22_learned_words.jpg" alt="Learned words: a search box, Forget everything, and each word with how often it was used, a Block and a Delete" width="30%">
@@ -344,7 +346,7 @@ scrolling of a label too long for its button on the quick actions bar or the qui
 waits, slides past, waits and starts over), and a
 card for each moment the keyboard has something to say, a word learned, a correction applied or
 undone, a swipe accepted, a suggestion tapped, with its animation, colour and how often it plays.
-One dial, Animation speed, runs all of them from a quarter to four times the default.
+One slider, Animation speed, runs all of them at set speeds from a tenth to four times the default.
 All of them stop as well when Android's own animations are off.
 
 The Effects screen holds the particles: five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction

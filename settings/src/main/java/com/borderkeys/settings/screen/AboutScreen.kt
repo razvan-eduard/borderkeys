@@ -3,9 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,13 +15,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.borderkeys.data.assist.AssistProtocol
+import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.BuildConfig
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 
 /**
  * Version, source and licence. The commit hash and the source URL point this binary at the source
@@ -55,7 +55,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             SettingRow(strings[Keys.ABOUT_SOURCE], BuildConfig.SOURCE_URL)
             Button(
                 onClick = { open(context, BuildConfig.SOURCE_URL) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.ABOUT_OPEN_THE_SOURCE_REPOSITORY]) }
             Explanation(
                 strings[Keys.ABOUT_THE_COMMIT_ABOVE_IS_THE_ONE],
@@ -71,7 +71,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             SettingRow(strings[Keys.ABOUT_DICTIONARY_SOURCES], strings[Keys.ABOUT_DICTIONARY_SOURCES_NOTE])
             Button(
                 onClick = { open(context, DICTIONARY_SOURCES_URL) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.ABOUT_OPEN_DICTIONARY_SOURCES]) }
             // Only in the build that has the assistant.
             if (hasAssistant) {
@@ -89,14 +89,14 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                     SettingRow(strings[Keys.ABOUT_PLUS_REPOSITORY], BuildConfig.REPO_URL)
                     Button(
                         onClick = { open(context, BuildConfig.REPO_URL) },
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                     ) { Text(strings[Keys.ABOUT_PLUS_REPOSITORY]) }
                 }
                 if (BuildConfig.RELEASES_URL.isNotEmpty()) {
                     SettingRow(strings[Keys.ABOUT_PLUS_RELEASES], BuildConfig.RELEASES_URL)
                     Button(
                         onClick = { open(context, BuildConfig.RELEASES_URL) },
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                     ) { Text(strings[Keys.ABOUT_PLUS_RELEASES]) }
                 }
                 Explanation(strings[Keys.ABOUT_PLUS_REPOSITORY_NOTE])
@@ -109,7 +109,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             }
             Button(
                 onClick = { open(context, VOXAPPS_REPO_URL) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.ABOUT_OTHER_APPS_REPOSITORY]) }
         }
     }

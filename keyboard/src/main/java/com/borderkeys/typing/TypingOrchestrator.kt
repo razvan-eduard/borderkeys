@@ -241,8 +241,9 @@ class TypingOrchestrator(
     }
 
     /**
-     * What the user allows by hand, through the Suggestions quick action: [TypingFeatures.ALL],
-     * or [TypingFeatures.NONE] while switched off. Not saved; a new keyboard starts with ALL.
+     * What the user allows by hand, through the Enabled or disabled quick action:
+     * [TypingFeatures.ALL], or [TypingFeatures.NONE] while switched off. Not saved; a new keyboard
+     * starts with ALL.
      */
     var featuresByHand: TypingFeatures = TypingFeatures.ALL
         private set
@@ -271,6 +272,13 @@ class TypingOrchestrator(
         )
         for (flow in flows) {
             flow.userUnlocked()
+        }
+    }
+
+    /** The user switched the input-method subtype: every flow hears of it. */
+    fun onSubtypeChanged() {
+        for (flow in flows) {
+            flow.subtypeChanged()
         }
     }
 
@@ -698,13 +706,13 @@ class TypingOrchestrator(
 
         // A space typed right after one this keyboard added is handled per
         // KeyboardPreferences.autoSpaceHabit.
-        if (shifted == ' '.code && spacingFlow.swallowsTypedSpace(typed.isEmpty(), editor)) {
+        if (shifted == KeyCodes.SPACE && spacingFlow.swallowsTypedSpace(typed.isEmpty(), editor)) {
             shiftFlow.afterDelimiter(heldByUser, composing.isEmpty())
             return
         }
 
         // Two spaces in quick succession after a word character become ". ".
-        if (shifted == ' '.code && spacingFlow.doubleSpaceMakesPeriod(typed.isEmpty(), editor)) {
+        if (shifted == KeyCodes.SPACE && spacingFlow.doubleSpaceMakesPeriod(typed.isEmpty(), editor)) {
             ownEditPending = true
             spacingFlow.writePeriod(editor)
             commitFlow.dropPending()
@@ -1010,8 +1018,9 @@ class TypingOrchestrator(
      * A decoded swipe that did not pause: the first candidate composes at once and all of them go
      * to the strip. With [KeyboardPreferences.radialLiftKeepsOpen] on, a ring opens for a tap,
      * unless the decode was decisive and [KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY] is set.
+     * The pairs and triples the swiped word makes go under [language], the one the decode read.
      */
-    fun onGestureCandidates(candidates: List<Candidate>) {
+    fun onGestureCandidates(candidates: List<Candidate>, language: String? = null) {
         host.onSwipeAnswered()
         if (candidates.isEmpty()) {
             host.clearStrip()
@@ -1021,6 +1030,7 @@ class TypingOrchestrator(
         if (currentEditor() == null) {
             return
         }
+        language?.let(learningFlow::answeredIn)
         val cased = caseSwipedWords(candidates)
         val best = cased.first().text
         if (session.terminalField) {
@@ -1698,7 +1708,7 @@ class TypingOrchestrator(
 
     /**
      * The engine's answer about [query]: kept for the delimiter, then cased and arranged on the
-     * strip. An answer about an older query is dropped.
+     * strip, and its [language] learned under. An answer about an older query is dropped.
      */
     fun onSuggestions(
         candidates: List<Candidate>,
@@ -1708,10 +1718,12 @@ class TypingOrchestrator(
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
+        language: String? = null,
     ) {
         if (!suggestionFlow.accept(query)) {
             return
         }
+        language?.let(learningFlow::answeredIn)
         if (composing.isNotEmpty()) {
             host.setEditorEmpty(false)
         }

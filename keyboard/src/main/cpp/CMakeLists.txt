@@ -23,6 +23,7 @@ set(BORDERKEYS_SOURCES
     packed_trie.cpp
     ngram_model.cpp
     user_model.cpp
+    personal_score.cpp
     proximity.cpp
     touch_model.cpp
     gesture/resample.cpp

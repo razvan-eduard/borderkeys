@@ -3,40 +3,43 @@
 
 package com.borderkeys.settings.screen
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import com.borderkeys.settings.PickerChip
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
 import com.borderkeys.data.theme.EffectSetting
 import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.effects.EffectStyle
 import com.borderkeys.i18n.Keys
+import com.borderkeys.ime.LabelMarquee
 import com.borderkeys.settings.ChoiceSlider
-import com.borderkeys.settings.DEFAULT_PREFERENCES
-import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.ColourRow
-import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import java.text.DecimalFormat
 
 /**
  * Every animation's switch under the one that stops them all, then the effects that answer an
@@ -91,19 +94,19 @@ fun EventEffectsSection(
         ) { value -> onChange { it.copy(draftBoxMotion = value) } }
         SwitchRow(
             title = strings[Keys.ANIMATIONS_SCROLLING_LABELS],
-            subtitle = strings[Keys.ANIMATIONS_SCROLLING_LABELS_NOTE],
+            subtitle = strings.counted(Keys.ANIMATIONS_SCROLLING_LABELS_NOTE, LabelMarquee.HOLD_SECONDS),
             checked = effects.scrollingLabels,
             enabled = effects.anyOn,
         ) { value -> onChange { it.copy(scrollingLabels = value) } }
         // One pace for everything on the page, 1x the default, with the reset the other dials have.
         Disableable(disabled = !effects.anyOn) {
             SettingLabel(strings[Keys.ANIMATIONS_SPEED])
-            DefaultableSlider(
-                label = strings.getString(Keys.ANIMATIONS_TIMES, "%.2f".format(effects.speed)),
+            ChoiceSlider(
+                choices = EffectsSettings.SPEED_STOPS.map { speed ->
+                    speed to strings.getString(Keys.ANIMATIONS_TIMES, DecimalFormat(SPEED_LABEL_PATTERN).format(speed))
+                },
                 value = effects.speed,
-                range = EffectsSettings.MIN_SPEED..EffectsSettings.MAX_SPEED,
                 default = EffectsSettings.DEFAULT_SPEED,
-                steps = EffectsSettings.SPEED_STEPS,
             ) { value -> onChange { it.copy(speed = value) } }
             Explanation(strings[Keys.ANIMATIONS_SPEED_NOTE])
         }
@@ -144,8 +147,8 @@ private fun EventEffectCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     PickerChip(strings[Keys.EFFECTS_STYLE_OFF], !setting.enabled) {
                         onSettingChange { it.copy(style = EffectSetting.OFF) }
@@ -173,7 +176,7 @@ private fun EventEffectCard(
                             Text(
                                 strings[Keys.EFFECTS_FREQUENCY],
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                             )
                             ChoiceSlider(
                                 choices = FREQUENCY_LABELS.map { (frequency, labelKey) -> frequency to strings[labelKey] },
@@ -235,3 +238,6 @@ private fun titleKeyFor(event: EffectEvent): String = when (event) {
 
 /** Where a card's own swatches live in the shared custom-colour map. */
 private fun effectColourKey(event: EffectEvent): String = "effect_${event.name}"
+
+/** A speed as the slider labels it: up to two decimals, none trailing. */
+private const val SPEED_LABEL_PATTERN = "0.##"
