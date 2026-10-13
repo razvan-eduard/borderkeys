@@ -43,6 +43,17 @@ class DictionaryRepository internal constructor(
     private val keyTouches: KeyTouchDao,
     private val userPhraseClocks: UserPhraseClockDao,
 ) {
+    /** The repository on [database]'s own tables. */
+    internal constructor(database: BorderKeysDatabase) : this(
+        database,
+        database.userWordDao(),
+        database.blockedWordDao(),
+        database.userBigramDao(),
+        database.userTrigramDao(),
+        database.keyTouchDao(),
+        database.userPhraseClockDao(),
+    )
+
     private val phraseRecorder = PhraseRecorder(userBigrams, userTrigrams, userPhraseClocks)
 
     val words: Flow<List<UserWord>> = userWords.observeAll()
@@ -103,6 +114,34 @@ class DictionaryRepository internal constructor(
 
     /** Each language's pair clock and triple clock. */
     suspend fun phraseClocks(): List<UserPhraseClock> = userPhraseClocks.all()
+
+    /**
+     * What the keyboard loads into the engine's personal model: the [wordLimit] words used most
+     * ([topWords]), [pairsToLoad], [pairContexts], [triplesToLoad], [tripleContexts] and
+     * [phraseClocks].
+     */
+    suspend fun personalRows(wordLimit: Int): PersonalRows = PersonalRows(
+        words = topWords(wordLimit),
+        pairs = pairsToLoad(),
+        pairContexts = pairContexts(),
+        triples = triplesToLoad(),
+        tripleContexts = tripleContexts(),
+        clocks = phraseClocks(),
+    )
+
+    /**
+     * Writes what a learning flush carries: [updates] ([applyLearned]), then [pairs]
+     * ([applyLearnedBigrams]), then [triples] ([applyLearnedTrigrams]). Returns the pairs and
+     * triples given up beyond the engine's.
+     */
+    suspend fun applyLearning(
+        updates: List<LearnedWord>,
+        pairs: List<PairStep>,
+        triples: List<TripleStep>,
+    ): PhraseRecorder.Dropped {
+        applyLearned(updates)
+        return PhraseRecorder.Dropped(applyLearnedBigrams(pairs), applyLearnedTrigrams(triples))
+    }
 
     /** Applies a batch of learning updates in one transaction. */
     suspend fun applyLearned(updates: List<LearnedWord>) {

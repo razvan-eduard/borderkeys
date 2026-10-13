@@ -3,9 +3,16 @@
 
 package com.borderkeys.predict
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.InMemoryDictionary
 import com.borderkeys.data.LanguagePackRepository
+import com.borderkeys.data.PhraseRecorder
+import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.Contractions
+import com.borderkeys.ime.OffensiveWords
 import com.borderkeys.typing.FieldPolicy
 import com.borderkeys.typing.FieldSession
 import com.borderkeys.typing.LearningFlow
@@ -13,6 +20,7 @@ import com.borderkeys.typing.QueuedEngine
 import com.borderkeys.typing.SwipePath
 import com.borderkeys.typing.TypingOrchestrator
 import com.borderkeys.typing.TypingRig
+import kotlinx.coroutines.runBlocking
 import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
@@ -277,19 +285,62 @@ internal class Pipeline private constructor(
         rig.settle()
     }
 
-    /** What the store holds after [learnHistory], read as the service reads it at start. */
-    fun personalSnapshot(): PersonalSnapshot =
-        PersonalSnapshot.of(rig.store.batches, settings(), rig.clock.now)
+    /**
+     * [read] of the store after [learnHistory], each batch written as a flush writes it
+     * ([com.borderkeys.typing.LearningBatch.writeTo]) into a database of its own, and of what
+     * those writes gave up beyond the engine's. Needs Robolectric.
+     */
+    fun <T> fromStore(read: suspend (DictionaryRepository, PhraseRecorder.Dropped) -> T): T =
+        InMemoryDictionary(ApplicationProvider.getApplicationContext()).use { dictionary ->
+            runBlocking {
+                var dropped = PhraseRecorder.Dropped()
+                for (batch in rig.store.batches) {
+                    dropped += batch.writeTo(dictionary.repository)
+                }
+                read(dictionary.repository, dropped)
+            }
+        }
 
-    /** The words the engine holds after [previous] in [language]'s pairs, as the store keys them. */
-    fun heldAfter(language: String, previous: String): Set<String> {
-        val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
+    /**
+     * The model the service loads at start from what [learnHistory] left in the store
+     * ([PersonalModelLoad.read]), under this pipeline's settings, its languages' offensive words
+     * as the loader reads them, and its clock. Needs Robolectric.
+     */
+    fun personalSnapshot(): PersonalModelLoad {
+        val assets = ApplicationProvider.getApplicationContext<Context>().assets
+        val offensiveWords = OffensiveWords.merge(languages.map { OffensiveWords.load(assets, it) })
+        return fromStore { dictionary, _ ->
+            PersonalModelLoad.read(dictionary, settings(), offensiveWords, rig.clock.now)
+        }
+    }
+
+    /**
+     * The words the engine holds after [previous] in [language]'s pairs, or after [before] and
+     * [previous] in its triples when [before] is given, as the store keys them.
+     */
+    fun heldAfter(language: String, previous: String, before: String? = null): Set<String> {
         val held = NativePredictor.nativeContextLinks(
-            handle, language, null, previous, emptyArray(), IntArray(0), LongArray(0), counted,
+            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0),
+            LongArray(NativePredictor.CONTEXT_SLOTS),
         )
         val words = arrayOfNulls<String>(held)
-        NativePredictor.nativeContextLinks(handle, language, null, previous, words, IntArray(held), LongArray(held), counted)
+        NativePredictor.nativeContextLinks(
+            handle, language, before, previous, words, IntArray(held), LongArray(held),
+            LongArray(NativePredictor.CONTEXT_SLOTS),
+        )
         return words.filterNotNull().toSet()
+    }
+
+    /**
+     * The total and the observations ([NativePredictor.CONTEXT_TOTAL], [NativePredictor.CONTEXT_SEEN])
+     * the engine holds for the context of [heldAfter]'s words; zeros for one not held.
+     */
+    fun contextCounts(language: String, previous: String, before: String? = null): List<Long> {
+        val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
+        NativePredictor.nativeContextLinks(
+            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0), counted,
+        )
+        return counted.toList()
     }
 
     /**
@@ -297,9 +348,9 @@ internal class Pipeline private constructor(
      * words typed meanwhile are learned into the store but not into the engine, and their pairs
      * and triples into neither.
      */
-    fun <T> withPersonal(personal: PersonalSnapshot, block: () -> T): T {
+    fun <T> withPersonal(personal: PersonalModelLoad, block: () -> T): T {
         rig.settle()
-        personal.loadInto(handle)
+        load(personal)
         rig.engine.learns = false
         try {
             return block()
@@ -397,11 +448,12 @@ internal class Pipeline private constructor(
         }
     }
 
-    /** Replaces the personal words with [words], each used [uses] times, as the loader hands them over. */
-    fun loadWords(words: List<String>, uses: Int) {
-        val none = IntArray(words.size)
-        NativePredictor.nativeLoadUserWords(handle, words.toTypedArray(), IntArray(words.size) { uses }, none, none)
-    }
+    /** Replaces the personal model with [model], as the loader hands one over ([PersonalModelLoad.loadInto]). */
+    fun load(model: PersonalModelLoad) = model.loadInto(handle)
+
+    /** Replaces the personal model with [words], each used [uses] times, and no pairs or triples ([load]). */
+    fun loadWords(words: List<String>, uses: Int) =
+        load(PersonalSnapshot.EMPTY.copy(words = words.map { UserWord(it, languages.first(), uses, rig.clock.now) }))
 
     /** Replaces the blocked words, the way the service pushes them. */
     fun block(vararg words: String) = NativePredictor.nativeSetBlockedWords(handle, arrayOf(*words))

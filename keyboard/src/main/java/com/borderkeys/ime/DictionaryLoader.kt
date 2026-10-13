@@ -8,14 +8,12 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.LanguagePackRepository
-import com.borderkeys.data.PersonalWordDecay
-import com.borderkeys.data.decayed
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.predict.LanguagePackInspector
+import com.borderkeys.predict.PersonalModelLoad
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
-import com.borderkeys.predict.WordFold
 import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -159,31 +157,12 @@ internal class DictionaryLoader(
     }
 
     /**
-     * Pushes the personal dictionary into the native model, each entry decayed for how long it
-     * has sat unused. Not under [load]'s lock.
+     * Pushes the personal dictionary into the native model ([PersonalModelLoad.read]). Not under
+     * [load]'s lock.
      */
     suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
-        val now = System.currentTimeMillis()
-        val halfLife = PersonalWordDecay.halfLifeMillis(preferences().unlearnHalfLifeDays)
-        // With the offensive-word switch on, words, pairs and triples that contain an offensive
-        // word are left out.
-        val hidden = if (preferences().blockOffensiveWords) offensiveWords else emptySet()
-        fun shown(word: String) = hidden.isEmpty() || WordFold.fold(word) !in hidden
-        engine.loadUserWords(
-            dictionary.topWords(preferences().learnedWordLimit)
-                .filter { shown(it.word) }
-                .map { it.decayed(now, halfLife) },
-        )
-        engine.loadUserLinks(
-            pairs = dictionary.pairsToLoad()
-                .filter { shown(it.previousWord) && shown(it.word) }
-                .map { it.decayed(now, halfLife) },
-            pairContexts = dictionary.pairContexts().map { it.decayed(now, halfLife) },
-            triples = dictionary.triplesToLoad()
-                .filter { shown(it.previousWord2) && shown(it.previousWord1) && shown(it.word) }
-                .map { it.decayed(now, halfLife) },
-            tripleContexts = dictionary.tripleContexts().map { it.decayed(now, halfLife) },
-            clocks = dictionary.phraseClocks(),
+        engine.loadPersonal(
+            PersonalModelLoad.read(dictionary, preferences(), offensiveWords, System.currentTimeMillis()),
         )
     }
 

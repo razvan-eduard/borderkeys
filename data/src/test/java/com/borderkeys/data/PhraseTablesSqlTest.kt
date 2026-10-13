@@ -3,8 +3,6 @@
 
 package com.borderkeys.data
 
-import android.content.Context
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
@@ -19,7 +17,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
@@ -27,24 +24,23 @@ import org.robolectric.annotation.Config
  * and the purge taking its verdicts outside a transaction. Rows are written already keyed, so
  * nothing here reaches the native library.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [PhraseTablesSqlTest.SDK])
+@RunWith(SharedNativeTextRunner::class)
+@Config(sdk = [SharedNativeTextRunner.SDK])
 class PhraseTablesSqlTest {
 
-    private lateinit var database: BorderKeysDatabase
+    private lateinit var dictionary: InMemoryDictionary
+    private val database get() = dictionary.database
     private lateinit var recorder: PhraseRecorder
 
     @Before
     fun open() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext<Context>(), BorderKeysDatabase::class.java,
-        ).allowMainThreadQueries().build()
+        dictionary = InMemoryDictionary(ApplicationProvider.getApplicationContext())
         recorder = PhraseRecorder(database.userBigramDao(), database.userTrigramDao(), database.userPhraseClockDao())
     }
 
     @After
     fun close() {
-        database.close()
+        dictionary.close()
     }
 
     /** Writes the pair [previous] [word] used [uses] times, its uses added to its context. */
@@ -120,10 +116,7 @@ class PhraseTablesSqlTest {
     @Test
     fun `the purge takes its verdicts with no transaction open`() = runTest {
         holdPair("the", UNLEARNABLE, 1)
-        val repository = DictionaryRepository(
-            database, database.userWordDao(), database.blockedWordDao(), database.userBigramDao(),
-            database.userTrigramDao(), database.keyTouchDao(), database.userPhraseClockDao(),
-        )
+        val repository = dictionary.repository
         val inTransaction = mutableListOf<Boolean>()
         val purged = repository.purgeUnlearnable { words ->
             inTransaction += database.inTransaction()
@@ -135,9 +128,6 @@ class PhraseTablesSqlTest {
     }
 
     companion object {
-        /** The newest Android Robolectric runs. */
-        const val SDK = 35
-
         const val LANGUAGE = "en"
 
         /** A word the purge's test answers is not learnable. */

@@ -12,11 +12,7 @@ import android.os.Trace
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
-import com.borderkeys.data.entity.UserPairContext
-import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
-import com.borderkeys.data.entity.UserTripleContext
-import com.borderkeys.data.entity.UserWord
 import com.borderkeys.typing.EnginePort
 import com.borderkeys.typing.LearnOutcome
 import com.borderkeys.typing.SearchAnswer
@@ -282,37 +278,10 @@ class PredictionEngine(
     var lastGeometryKeyCount: Int = 0
         private set
 
-    /** Replaces the engine's personal words, also with an empty list. */
-    fun loadUserWords(words: List<UserWord>) {
-        val texts = Array(words.size) { words[it].word }
-        val counts = IntArray(words.size) { words[it].count }
-        val deliberateCapitals = IntArray(words.size) { words[it].deliberateCapitals }
-        val asserted = IntArray(words.size) { words[it].asserted }
+    /** Replaces the engine's personal model with [model] ([PersonalModelLoad.loadInto]), also an empty one. */
+    internal fun loadPersonal(model: PersonalModelLoad) {
         worker.post {
-            withHandle(Unit) { current ->
-                NativePredictor.nativeLoadUserWords(
-                    current, texts, counts, deliberateCapitals, asserted,
-                )
-            }
-        }
-    }
-
-    /**
-     * Replaces the engine's personal pairs and triples, each in its language's store, with their
-     * stamps, their contexts' totals and observations and each language's clocks, also with empty
-     * lists. Call after [loadUserWords].
-     */
-    fun loadUserLinks(
-        pairs: List<UserBigram>,
-        pairContexts: List<UserPairContext>,
-        triples: List<UserTrigram>,
-        tripleContexts: List<UserTripleContext>,
-        clocks: List<UserPhraseClock>,
-    ) {
-        worker.post {
-            withHandle(Unit) { current ->
-                PersonalLinks.load(current, pairs, pairContexts, triples, tripleContexts, clocks)
-            }
+            withHandle(Unit) { current -> model.loadInto(current) }
         }
     }
 

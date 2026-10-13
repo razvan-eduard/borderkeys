@@ -4,6 +4,8 @@
 package com.borderkeys.predict
 
 import com.borderkeys.data.PhraseBudget
+import com.borderkeys.data.PhraseRecorder
+import com.borderkeys.data.SharedNativeTextRunner
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.language.LanguageTags
@@ -11,8 +13,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
-/** The phrase budget run as each phrase is recorded, through [Pipeline] on the shipped packs. */
+/**
+ * The phrase budget run as each phrase is recorded, through [Pipeline] on the shipped packs; the
+ * store read through the personal dictionary on a database in memory, under Robolectric.
+ */
+@RunWith(SharedNativeLibraryRunner::class)
+@Config(sdk = [SharedNativeTextRunner.SDK])
 class PhraseBudgetPipelineTest {
 
     @Test
@@ -28,8 +37,11 @@ class PhraseBudgetPipelineTest {
             for ((index, follower) in followers.withIndex()) {
                 english.learnHistory(listOf(listOf(CONTEXT, follower)))
                 val engine = english.heldAfter(language, CONTEXT)
-                val store = english.personalSnapshot().pairs.filter { it.previousWord == CONTEXT }.map { it.word }.toSet()
-                assertEquals("after ${index + 1} followers", store, engine)
+                val (store, dropped) = english.fromStore { dictionary, dropped ->
+                    dictionary.pairsToLoad().filter { it.previousWord == CONTEXT }.map { it.word }.toSet() to dropped
+                }
+                assertEquals("after ${index + 1} followers", engine, store)
+                assertEquals("the store gives up only what the engine did", PhraseRecorder.Dropped(), dropped)
                 assertEquals(minOf(index + 1, most), engine.size)
                 assertTrue("the one just recorded is kept", follower in engine)
             }

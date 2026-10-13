@@ -32,6 +32,7 @@ import com.borderkeys.data.DirectBoot
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.PersonalWordDecay
+import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.entity.ClipEntry
@@ -2261,13 +2262,11 @@ class BorderKeysService :
     }
 
     /** Writes [batch]; returns the pairs and triples the store gave up under its budget. */
-    private suspend fun persistLearning(batch: LearningBatch): Pair<List<UserBigram>, List<UserTrigram>> {
-        DataGraph.dictionary.applyLearned(batch.updates)
-        val droppedPairs = DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
-        val droppedTriples = DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
+    private suspend fun persistLearning(batch: LearningBatch): PhraseRecorder.Dropped {
+        val dropped = batch.writeTo(DataGraph.dictionary)
         DataGraph.dictionary.applyTouches(batch.touches, batch.touchHalfLifeMillis)
         maybeDecayPersonalDictionary()
-        return droppedPairs to droppedTriples
+        return dropped
     }
 
     /**
