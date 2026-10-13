@@ -31,12 +31,12 @@ interface UserBigramDao {
     suspend fun countIn(language: String): Int
 
     /** The pairs [word] takes part in, on either side, in every language. */
-    /** The pairs used at most [uses] times, in the order each was first recorded. */
-    @Query("SELECT * FROM user_bigrams WHERE count <= :uses ORDER BY rowid")
-    suspend fun usedAtMost(uses: Int): List<UserBigram>
-
     @Query("SELECT * FROM user_bigrams WHERE previousWord = :word OR word = :word")
     suspend fun involving(word: String): List<UserBigram>
+
+    /** The pairs used at most [uses] times. */
+    @Query("SELECT * FROM user_bigrams WHERE count <= :uses")
+    suspend fun usedAtMost(uses: Int): List<UserBigram>
 
     @Upsert
     suspend fun upsert(pair: UserBigram)
