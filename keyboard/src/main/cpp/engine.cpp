@@ -2991,7 +2991,8 @@ bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
         const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
         return foldedLength <= 0 || packsAgreeProperNoun(folded, foldedLength);
     }
-    // A personal word the user capitalised with shift at least once is a name.
+    // A personal word the user capitalised at least once, with shift or under a caps lock they
+    // set, is a name.
     if (candidate.packIndex == Candidate::kUserPack && candidate.wordIndex >= 0 &&
         userModel_.deliberateCapitals(static_cast<uint32_t>(candidate.wordIndex)) > 0) {
         return true;

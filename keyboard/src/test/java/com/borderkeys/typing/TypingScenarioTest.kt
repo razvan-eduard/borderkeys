@@ -525,6 +525,158 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a word begun under the user's caps lock is learned as the user's capital, and a word in capitals throughout as none`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.SHIFT)
+        rig.type("go p")
+        rig.press(KeyCodes.SHIFT)
+        rig.type("aris ")
+        assertEquals("GO Paris ", rig.editor.text)
+        assertEquals(mapOf("GO" to false, "Paris" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `under the user's caps lock, a word typed right after a swiped one is learned as the user's capital`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.SHIFT)
+        rig.swipe("the")
+        rig.type("p")
+        rig.press(KeyCodes.SHIFT)
+        rig.type("aris ")
+        assertEquals("THE Paris ", rig.editor.text)
+        assertEquals(mapOf("THE" to false, "Paris" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a caps lock set by holding shift in a field that locked itself is the user's`() {
+        learningOn(autoCapitalise = true, inputType = CAPITALS_FIELD)
+        rig.longPress(KeyCodes.SHIFT)
+        rig.type("p")
+        rig.press(KeyCodes.SHIFT)
+        rig.type("a ")
+        assertEquals("Pa ", rig.editor.text)
+        assertEquals(mapOf("Pa" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a caps lock the field asked for is not the user's capital`() {
+        learningOn(autoCapitalise = true, inputType = CAPITALS_FIELD)
+        rig.type("p")
+        rig.press(KeyCodes.SHIFT)
+        rig.type("a ")
+        assertEquals("Pa ", rig.editor.text)
+        assertEquals(mapOf("Pa" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `shift is the user's capital for the one word whose letter it capitalised`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.type("go now ")
+        assertEquals("Go now ", rig.editor.text)
+        assertEquals(mapOf("Go" to true, "now" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `with names not capitalised, a swiped name is written lower case, shift still capitalises, and each swiped word's capital is its own`() {
+        learningOn(capitaliseNames = false)
+        rig.press(KeyCodes.SHIFT)
+        rig.type("go ")
+        rig.orchestrator.composeSwipedWord(swiped("now"))
+        rig.settle()
+        rig.type(" ")
+        rig.orchestrator.composeSwipedWord(swiped(Candidate(NAME, isProperNoun = true)))
+        rig.settle()
+        rig.type(" ")
+        rig.press(KeyCodes.SHIFT)
+        rig.orchestrator.composeSwipedWord(swiped("then"))
+        rig.settle()
+        rig.type(" ")
+        val lowerName = NAME.lowercase()
+        assertEquals("Go now $lowerName Then ", rig.editor.text)
+        assertEquals(mapOf("Go" to true, "now" to false, lowerName to false, "Then" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a prediction picked under shift is learned as the user's capital, and one picked without as none`() {
+        learningOn()
+        rig.type("we ")
+        rig.press(KeyCodes.SHIFT)
+        val shifted = rig.host.strip.first().text
+        assertTrue(shifted, shifted.first().isUpperCase())
+        rig.pick(0, shifted)
+        val plain = rig.host.strip.first().text
+        rig.pick(0, plain)
+        assertEquals(mapOf("we" to false, shifted to true, plain to false), learnedCapitals())
+    }
+
+    @Test
+    fun `a pick that replaces a word begun with shift keeps the user's capital`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.type("th")
+        val picked = rig.host.strip.first { it.text.startsWith("Th") }.text
+        rig.pick(rig.host.strip.indexOfFirst { it.text == picked }, picked)
+        assertEquals(mapOf(picked to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a word the ring applies after a pause under shift is learned as the user's capital`() {
+        ringOn()
+        learningOn(radialMenuEnabled = true)
+        rig.press(KeyCodes.SHIFT)
+        rig.swipeAndPause("the")
+        assertEquals("The", rig.editor.text)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("The ", rig.editor.text)
+        assertEquals(mapOf("The" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a pause's guess taken back by the finished swipe gives back the shift it spent`() {
+        ringOn()
+        learningOn(radialMenuEnabled = true)
+        rig.ring.refuses = true
+        rig.press(KeyCodes.SHIFT)
+        rig.swipeAndPause("the")
+        assertEquals("The", rig.editor.text)
+        rig.swipe("the")
+        rig.type(" ")
+        assertEquals("The ", rig.editor.text)
+        assertEquals(mapOf("The" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `a swiped word deleted by backspace gives back the shift it spent`() {
+        learningOn(swipeBackspaceDeletesWord = true)
+        rig.press(KeyCodes.SHIFT)
+        rig.swipe("the")
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("", rig.editor.text)
+        assertEquals(ShiftState.ON, rig.host.shiftState)
+        rig.swipe("the")
+        rig.type(" ")
+        assertEquals("The ", rig.editor.text)
+    }
+
+    @Test
+    fun `a caps lock released after a swiped word stays released when backspace deletes the word`() {
+        learningOn(swipeBackspaceDeletesWord = true)
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.SHIFT)
+        rig.swipe("the")
+        rig.press(KeyCodes.SHIFT)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("", rig.editor.text)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+    }
+
+    @Test
     fun `shift spent on a swipe capitalises the swiped word, and the strip follows shift`() {
         rig.press(KeyCodes.SHIFT)
         assertTrue(rig.host.strip.isNotEmpty())
@@ -1843,6 +1995,35 @@ class TypingScenarioTest {
         }
     }
 
+    /** A fresh field with Learning on and [SMOKE_SETTINGS] otherwise, but for the settings given. */
+    private fun learningOn(
+        autoCapitalise: Boolean = false,
+        capitaliseNames: Boolean = true,
+        radialMenuEnabled: Boolean = false,
+        swipeBackspaceDeletesWord: Boolean = false,
+        inputType: Int = InputType.TYPE_CLASS_TEXT,
+    ) {
+        rig.orchestrator.applySettings(
+            rig.orchestrator.preferences.copy(
+                learningEnabled = true,
+                autoCapitalise = autoCapitalise,
+                capitaliseNames = capitaliseNames,
+                radialMenuEnabled = radialMenuEnabled,
+                swipeBackspaceDeletesWord = swipeBackspaceDeletesWord,
+            ),
+        )
+        rig.startField(inputType = inputType)
+    }
+
+    /**
+     * Each word learned once the buffer is written, with whether its first letter was the user's
+     * capital, the last time it was learned.
+     */
+    private fun learnedCapitals(): Map<String, Boolean> {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.store.batches.flatMap { it.updates }.associate { it.word to it.deliberateCapital }
+    }
+
     /** The letters the heatmap wrote totals for, in order. */
     private fun touchedLetters(): String =
         rig.store.touches.joinToString(" ") { it.code.toChar().toString() }
@@ -1933,8 +2114,11 @@ class TypingScenarioTest {
     }
 
     /** A decode of [words], best first, cased as the orchestrator cases a swipe. */
-    private fun swiped(vararg words: String): List<Candidate> =
-        rig.orchestrator.caseSwipedWords(words.map { Candidate(it) })
+    private fun swiped(vararg words: String): List<Candidate> = swiped(*words.map { Candidate(it) }.toTypedArray())
+
+    /** [candidates] as a swipe's decode, cased as the keyboard cases them. */
+    private fun swiped(vararg candidates: Candidate): List<Candidate> =
+        rig.orchestrator.caseSwipedWords(candidates.toList())
 
     /** What a terminal does with a key: a letter or a space is written, Enter ends the line. */
     private fun terminal(keyCode: Int, metaState: Int) {
@@ -1969,6 +2153,12 @@ class TypingScenarioTest {
 
         /** The Languages screen's default. */
         const val BALANCED_EVIDENCE = 1.8f
+
+        /** A name the English pack writes with a capital. */
+        const val NAME = "Paris"
+
+        /** A field that asks for capitals throughout; shift locks again after each letter typed lower case. */
+        const val CAPITALS_FIELD = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
 
         /** Words only one of the two shipped packs holds, as ImeSmokeTest types them. */
         const val ROMANIAN_PHRASE = "acesta trebuie foarte despre pentru"

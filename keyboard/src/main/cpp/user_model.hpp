@@ -73,9 +73,9 @@ public:
 
     /**
      * Records that the user committed this word, adding it if new; returns its entry index.
-     * [deliberateCapital] counts a first letter the user capitalised with shift; [asserted] counts
-     * a word chosen on purpose, picked from the strip or put back after a correction. Neither
-     * count goes down.
+     * [deliberateCapital] counts a first letter the user capitalised, with shift or under a caps
+     * lock they set; [asserted] counts a word chosen on purpose, picked from the strip or put back
+     * after a correction. Neither count goes down.
      */
     int32_t learn(const char* word, size_t length, bool deliberateCapital = false,
                   bool asserted = false);

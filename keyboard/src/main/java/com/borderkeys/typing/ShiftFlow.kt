@@ -36,11 +36,28 @@ class ShiftFlow(
     private var autoLocked = false
     private var lastPressAt = 0L
 
+    /**
+     * Shift as it stood before the last swiped word was cased, until shift is pressed or the word
+     * is kept by a letter, a pick or a delimiter.
+     */
+    private var beforeSwipe: Pair<Int, Boolean>? = null
+
+    /**
+     * Whether a capital written now is the user's: shift pressed for it ([heldByUser]), or a caps
+     * lock the user set rather than the field. Whether a capital is written is [userCapital]'s.
+     */
+    val capitalByUser: Boolean
+        get() = heldByUser || (state == ShiftState.LOCKED && !autoLocked)
+
+    /** Whether [written], a word's first letter as it comes out, is a capital the user chose. */
+    fun userCapital(written: Int): Boolean = capitalByUser && Character.isUpperCase(written)
+
     /** Each field starts with shift and caps lock off. */
     override fun onFieldStarted(field: FieldSession) {
         heldByUser = false
         userReleasedAutoLock = false
         autoLocked = false
+        beforeSwipe = null
         state = ShiftState.OFF
         host.showShiftState(state)
     }
@@ -60,6 +77,7 @@ class ShiftFlow(
         heldByUser = state != ShiftState.OFF
         autoLocked = false
         userReleasedAutoLock = releasedAutoLock
+        beforeSwipe = null
         host.showShiftState(state)
     }
 
@@ -69,6 +87,7 @@ class ShiftFlow(
         heldByUser = true
         autoLocked = false
         userReleasedAutoLock = false
+        beforeSwipe = null
         host.showShiftState(state)
     }
 
@@ -90,11 +109,13 @@ class ShiftFlow(
     fun letterTyped() {
         heldByUser = false
         userReleasedAutoLock = false
+        beforeSwipe = null
     }
 
     /** The user's shift press is used up. */
     fun clearHeld() {
         heldByUser = false
+        beforeSwipe = null
     }
 
     /**
@@ -117,6 +138,7 @@ class ShiftFlow(
      * ([heldByUser]). [justCommitted] is what this keystroke wrote; see [applyAuto].
      */
     fun afterDelimiter(heldByUser: Boolean, composingEmpty: Boolean, justCommitted: String = "") {
+        beforeSwipe = null
         if (state == ShiftState.LOCKED || heldByUser) {
             return
         }
@@ -168,16 +190,17 @@ class ShiftFlow(
         }
 
     /**
-     * Cases a swipe's [candidates] as typed letters would come out under the current shift, names
-     * capitalised, then spends a one-shot shift. Never lower-cases. Drops candidates that become
-     * the same text.
+     * Cases a swipe's [candidates] as typed letters would come out under the current shift, a name
+     * capitalised or not as the strip writes it. Lower-cases only a name. Drops candidates that
+     * become the same text.
      */
     fun caseSwiped(candidates: List<Candidate>): List<Candidate> {
         var cased = candidates.map { candidate ->
-            if (candidate.isProperNoun) {
-                candidate.copy(text = candidate.text.replaceFirstChar { it.uppercaseChar() })
-            } else {
-                candidate
+            when {
+                !candidate.isProperNoun -> candidate
+                settings.capitaliseNames ->
+                    candidate.copy(text = candidate.text.replaceFirstChar { it.uppercaseChar() })
+                else -> candidate.copy(text = candidate.text.replaceFirstChar { it.lowercaseChar() })
             }
         }
         val current = state
@@ -192,9 +215,28 @@ class ShiftFlow(
                 )
             }
         }
+        return cased.distinctBy { it.text }
+    }
+
+    /**
+     * A swiped word was cased: a one-shot shift is spent and the user's shift press used up, both
+     * given back by [restoreAfterSwipeTakenBack].
+     */
+    fun swipedWordCased() {
+        beforeSwipe = state to heldByUser
         spendOneShot()
         heldByUser = false
-        return cased.distinctBy { it.text }
+    }
+
+    /** The swiped word last cased was taken back: shift is as it stood before it. */
+    fun restoreAfterSwipeTakenBack() {
+        val (before, held) = beforeSwipe ?: return
+        beforeSwipe = null
+        heldByUser = held
+        if (state != before) {
+            state = before
+            host.showShiftState(state)
+        }
     }
 
     /**
