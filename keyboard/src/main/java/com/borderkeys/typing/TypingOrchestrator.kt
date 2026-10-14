@@ -660,8 +660,9 @@ class TypingOrchestrator(
             shiftFlow.spendOneShot()
         }
         val heldByUser = shiftFlow.heldByUser
+        val userCapital = shiftFlow.userCapital(shifted)
         if (composing.isEmpty() && letter) {
-            composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
+            composingWord.capitalisedByUser = userCapital
             val ahead = editor.textBeforeCursor(1)
             composingWord.runningText = ahead.isNullOrEmpty() || !RunningText.isMark(ahead[0])
         }
@@ -685,7 +686,7 @@ class TypingOrchestrator(
                     learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
                 }
                 checkpointField()
-                composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
+                composingWord.capitalisedByUser = userCapital
             }
             composingWord.append(shifted, keyIndex, x, y)
             editor.setComposingText(composing, 1)
@@ -1168,17 +1169,16 @@ class TypingOrchestrator(
     }
 
     /**
-     * Cases the swipe candidates as typed letters would come out under the current shift, names
-     * capitalised, then spends a one-shot shift. Never lower-cases. Drops candidates that become
-     * the same text.
+     * The swipe candidates with their contractions, cased by [ShiftFlow.caseSwiped]; sets whether
+     * the first one's first letter is the user's capital ([ShiftFlow.userCapital]), then lets the
+     * swipe spend shift ([ShiftFlow.swipedWordCased]).
      */
     fun caseSwipedWords(candidates: List<Candidate>): List<Candidate> {
-        val written = withContractions(candidates)
-        if (!preferences.capitaliseNames) {
-            return written
-        }
-        composingWord.capitalisedByUser = shiftFlow.heldByUser && shiftFlow.state != ShiftState.OFF
-        return shiftFlow.caseSwiped(written)
+        val cased = shiftFlow.caseSwiped(withContractions(candidates))
+        val first = cased.firstOrNull()?.text.orEmpty()
+        composingWord.capitalisedByUser = first.isNotEmpty() && shiftFlow.userCapital(first.codePointAt(0))
+        shiftFlow.swipedWordCased()
+        return cased
     }
 
     /**
@@ -1220,7 +1220,7 @@ class TypingOrchestrator(
     /**
      * Discards the swiped word, with no commit and no learning: empties the composing region, or
      * deletes the word before the caret when it is no longer composing, and the space inserted
-     * before it.
+     * before it; the shift it spent is given back ([ShiftFlow.restoreAfterSwipeTakenBack]).
      */
     fun cancelSwipedWord() {
         val editor = currentEditor()
@@ -1245,6 +1245,7 @@ class TypingOrchestrator(
         composingWord.clear()
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
+        shiftFlow.restoreAfterSwipeTakenBack()
         host.clearStrip()
         refreshContextFromEditor()
         applyAutoShift()
@@ -1575,11 +1576,18 @@ class TypingOrchestrator(
         val contextWord = wordContext.previous1
         val grandContextWord = wordContext.previous2
         val typedTaps = TypedTaps.of(composing, composingWord.taps)
-        editor.beginBatchEdit()
         // A pick replaces the word being typed or the word the caret sits in; with neither, it
-        // is a prediction inserted at the caret. An adopted word is deleted first, when it is
-        // still the text before the caret.
+        // is a prediction inserted at the caret.
         val replacesWord = composing.isNotEmpty() || lastQuery.isNotEmpty()
+        // Its first letter is the user's capital as the word it replaces began, or, for a
+        // prediction, as shift writes it.
+        val userCapital = if (replacesWord) {
+            composingWord.capitalisedByUser
+        } else {
+            word.isNotEmpty() && shiftFlow.userCapital(word.codePointAt(0))
+        }
+        editor.beginBatchEdit()
+        // An adopted word is deleted first, when it is still the text before the caret.
         val replaced = if (composing.isNotEmpty()) composing.toString() else lastQuery
         if (composing.isEmpty() && lastQuery.isNotEmpty()) {
             val before = editor.textBeforeCursor(lastQuery.length)
@@ -1637,7 +1645,7 @@ class TypingOrchestrator(
         for ((index, part) in words.withIndex()) {
             // The letters typed before the pick line up with the first word's.
             learningFlow.record(
-                part, previous, grandPrevious, asserted = true,
+                part, previous, grandPrevious, deliberateCapital = index == 0 && userCapital, asserted = true,
                 taps = if (index == 0) typedTaps else null, completion = true,
             )
             grandPrevious = previous

@@ -742,9 +742,12 @@ engine loads the same words in the same order. A word's phrases go when no case 
 Lowering the setting below the words already learned asks first, then deletes them at once
 (`keepWords`). `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
 
-**Deliberate capitals.** A word the user capitalised *themselves* — shift physically pressed for
-that letter, never auto-capitalise's doing — is treated as a name from then on, regardless of how
-it is typed next time (`UserModel::deliberateCapitals`).
+**Deliberate capitals.** A word whose first capital the user chose *themselves* — shift pressed
+for it, or a caps lock they set (`ShiftFlow.capitalByUser`), never auto-capitalise's or the
+field's doing — typed, swiped or picked from the strip, is treated as a name from then on,
+regardless of how it is typed next time (`UserModel::deliberateCapitals`). A word written all in
+capitals, two letters or more, is learned as written and never as a name (`LearningFlow`). A
+word a pack knows keeps the pack's casing.
 
 **Learn after** (`setLearnAfterUses`, `KeyboardPreferences.learnAfter`) is how many uses a word,
 pair or triple needs before it counts; below it, it carries no weight.

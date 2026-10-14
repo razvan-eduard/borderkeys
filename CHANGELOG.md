@@ -30,6 +30,19 @@ attestations and the full commit lists are on the
   kept that were used at most twice and hold such a word.
 - A phrase no longer spans a change of language: the words written just after the language
   changes start a new phrase.
+- A capital you choose is learned however the word is written: a word begun under a caps lock you
+  set and finished without it, such as "Paris", a suggestion picked with shift on or in place of a
+  word you began with shift, and a word swiped with shift on while Capitalise names is off are
+  remembered as a name, as a word typed with shift is. A caps lock the field turns on counts for
+  none of them.
+- Fixed: the first word after you turned caps lock on, written in capitals throughout such as
+  "NASA", was taken for a name; a word in capitals throughout is now learned as written.
+- Fixed: with Capitalise names off, a swiped word ignored shift and caps lock, and a swiped name
+  kept its capital; a swiped word now takes shift and caps lock as typed letters do, and a name
+  is written in lower case, as the suggestions write it.
+- Fixed: a swiped word taken back, deleted with backspace, cancelled on the ring or replaced by
+  the finished swipe after a pause, used up shift, so the word written next lost its capital;
+  shift now stays as it was.
 - Fixed: a word longer than 48 letters could be offered the corrections of the word typed before
   it.
 - Fixed: with Learned words set above 20,000 and more words learned than that, none of them

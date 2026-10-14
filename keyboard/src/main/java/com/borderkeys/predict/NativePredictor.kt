@@ -146,8 +146,8 @@ internal object NativePredictor {
      * Records that the user committed [word] after [prev1] and [prev2], the pair and triple in
      * the store of [language], a primary language subtag, or with none of the language the
      * engine reads. [asserted] is whether it was picked on the strip or put back after a
-     * correction; [deliberateCapital] is whether its capital was typed with shift. Not [tally],
-     * the word is not counted.
+     * correction; [deliberateCapital] is whether its capital was the user's, with shift or under a
+     * caps lock they set. Not [tally], the word is not counted.
      */
     external fun nativeLearn(
         handle: Long,

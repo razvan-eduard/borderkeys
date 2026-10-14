@@ -18,7 +18,7 @@ class ComposingWord {
     /** The word came from a swipe; a letter typed after it starts the next word. */
     var fromGesture = false
 
-    /** Its first letter is a capital the user typed with shift. */
+    /** Its first letter is a capital the user chose: with shift, or under a caps lock they set. */
     var capitalisedByUser = false
 
     /** It is running text rather than an address, a path or code; decided at its first letter. */

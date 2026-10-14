@@ -29,8 +29,9 @@ data class UserWord(
     val count: Int,
     val lastUsedAt: Long,
     /**
-     * How many times this word was committed with shift pressed for its first letter, not by
-     * auto-capitalise. Above zero, the native model suggests it capitalised. Never decremented.
+     * How many times this word was committed with a first-letter capital the user chose, with shift
+     * or under a caps lock they set, not one auto-capitalise or the field gave. Above zero, the
+     * native model suggests it capitalised. Never decremented.
      */
     val deliberateCapitals: Int = 0,
     /**

@@ -143,10 +143,11 @@ class LearningFlow(
     /**
      * Records a confirmed word, and the pair and triple it makes with [contextWord] and
      * [grandContextWord], read before the commit; a word of one letter is not counted, but its
-     * pair and triple are learned. [deliberateCapital] is whether its capital was typed with shift;
-     * [asserted] whether the user chose it on purpose. [taps] is the word as it was typed, with
-     * where each letter was tapped, lined up with [word], or with its first letters when
-     * [completion].
+     * pair and triple are learned. [deliberateCapital] is whether its first letter is a capital the
+     * user chose ([ComposingWord.capitalisedByUser]); a word written in capitals throughout is
+     * learned with none. [asserted] is whether the user chose it on purpose. [taps] is the word as
+     * it was typed, with where each letter was tapped, lined up with [word], or with its first
+     * letters when [completion].
      */
     fun record(
         word: String,
@@ -158,6 +159,7 @@ class LearningFlow(
         completion: Boolean = false,
     ) {
         val touched = taps != null && recordTouches(taps, word, completion)
+        val nameCapital = deliberateCapital && !writtenInCapitals(word)
         var learned = false
         if (learning.enabled) {
             // The input-method subtype's tag, recorded with the word.
@@ -176,7 +178,7 @@ class LearningFlow(
             val pairKept = (since == null || since >= 1) && learning.acceptsPair(pairContext, word)
             val tripleKept = (since == null || since >= 2) && contextWord != null && grandContextWord != null &&
                 learning.acceptsTriple(grandContextWord, contextWord, word)
-            val counted = learning.record(word, locale, now, deliberateCapital, asserted)
+            val counted = learning.record(word, locale, now, nameCapital, asserted)
             if (counted) {
                 host.playEffect(EffectEvent.LearnedWord, word)
             }
@@ -185,7 +187,7 @@ class LearningFlow(
                 // The engine learns the pair and the triple the buffer takes; the buffer keeps what
                 // the engine recorded.
                 engine.learn(
-                    listOf(LearnedWord(word, locale, if (counted) 1 else 0, now, deliberateCapital, asserted)),
+                    listOf(LearnedWord(word, locale, if (counted) 1 else 0, now, nameCapital, asserted)),
                     pairContext.takeIf { pairKept }, grandContextWord.takeIf { tripleKept }, language,
                 ) { outcome ->
                     if (outcome.pairs.isNotEmpty() || outcome.triples.isNotEmpty()) {
@@ -282,3 +284,20 @@ class LearningFlow(
         return LearningBatch(updates, pairs, triples, taps, halfLifeMillis)
     }
 }
+
+/** Whether [word] holds two letters or more, each a capital. */
+private fun writtenInCapitals(word: String): Boolean {
+    var letters = 0
+    for (character in word) {
+        if (character.isLetter()) {
+            if (!character.isUpperCase()) {
+                return false
+            }
+            letters++
+        }
+    }
+    return letters >= MIN_CAPITALS_WORD
+}
+
+/** The fewest letters a word written in capitals throughout has. */
+private const val MIN_CAPITALS_WORD = 2
