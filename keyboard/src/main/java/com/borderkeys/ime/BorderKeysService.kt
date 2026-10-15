@@ -1066,7 +1066,6 @@ class BorderKeysService :
         if (!remembersLanguage(preferences)) {
             engine.resetLanguageEvidence()
         }
-        engine.setPhraseSuggestions(preferences.phraseSuggestions)
 
         privateReveal = false
         host?.let { view ->

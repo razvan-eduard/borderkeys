@@ -254,13 +254,14 @@ class LearningFlow(
 
     /**
      * Whether anything is learned, whether the personal dictionary is consulted and from how many
-     * uses, and whether the learned touch patterns count: off with their switches or in a private
-     * field.
+     * uses, whether learned phrases are offered, and whether the learned touch patterns count: off
+     * with their switches or in a private field.
      */
     private fun applyGate() {
         learning.enabled = session.policy.personalAllowed
         engine.setPersonalModelEnabled(learning.enabled)
         engine.setLearnAfterUses(settings.learnAfter)
+        engine.setPhraseSuggestions(settings.phraseSuggestions)
         engine.setTouchModel(
             session.policy.heatmapAllowed, settings.heatmapWeight, settings.heatmapMinTaps,
         )

@@ -140,6 +140,15 @@ internal class QueuedEngine(
         tasks.addLast(Task(request = false) { NativePredictor.nativeSetLearnAfterUses(handle, uses) })
     }
 
+    /** Whether learned phrases are offered, as last handed over, or null before any. */
+    var phraseSuggestions: Boolean? = null
+        private set
+
+    override fun setPhraseSuggestions(enabled: Boolean) {
+        phraseSuggestions = enabled
+        tasks.addLast(Task(request = false) { NativePredictor.nativeSetPhraseSuggestions(handle, enabled) })
+    }
+
     /** The correction strictness last handed over, or null before any. */
     var correctionStrictness: Float? = null
         private set

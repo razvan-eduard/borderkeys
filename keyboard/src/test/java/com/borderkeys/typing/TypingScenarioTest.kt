@@ -571,6 +571,75 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a caseless word typed under the user's caps lock is learned with no capital`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.SHIFT)
+        rig.type("שלום ")
+        assertEquals("שלום ", rig.editor.text)
+        assertEquals(mapOf("שלום" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `a caseless word typed under a one-shot shift is learned with no capital`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.type("ש")
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type("לום ")
+        assertEquals("שלום ", rig.editor.text)
+        assertEquals(mapOf("שלום" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `a word of one letter and a hyphen typed under shift is the user's capital, not capitals throughout`() {
+        learningOn()
+        rig.press(KeyCodes.SHIFT)
+        rig.type("A- ")
+        assertEquals("A- ", rig.editor.text)
+        assertEquals(mapOf("A-" to true), learnedCapitals())
+    }
+
+    @Test
+    fun `only the first word of a two-word pick takes the user's capital`() {
+        learnPhrase("we go home", maxOf(rig.orchestrator.preferences.learnAfter, PHRASE_SHARE_FLOOR_USES))
+        learningOn(phraseSuggestions = true)
+        rig.type("we ")
+        val phrase = rig.host.strip.first { ' ' in it.text }.text
+        assertEquals("go home", phrase)
+        rig.press(KeyCodes.SHIFT)
+        val shifted = rig.host.strip.first { ' ' in it.text }.text
+        assertEquals("Go home", shifted)
+        rig.pick(rig.host.strip.indexOfFirst { it.text == shifted }, shifted)
+        assertEquals("we Go home ", rig.editor.text)
+        // The phrase's own uses, typed lower case, sit beside the pick's two words.
+        assertEquals(mapOf("we" to false, "go" to false, "Go" to true, "home" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `a swipe at a sentence start spends the shift auto-capitalise gave`() {
+        learningOn(autoCapitalise = true, inputType = SENTENCES_FIELD)
+        assertEquals(ShiftState.ON, rig.host.shiftState)
+        rig.swipe("the")
+        assertEquals("The", rig.editor.text)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type("n ")
+        assertEquals("The n ", rig.editor.text)
+    }
+
+    @Test
+    fun `a caps lock set by holding shift after a swiped word stays when backspace deletes the word`() {
+        learningOn(swipeBackspaceDeletesWord = true)
+        rig.press(KeyCodes.SHIFT)
+        rig.swipe("the")
+        rig.longPress(KeyCodes.SHIFT)
+        assertEquals(ShiftState.LOCKED, rig.host.shiftState)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("", rig.editor.text)
+        assertEquals(ShiftState.LOCKED, rig.host.shiftState)
+    }
+
+    @Test
     fun `shift is the user's capital for the one word whose letter it capitalised`() {
         learningOn()
         rig.press(KeyCodes.SHIFT)
@@ -2001,6 +2070,7 @@ class TypingScenarioTest {
         capitaliseNames: Boolean = true,
         radialMenuEnabled: Boolean = false,
         swipeBackspaceDeletesWord: Boolean = false,
+        phraseSuggestions: Boolean = false,
         inputType: Int = InputType.TYPE_CLASS_TEXT,
     ) {
         rig.orchestrator.applySettings(
@@ -2010,6 +2080,7 @@ class TypingScenarioTest {
                 capitaliseNames = capitaliseNames,
                 radialMenuEnabled = radialMenuEnabled,
                 swipeBackspaceDeletesWord = swipeBackspaceDeletesWord,
+                phraseSuggestions = phraseSuggestions,
             ),
         )
         rig.startField(inputType = inputType)
@@ -2135,7 +2206,18 @@ class TypingScenarioTest {
     }
 
     private companion object {
-        /** ImeSmokeTest's settings. */
+        /**
+         * The fewest uses at which both links of a three-word phrase clear the engine's phrase
+         * share floor: the second link's share is 4 / (4 + 4.0 × 1.5) = 0.40 against a floor of
+         * 0.34, where 3 uses give 0.33. A phrase is offered from this many uses or learn-after,
+         * whichever is more.
+         */
+        const val PHRASE_SHARE_FLOOR_USES = 4
+
+        /**
+         * ImeSmokeTest's settings: what every scenario starts from. A scenario changes only the
+         * settings it is about, through [learningOn] or a copy.
+         */
         val SMOKE_SETTINGS = KeyboardPreferences(
             learningEnabled = false,
             autoCorrectOnSpace = true,
@@ -2159,6 +2241,9 @@ class TypingScenarioTest {
 
         /** A field that asks for capitals throughout; shift locks again after each letter typed lower case. */
         const val CAPITALS_FIELD = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+
+        /** A field that asks for a capital at each sentence start. */
+        const val SENTENCES_FIELD = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
 
         /** Words only one of the two shipped packs holds, as ImeSmokeTest types them. */
         const val ROMANIAN_PHRASE = "acesta trebuie foarte despre pentru"

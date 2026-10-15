@@ -430,8 +430,7 @@ class PredictionEngine(
         }
     }
 
-
-    fun setPhraseSuggestions(enabled: Boolean) {
+    override fun setPhraseSuggestions(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetPhraseSuggestions(current, enabled)

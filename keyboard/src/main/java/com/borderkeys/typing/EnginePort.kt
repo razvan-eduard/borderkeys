@@ -53,6 +53,12 @@ interface EnginePort {
     fun setLearnAfterUses(uses: Int)
 
     /**
+     * Whether learned phrases are offered after their context; see
+     * [com.borderkeys.data.theme.KeyboardPreferences.phraseSuggestions].
+     */
+    fun setPhraseSuggestions(enabled: Boolean)
+
+    /**
      * How much evidence an edit needs before it outranks a word spelled as typed; see
      * [com.borderkeys.data.theme.KeyboardPreferences.correctionStrictness].
      */
