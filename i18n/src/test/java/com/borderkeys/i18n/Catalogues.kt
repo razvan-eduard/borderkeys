@@ -3,13 +3,13 @@
 
 package com.borderkeys.i18n
 
-import java.io.File
-import java.text.Normalizer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.text.Normalizer
 
 /** The shipped catalogues and the test resources that describe them, read from disk. */
 object Catalogues {

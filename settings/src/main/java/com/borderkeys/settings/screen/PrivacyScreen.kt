@@ -3,22 +3,20 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SectionHeader
-import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 
 /**
  * What is stored, where, and what is not. The permission list is read from the package manager

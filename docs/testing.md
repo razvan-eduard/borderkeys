@@ -250,6 +250,9 @@ packager.
 - **Headers are self-contained.** Every `.hpp` under `keyboard/src/main/cpp` and `native-tests`
   is compiled alone with `-fsyntax-only`. A header that only compiled because of what happened to
   be included before it fails here — which is exactly what happened once.
+- **Kotlin imports are in order and used.** `check_imports.py` reports an import out of ktlint's
+  order or one the file never uses, over every tracked Kotlin file, build scripts included;
+  `--selftest` proves its rules on synthetic snippets.
 - **Dictionary compiler round trip.** `build_dict.py --selftest` proves the Python still agrees
   with `bkd_format.hpp`, which is the authority on the format.
 - **Encoder parity, `test_tcn.cpp`.** `native-tests/data/tcn_golden.bin` carries `model.py`'s

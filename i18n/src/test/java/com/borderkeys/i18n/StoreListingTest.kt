@@ -3,10 +3,10 @@
 
 package com.borderkeys.i18n
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Each store listing, for both applications and every locale, has its three files, with the title

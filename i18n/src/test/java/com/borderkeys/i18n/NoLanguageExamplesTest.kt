@@ -3,9 +3,9 @@
 
 package com.borderkeys.i18n
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
  * No description may explain itself with an example in a particular language. Language names as

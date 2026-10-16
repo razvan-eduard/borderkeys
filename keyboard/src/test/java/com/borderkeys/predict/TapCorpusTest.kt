@@ -3,8 +3,8 @@
 
 package com.borderkeys.predict
 
-import org.junit.AssumptionViolatedException
 import org.junit.Assert.assertTrue
+import org.junit.AssumptionViolatedException
 import org.junit.Test
 import java.io.File
 import java.util.Locale

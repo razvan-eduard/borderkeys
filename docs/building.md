@@ -239,6 +239,7 @@ Every tool prints its usage with `--help`, and its header says what it does.
 | `make_extra_keys.py` | Each language's extra keys, from `tools/extra_keys/method.xml`. |
 | `gen_keys.py` | `Keys.kt` from the English catalogue. |
 | `check_layouts.py` | That the layout assets, their subtypes and their labels agree. |
+| `check_imports.py` | That every tracked Kotlin file's imports are in ktlint's order and all used; `--selftest` proves its rules on synthetic snippets. |
 
 ### Keeping the word lists clean
 

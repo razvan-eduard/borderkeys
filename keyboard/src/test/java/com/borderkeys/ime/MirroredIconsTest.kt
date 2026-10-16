@@ -3,9 +3,9 @@
 
 package com.borderkeys.ime
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /** An icon that points back or forward in reading order is mirrored in a right-to-left layout. */
 class MirroredIconsTest {

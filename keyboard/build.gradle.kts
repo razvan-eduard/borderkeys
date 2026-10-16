@@ -1,5 +1,5 @@
-import javax.inject.Inject
 import org.gradle.process.ExecOperations
+import javax.inject.Inject
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 

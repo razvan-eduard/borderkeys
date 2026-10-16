@@ -3,9 +3,9 @@
 
 package com.borderkeys.settings
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
  * No screen may write a sentence into the source. Fails on a call that takes text and is given a

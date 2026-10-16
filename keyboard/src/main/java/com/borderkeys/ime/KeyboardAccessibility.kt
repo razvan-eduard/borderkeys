@@ -11,8 +11,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeProvider
-import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 
 /**
  * The keyboard's virtual view hierarchy for a screen reader, served from the compiled geometry.

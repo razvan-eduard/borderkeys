@@ -201,6 +201,12 @@ jobs:
       - name: The extra keys match their generator
         run: python3 tools/make_extra_keys.py --check
 
+      - name: The import check knows its rules
+        run: python3 tools/check_imports.py --selftest
+
+      - name: Kotlin imports are in order and used
+        run: python3 tools/check_imports.py
+
       # Every header compiles on its own, with libstdc++.
       - name: Headers are self-contained
         run: |

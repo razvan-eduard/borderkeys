@@ -3,9 +3,9 @@
 
 package com.borderkeys.ime
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
  * No keyboard source may show a sentence written in the code. Fails on a prose-shaped literal

@@ -3,9 +3,8 @@
 
 package com.borderkeys.predict
 
-import com.borderkeys.i18n.Keys
-
 import android.os.ParcelFileDescriptor
+import com.borderkeys.i18n.Keys
 import java.io.File
 
 /**
