@@ -70,6 +70,16 @@ class PersonalWordDecayTest {
     }
 
     @Test
+    fun `a word chosen on purpose never decays below one use, one never chosen decays to none`() {
+        val chosen = UserWord(word = "nadia", locale = "en-US", count = 1, lastUsedAt = 0, asserted = 1)
+        val never = chosen.copy(asserted = 0)
+        val later = 3 * halfLife
+        assertEquals(1, chosen.decayed(now = later, halfLifeMillis = halfLife).count)
+        assertEquals(0, never.decayed(now = later, halfLifeMillis = halfLife).count)
+        assertEquals(1, chosen.decayed(now = later, halfLifeMillis = halfLife).asserted)
+    }
+
+    @Test
     fun `an unconfirmed word is kept its set days, or for good with Off, a confirmed one is only ever halved`() {
         for (days in KeyboardPreferences.UNCONFIRMED_LIFE_STEPS - KeyboardPreferences.UNCONFIRMED_LIFE_OFF) {
             assertEquals(PersonalWordDecay.halfLifeMillis(days), PersonalWordDecay.unconfirmedLifeMillis(days))

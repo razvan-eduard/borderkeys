@@ -641,6 +641,28 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a correction put back stays chosen on purpose through the reload that forgets it, and its link through the forgotten word goes`() {
+        learningOn()
+        rig.reloadOnForget()
+        rig.type("the teh ")
+        assertEquals("the the ", rig.editor.text)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("the teh ", rig.editor.text)
+        assertEquals(listOf("the" to false), rig.host.forgotten)
+        // The buffer's own flush writes whatever the reload left in it.
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val written = rig.store.batches.flatMap { it.updates }
+        assertEquals(listOf("teh"), written.map { it.word })
+        assertTrue("chosen on purpose", written.single().asserted)
+        val throughForgotten = rig.store.batches.flatMap { it.pairs }.filter { step ->
+            step.use?.let { it.previousWord == "the" || it.word == "the" } == true
+        }
+        assertTrue("no link through the forgotten word: $throughForgotten", throughForgotten.isEmpty())
+        rig.type("teh ")
+        assertEquals("the teh teh ", rig.editor.text)
+    }
+
+    @Test
     fun `a swipe at a sentence start spends the shift auto-capitalise gave`() {
         learningOn(autoCapitalise = true, inputType = SENTENCES_FIELD)
         assertEquals(ShiftState.ON, rig.host.shiftState)

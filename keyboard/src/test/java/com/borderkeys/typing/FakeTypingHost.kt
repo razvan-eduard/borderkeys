@@ -39,6 +39,9 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
     /** Each forgotten word, with whether it was to be blocked when not personal. */
     val forgotten = mutableListOf<Pair<String, Boolean>>()
 
+    /** What [forgetWord] runs at once with the word; nothing unless a test sets it. */
+    var onForgetWord: ((String) -> Unit)? = null
+
     val offeredReplacements = mutableListOf<List<LanguageSwitchCorrector.Replacement>>()
 
     override var modifiersArmed = false
@@ -148,6 +151,7 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
 
     override fun forgetWord(word: String, blockWhenNotPersonal: Boolean) {
         forgotten += word to blockWhenNotPersonal
+        onForgetWord?.invoke(word)
     }
 
     override fun subtypeTag(): String = subtype

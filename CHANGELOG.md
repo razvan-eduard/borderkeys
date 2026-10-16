@@ -54,6 +54,11 @@ attestations and the full commit lists are on the
 - Fixed: a phrase appeared only after at least four uses whatever "How soon a word or phrase is
   learned" asked, and from five uses up as soon as a single word; a phrase now takes twice the
   uses set for a word, at every setting.
+- Fixed: a word you chose on purpose, picked from the strip or put back after a correction,
+  could be deleted by the clean-up as a word used once, and could drop out of the keyboard's
+  memory after long unused; it is kept now.
+- Fixed: a change on the Personal dictionary screens, or a correction put back, could lose the
+  last few seconds of learning until the keyboard next reloaded it.
 
 ## v0.11.0 — 2026-10-06
 

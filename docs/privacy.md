@@ -174,10 +174,11 @@ triples are kept per language, and each language and each context keeps only so 
 is full, what has gone unused longest, weighed by how often it was used, is deleted, so a phrase
 typed once years ago does not hold a place against one typed daily. The words themselves stop at
 the *Words kept* setting, 20,000 by default: past it, the words used least are deleted, and their
-phrases with the last of their cases. A word typed only once is deleted after the days unused
-that *How long a word used once is kept* sets, 30 by default, 10 or 90, or never with it Off, and
-its phrases with the last of its cases. The clean-up that fades and deletes runs daily, weekly or
-monthly, weekly by default.
+phrases with the last of their cases. A word typed only once and never chosen on purpose is
+deleted after the days unused that *How long a word used once is kept* sets, 30 by default, 10 or
+90, or never with it Off, and its phrases with the last of its cases; a word chosen on purpose,
+picked from the strip or put back after a correction, is kept and never fades below one use. The
+clean-up that fades and deletes runs daily, weekly or monthly, weekly by default.
 
 Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
 Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a

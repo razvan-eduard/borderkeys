@@ -44,6 +44,9 @@ interface EnginePort {
     /** Drops the pairs and triples the store gave up under its budget. */
     fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>)
 
+    /** Calls [onSettled] on the UI thread once every learn posted before it has reported its steps. */
+    fun settle(onSettled: () -> Unit)
+
     fun setPersonalModelEnabled(enabled: Boolean)
 
     /**

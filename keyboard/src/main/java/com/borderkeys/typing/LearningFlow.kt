@@ -273,6 +273,15 @@ class LearningFlow(
         store.persist(batch) { pairs, triples -> engine.dropLinks(pairs, triples) }
     }
 
+    /** Writes what the buffer holds and waits for the write; the engine drops what the rows gave up. */
+    suspend fun flushNow() {
+        val batch = drain() ?: return
+        val dropped = store.persistNow(batch)
+        if (dropped.pairs.isNotEmpty() || dropped.triples.isNotEmpty()) {
+            engine.dropLinks(dropped.pairs, dropped.triples)
+        }
+    }
+
     /** Empties [learning] and [touches], or returns null when there was nothing in them. */
     private fun drain(): LearningBatch? {
         val updates = learning.drain()

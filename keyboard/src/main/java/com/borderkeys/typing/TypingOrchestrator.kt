@@ -300,6 +300,9 @@ class TypingOrchestrator(
      */
     fun forgetUnsaved(word: String): Boolean = learningFlow.forget(word)
 
+    /** Writes the learning not yet saved and waits for the write; see [LearningFlow.flushNow]. */
+    suspend fun flushLearningNow() = learningFlow.flushNow()
+
     /** Learns nothing until the learning gate is next set, at a field start or a settings change. */
     fun stopLearning() {
         learningFlow.stop()

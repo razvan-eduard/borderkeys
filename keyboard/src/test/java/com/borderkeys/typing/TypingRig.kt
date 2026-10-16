@@ -4,11 +4,22 @@
 package com.borderkeys.typing
 
 import android.text.InputType
+import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.ime.PersonalModelReload
+import com.borderkeys.predict.PersonalModelLoad
+import com.borderkeys.predict.PersonalSnapshot
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
  * A [TypingOrchestrator] on an in-memory field, the engine on the host bridge, a recording host
@@ -187,6 +198,39 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         settle()
     }
 
+    /** What a reload started by [reloadPersonalModel] threw, rethrown by [settle]. */
+    private var reloadFailure: Throwable? = null
+
+    /** Makes the host run [reloadPersonalModel], forgetting the word, at each word it is asked to forget. */
+    fun reloadOnForget() {
+        host.onForgetWord = { word -> reloadPersonalModel(forgetting = word) }
+    }
+
+    /**
+     * The service's reload of the personal model, started at once and carried on as the engine's
+     * settle is served: [forgetting], when named, dropped from the buffer and the store after the
+     * settle, the learning waiting written, the store's words loaded.
+     */
+    fun reloadPersonalModel(forgetting: String? = null) {
+        val failures = CoroutineExceptionHandler { _, error -> reloadFailure = error }
+        CoroutineScope(Dispatchers.Unconfined + failures).launch {
+            PersonalModelReload(
+                settle = {
+                    suspendCancellableCoroutine { continuation -> engine.settle { continuation.resume(Unit) } }
+                },
+                flush = { orchestrator.flushLearningNow() },
+                load = { engine.loadPersonal(store.model()) },
+            ).reload(
+                between = {
+                    if (forgetting != null) {
+                        orchestrator.forgetUnsaved(forgetting)
+                        store.forget(forgetting)
+                    }
+                },
+            )
+        }
+    }
+
     /** Delivers the selection reports, the engine's answers and the due runnables, until none is left. */
     fun settle() {
         while (true) {
@@ -200,6 +244,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
             }
             break
         }
+        reloadFailure?.let { throw it }
         val word = orchestrator.composingText
         check(orchestrator.taps.size == word.codePointCount(0, word.length)) {
             "'$word' has ${orchestrator.taps.size} taps"
@@ -245,6 +290,11 @@ internal class MemoryLearningStore : LearningStore {
         batches += batch
     }
 
+    override suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped {
+        batches += batch
+        return PhraseRecorder.Dropped()
+    }
+
     override fun persistBeforeShutdown(batch: LearningBatch?) {
         if (batch != null) {
             batches += batch
@@ -253,6 +303,43 @@ internal class MemoryLearningStore : LearningStore {
 
     override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
         onLoaded(storedTouches[bucket].orEmpty())
+    }
+
+    /** Drops [word], in any case, from every batch written, with the pair and triple uses naming it. */
+    fun forget(word: String) {
+        fun matches(other: String) = other.equals(word, ignoreCase = true)
+        val kept = batches.map { batch ->
+            LearningBatch(
+                batch.updates.filterNot { matches(it.word) },
+                batch.pairs.filterNot { step ->
+                    step.use?.let { matches(it.previousWord) || matches(it.word) } == true
+                },
+                batch.triples.filterNot { step ->
+                    step.use?.let { matches(it.previousWord2) || matches(it.previousWord1) || matches(it.word) } == true
+                },
+                batch.touches,
+                batch.touchHalfLifeMillis,
+            )
+        }
+        batches.clear()
+        batches += kept
+    }
+
+    /** The words the batches written add up to, as the engine loads them; no pairs or triples. */
+    fun model(): PersonalModelLoad {
+        val words = linkedMapOf<String, UserWord>()
+        for (update in batches.flatMap { it.updates }) {
+            val row = words[update.word]
+            words[update.word] = UserWord(
+                word = update.word,
+                locale = update.locale,
+                count = (row?.count ?: 0) + update.delta,
+                lastUsedAt = update.lastUsedAt,
+                deliberateCapitals = (row?.deliberateCapitals ?: 0) + (if (update.deliberateCapital) 1 else 0),
+                asserted = (row?.asserted ?: 0) + (if (update.asserted) 1 else 0),
+            )
+        }
+        return PersonalSnapshot.EMPTY.copy(words = words.values.toList())
     }
 }
 

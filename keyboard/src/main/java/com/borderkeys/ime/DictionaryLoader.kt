@@ -16,10 +16,12 @@ import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * The dictionaries behind the engine: the enabled language packs, a bundled one replaced where
@@ -131,12 +133,15 @@ internal class DictionaryLoader(
         }
     }
 
-    /** Reloads the blocked words and the personal dictionary. */
-    suspend fun reloadPersonal() {
+    /**
+     * Reloads the blocked words and the personal dictionary, with [between] as [loadPersonalModel]
+     * runs it, under [load]'s lock.
+     */
+    suspend fun reloadPersonal(between: suspend () -> Unit = {}) {
         lock.withLock {
             val dictionary = DataGraph.dictionary
             refreshBlockedWords(dictionary)
-            loadPersonalModel(dictionary)
+            loadPersonalModel(dictionary, between)
         }
     }
 
@@ -157,13 +162,25 @@ internal class DictionaryLoader(
     }
 
     /**
-     * Pushes the personal dictionary into the native model ([PersonalModelLoad.read]). Not under
-     * [load]'s lock.
+     * Pushes the personal dictionary into the native model ([PersonalModelLoad.read]) once the
+     * engine has settled and the learning not yet saved is written, with [between] run after the
+     * settle in the caller's context ([PersonalModelReload]). Not under [load]'s lock.
      */
-    suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
-        engine.loadPersonal(
-            PersonalModelLoad.read(dictionary, preferences(), offensiveWords, System.currentTimeMillis()),
-        )
+    suspend fun loadPersonalModel(dictionary: DictionaryRepository, between: suspend () -> Unit = {}) {
+        PersonalModelReload(
+            settle = { settleEngine() },
+            flush = { withContext(Dispatchers.Main) { orchestrator.flushLearningNow() } },
+            load = {
+                engine.loadPersonal(
+                    PersonalModelLoad.read(dictionary, preferences(), offensiveWords, System.currentTimeMillis()),
+                )
+            },
+        ).reload(between)
+    }
+
+    /** Returns once every learn the engine was handed has reported its steps. */
+    private suspend fun settleEngine() = suspendCancellableCoroutine { continuation ->
+        engine.settle { continuation.resume(Unit) }
     }
 
     /**

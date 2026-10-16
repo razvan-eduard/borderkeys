@@ -21,6 +21,9 @@ object PersonalWordDecay {
     /** The least a stale halving leaves a count at. */
     const val STALE_FLOOR = 1
 
+    /** The least a word chosen on purpose decays to. */
+    const val CHOSEN_FLOOR = 1
+
     /** The share of a count one half-life leaves. */
     private const val HALF_LIFE_SHARE = 1.0 / HALVING
 
@@ -59,9 +62,14 @@ object PersonalWordDecay {
     }
 }
 
-/** [UserWord.count] decayed as of [now], for the native model; the stored row is untouched. */
-fun UserWord.decayed(now: Long, halfLifeMillis: Long): UserWord =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))
+/**
+ * [UserWord.count] decayed as of [now], for the native model, at least 1 for a word chosen on
+ * purpose; the stored row is untouched.
+ */
+fun UserWord.decayed(now: Long, halfLifeMillis: Long): UserWord {
+    val decayed = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis)
+    return copy(count = if (asserted > 0) decayed.coerceAtLeast(PersonalWordDecay.CHOSEN_FLOOR) else decayed)
+}
 
 /** The pair equivalent of [UserWord.decayed]. */
 fun UserBigram.decayed(now: Long, halfLifeMillis: Long): UserBigram =

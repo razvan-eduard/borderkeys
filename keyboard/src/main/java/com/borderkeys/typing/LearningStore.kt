@@ -20,6 +20,9 @@ interface LearningStore {
      */
     fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit)
 
+    /** Writes [batch] and returns the pairs and triples the store gave up beyond the engine's, awaited. */
+    suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped
+
     /** Writes [batch], when there is one, and waits a bounded time for every write in flight. */
     fun persistBeforeShutdown(batch: LearningBatch?)
 

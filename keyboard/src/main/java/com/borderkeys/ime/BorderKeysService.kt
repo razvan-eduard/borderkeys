@@ -80,6 +80,7 @@ import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -502,6 +503,14 @@ class BorderKeysService :
                     }
             }
         }
+
+        /** The write runs under [learningJob], which [persistBeforeShutdown] waits for; a failure is logged. */
+        override suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped =
+            learningScope.async {
+                runCatching { persistLearning(batch) }
+                    .onFailure { error -> android.util.Log.e("BorderKeys", "learning flush failed", error) }
+                    .getOrDefault(PhraseRecorder.Dropped())
+            }.await()
 
         override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
             learningScope.launch {
@@ -2213,15 +2222,18 @@ class BorderKeysService :
         if (!unlocked) {
             return
         }
-        val waiting = orchestrator.forgetUnsaved(word)
         scope.launch {
             val dictionary = DataGraph.dictionary
-            val forgotten = dictionary.forgetEveryCase(word)
-            if (!forgotten && !waiting && blockWhenNotPersonal) {
-                dictionary.block(word.lowercase())
-                dictionaryLoader.refreshBlockedWords(dictionary)
+            dictionaryLoader.reloadPersonal {
+                withContext(Dispatchers.Main) {
+                    val waiting = orchestrator.forgetUnsaved(word)
+                    val forgotten = dictionary.forgetEveryCase(word)
+                    if (!forgotten && !waiting && blockWhenNotPersonal) {
+                        dictionary.block(word.lowercase())
+                        dictionaryLoader.refreshBlockedWords(dictionary)
+                    }
+                }
             }
-            dictionaryLoader.loadPersonalModel(dictionary)
             orchestrator.requestSuggestions()
         }
     }

@@ -12,6 +12,7 @@ import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.NativePredictor
 import com.borderkeys.predict.NewestWins
 import com.borderkeys.predict.PersonalLinks
+import com.borderkeys.predict.PersonalModelLoad
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.answerRequest
@@ -129,6 +130,15 @@ internal class QueuedEngine(
 
     override fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>) {
         tasks.addLast(Task(request = false) { PersonalLinks.drop(handle, pairs, triples) })
+    }
+
+    override fun settle(onSettled: () -> Unit) {
+        tasks.addLast(Task(request = false) { onSettled() })
+    }
+
+    /** Replaces the personal model with [model], queued as the prediction thread would take it. */
+    fun loadPersonal(model: PersonalModelLoad) {
+        tasks.addLast(Task(request = false) { model.loadInto(handle) })
     }
 
     /** The learn-after count last handed over, or null before any. */

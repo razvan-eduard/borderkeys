@@ -294,6 +294,10 @@ class PredictionEngine(
         }
     }
 
+    override fun settle(onSettled: () -> Unit) {
+        worker.post { mainHandler.post(onSettled) }
+    }
+
     /** Sets how many uses a word, pair or triple needs before it is learned. */
     override fun setLearnAfterUses(uses: Int) {
         worker.post {

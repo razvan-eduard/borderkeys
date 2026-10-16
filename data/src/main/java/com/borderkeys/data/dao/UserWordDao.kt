@@ -93,13 +93,13 @@ interface UserWordDao {
     )
     suspend fun decayStale(cutoff: Long, now: Long)
 
-    /** Drops the words written exactly once and not since [cutoff]. */
-    @Query("DELETE FROM user_words WHERE count <= 1 AND lastUsedAt < :cutoff")
+    /** Drops the words written exactly once, never chosen on purpose and not used since [cutoff]. */
+    @Query("DELETE FROM user_words WHERE $SINGLE_USE_NEVER_CHOSEN")
     suspend fun deleteUnconfirmedBefore(cutoff: Long): Int
 
     /** The words such a sweep would remove, read before the delete so the phrases naming them
      *  can be cleared in the same transaction. */
-    @Query("SELECT word FROM user_words WHERE count <= 1 AND lastUsedAt < :cutoff")
+    @Query("SELECT word FROM user_words WHERE $SINGLE_USE_NEVER_CHOSEN")
     suspend fun unconfirmedBefore(cutoff: Long): List<String>
 
     /**
@@ -126,6 +126,11 @@ interface UserWordDao {
 
     @Query("SELECT COUNT(*) FROM user_words")
     fun observeCount(): Flow<Int>
+
+    companion object {
+        /** The rows the single-use clean-up removes: written once, never chosen on purpose, unused since the cutoff. */
+        const val SINGLE_USE_NEVER_CHOSEN = "count <= 1 AND asserted = 0 AND lastUsedAt < :cutoff"
+    }
 }
 
 /** One pending learning update, as accumulated in memory between flushes. */
