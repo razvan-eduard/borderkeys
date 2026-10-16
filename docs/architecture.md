@@ -497,8 +497,8 @@ left out under the strict distance setting.
 | `kMaxUserBigramBoost` | 2.5 | Ceiling on what a personal pair adds. |
 | `kUserChainPreference` | 1.5 | How far a phrase *this* person writes may outrank what the corpus says follows. Scaled by confidence: +0.4 once, +0.8 at three, +1.3 at twenty. |
 | `kUserChainHalfLife` | 3.0 | Observations to reach half that ceiling. |
-| `kPhraseSecondLinkFactor` | 1.5 | The second word of a two-word suggestion needs 1.5× the evidence. Twice the guess, twice the evidence — single-word leads after two repetitions, two-word appears after four. |
-| `kPhraseMinShare` | 0.34 | Share of its context a link must hold. Not a count: followed by one thing nine times in ten is a habit; followed by nine different things is not. |
+| `kPhraseUsesPerWordUses` | 2 | Each link of a two-word phrase needs this many times the learn-after uses: the phrase note's "about twice as many repetitions", at every setting of the slider. |
+| `kPhraseMinShare` | 0.34 | Share of its context a link must hold, count over the context's total, unsmoothed. Not a count: followed by one thing nine times in ten is a habit; followed by nine different things is not. |
 
 ### Search bounds
 

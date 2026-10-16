@@ -115,12 +115,6 @@ constexpr float kUserChainPreference = 1.5f;
 /** Observations at which the preference above reaches half its ceiling. */
 constexpr float kUserChainHalfLife = 3.0f;
 
-/** How much larger the second link's prior is than the first's in a two-word suggestion. */
-constexpr float kPhraseSecondLinkFactor = 1.5f;
-
-/** The share of its context a link must hold to be part of a phrase. */
-constexpr float kPhraseMinShare = 0.34f;
-
 constexpr int kMaxEndpoints = 96;
 
 // How many trie nodes a request may visit, by prefix length.
@@ -1790,13 +1784,9 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         userModel_.successors(personal_.store(), personal_.context1(), first, kMaxFirst);
 
     for (int i = 0; i < firstCount && phraseCount_ < kMaxPhrases; ++i) {
-        // Each link has to be learned.
-        if (!personal_.learned(first[i].count)) {
-            continue;
-        }
-        const float firstShare = static_cast<float>(first[i].count) /
-                                 (static_cast<float>(firstTotal) + PersonalScore::kUserBigramPrior);
-        if (firstShare < kPhraseMinShare) {
+        // Each link has to be learned as a phrase's link and hold its share of its context.
+        if (!personal_.phraseLinkLearned(first[i].count) ||
+            PersonalScore::share(first[i].count, firstTotal) < PersonalScore::kPhraseMinShare) {
             continue;
         }
 
@@ -1807,15 +1797,8 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         }
         UserModel::Successor second[1];
         if (userModel_.successors(personal_.store(), middle, second, 1) != 1 ||
-            !personal_.learned(second[0].count)) {
-            continue;
-        }
-        // The second link is smoothed against a larger prior.
-        const float secondShare =
-            static_cast<float>(second[0].count) /
-            (static_cast<float>(secondTotal) +
-             PersonalScore::kUserBigramPrior * kPhraseSecondLinkFactor);
-        if (secondShare < kPhraseMinShare) {
+            !personal_.phraseLinkLearned(second[0].count) ||
+            PersonalScore::share(second[0].count, secondTotal) < PersonalScore::kPhraseMinShare) {
             continue;
         }
 
@@ -1852,7 +1835,12 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         phraseLength_[slot] = static_cast<int>(needed);
         ++phraseCount_;
 
-        // Scored as both links together, plus the first link's preference.
+        // Scored as both links together, each share smoothed, plus the first link's preference.
+        const float firstShare = static_cast<float>(first[i].count) /
+                                 (static_cast<float>(firstTotal) + PersonalScore::kUserBigramPrior);
+        const float secondShare =
+            static_cast<float>(second[0].count) /
+            (static_cast<float>(secondTotal) + PersonalScore::kUserBigramPrior);
         const float score = std::log(firstShare) + std::log(secondShare) +
                             kUserChainPreference *
                                 (static_cast<float>(first[i].count) /

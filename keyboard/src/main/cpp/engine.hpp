@@ -702,8 +702,8 @@ private:
     void searchUserSuccessors(TopK<Candidate>& heap);
 
     /**
-     * Offers a two-word continuation from the personal model when both links are habits, the
-     * second held to a larger prior.
+     * Offers a two-word continuation from the personal model when each link has twice the
+     * learn-after uses and holds its share of its context.
      */
     void searchUserPhrases(TopK<Candidate>& heap);
 

@@ -2743,24 +2743,58 @@ void runEngineTests() {
         check(off.rankOf("", "test keys", "the") < 0,
               "no two-word suggestion unless it is switched on");
 
+        // A phrase's link needs twice the learn-after uses.
+        const int phraseUses = static_cast<int>(PersonalScore::kPhraseUsesPerWordUses *
+                                                Engine::kDefaultLearnAfterUses);
         LoadedEngine on;
         on.open();
         on.engine.setPhraseSuggestions(true);
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < phraseUses - 1; ++i) {
             write(on, "the", "test", "keys");
         }
-        check(on.rankOf("", "test keys", "the") > 0,
-              "a phrase written six times is offered");
+        check(on.rankOf("", "test keys", "the") < 0,
+              "one use short of twice learn-after is no phrase");
+        write(on, "the", "test", "keys");
+        check(on.rankOf("", "test keys", "the") > 0, "twice learn-after is");
         check(on.rankOf("", "test", "the") == 0,
               "and never ahead of its own first word, which is still there alone");
 
-        // The second link is held to twice the evidence, so one repetition is not a phrase.
-        LoadedEngine once;
-        once.open();
-        once.engine.setPhraseSuggestions(true);
-        write(once, "the", "test", "keys");
-        check(once.rankOf("", "test keys", "the") < 0,
-              "a phrase written once is not offered");
+        LoadedEngine soon;
+        soon.open();
+        soon.engine.setPhraseSuggestions(true);
+        soon.engine.setLearnAfterUses(1);
+        write(soon, "the", "test", "keys");
+        check(soon.rankOf("", "test keys", "the") < 0, "at learn-after 1, one use is no phrase");
+        write(soon, "the", "test", "keys");
+        check(soon.rankOf("", "test keys", "the") > 0, "and two uses are");
+
+        // A link under a third of its context's continuations is no phrase.
+        LoadedEngine spread;
+        spread.open();
+        spread.engine.setPhraseSuggestions(true);
+        const char* others[] = {"time", "water", "keyboard", "key", "border", "theme"};
+        for (int i = 0; i < phraseUses; ++i) {
+            write(spread, "the", "test", "keys");
+            for (const char* other : others) {
+                write(spread, "the", other, "keys");
+            }
+        }
+        check(spread.rankOf("", "test keys", "the") < 0,
+              "a link under a third of its context is no phrase");
+
+        // The second link is gated on its own count.
+        LoadedEngine second;
+        second.open();
+        second.engine.setPhraseSuggestions(true);
+        for (int i = 0; i < phraseUses / 2; ++i) {
+            write(second, "the", "test", "keys");
+        }
+        for (int i = 0; i < phraseUses - phraseUses / 2; ++i) {
+            second.engine.learn("the", 3, nullptr, 0, nullptr, 0);
+            second.engine.learn("test", 4, "the", 3, nullptr, 0);
+        }
+        check(second.rankOf("", "test keys", "the") < 0,
+              "a second link at learn-after but short of twice it is no phrase");
     }
 
     section("a phrase is not learned from a single word");

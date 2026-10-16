@@ -25,6 +25,12 @@ public:
     /** Smoothing for a context's share, in uses: a word's share is `count / (total + prior)`. */
     static constexpr float kUserBigramPrior = 4.0f;
 
+    /** How many times the learn-after uses each link of a phrase needs. */
+    static constexpr uint32_t kPhraseUsesPerWordUses = 2;
+
+    /** The share of its context a link must hold to be part of a phrase. */
+    static constexpr float kPhraseMinShare = 0.34f;
+
     /** The most a learned context adds to a word. */
     static constexpr float kMaxUserBigramBoost = 2.5f;
 
@@ -40,6 +46,19 @@ public:
 
     /** Whether [count] uses make a word, pair or triple count. */
     bool learned(uint32_t count) const { return count >= learnAfterUses_; }
+
+    /** Whether [count] uses make a link part of a phrase. */
+    bool phraseLinkLearned(uint32_t count) const {
+        return count >= kPhraseUsesPerWordUses * learnAfterUses_;
+    }
+
+    /**
+     * The share of a context seen [total] times that a link used [count] times holds; 0 for a
+     * context never seen.
+     */
+    static float share(uint32_t count, uint32_t total) {
+        return total == 0u ? 0.0f : static_cast<float>(count) / static_cast<float>(total);
+    }
 
     /** Whether [entry] counts: chosen on purpose at least once, or used learnAfterUses times. */
     bool established(uint32_t entry) const;

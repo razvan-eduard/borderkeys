@@ -611,10 +611,10 @@ class TypingScenarioTest {
 
     @Test
     fun `only the first word of a two-word pick takes the user's capital`() {
-        learnPhrase("we go home", maxOf(rig.orchestrator.preferences.learnAfter, PHRASE_SHARE_FLOOR_USES))
+        learnPhrase("we go home", PHRASE_USES_PER_WORD_USES * rig.orchestrator.preferences.learnAfter)
         learningOn(phraseSuggestions = true)
         rig.type("we ")
-        assertTrue("a phrase chip at PHRASE_SHARE_FLOOR_USES uses", rig.host.strip.any { ' ' in it.text })
+        assertTrue("a phrase chip at twice learn-after", rig.host.strip.any { ' ' in it.text })
         val phrase = rig.host.strip.first { ' ' in it.text }.text
         assertEquals("go home", phrase)
         rig.press(KeyCodes.SHIFT)
@@ -624,6 +624,20 @@ class TypingScenarioTest {
         assertEquals("we Go home ", rig.editor.text)
         // The phrase's own uses, typed lower case, sit beside the pick's two words.
         assertEquals(mapOf("we" to false, "go" to false, "Go" to true, "home" to false), learnedCapitals())
+    }
+
+    @Test
+    fun `a phrase is offered after twice the learn-after uses and not one use earlier`() {
+        val uses = PHRASE_USES_PER_WORD_USES * rig.orchestrator.preferences.learnAfter
+        learnPhrase("we go home", uses - 1)
+        learningOn(phraseSuggestions = true)
+        rig.type("we ")
+        assertFalse("no phrase one use short", rig.host.strip.any { ' ' in it.text })
+        rig.type("go home ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        rig.startField()
+        rig.type("we ")
+        assertTrue("a phrase at twice learn-after", rig.host.strip.any { ' ' in it.text })
     }
 
     @Test
@@ -2235,11 +2249,8 @@ class TypingScenarioTest {
     }
 
     private companion object {
-        /**
-         * The fewest uses at which the engine offers both links of a three-word phrase; a phrase
-         * is offered from this many uses or learn-after, whichever is more.
-         */
-        const val PHRASE_SHARE_FLOOR_USES = 4
+        /** What the phrase note promises: a phrase after twice a word's uses. */
+        const val PHRASE_USES_PER_WORD_USES = 2
 
         /** ImeSmokeTest's settings: what every scenario starts from. */
         val SMOKE_SETTINGS = KeyboardPreferences(

@@ -51,6 +51,9 @@ attestations and the full commit lists are on the
   listed under Learned phrases but never suggested.
 - Fixed: the explanation of a word's score could name the wrong language after the enabled
   languages changed.
+- Fixed: a phrase appeared only after at least four uses whatever "How soon a word or phrase is
+  learned" asked, and from five uses up as soon as a single word; a phrase now takes twice the
+  uses set for a word, at every setting.
 
 ## v0.11.0 — 2026-10-06
 
