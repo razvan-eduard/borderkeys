@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +46,7 @@ import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
 import com.borderkeys.settings.openKeyboardPicker
@@ -207,7 +207,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             unlocked = isDefault,
         ) {
             Explanation(strings[Keys.SETUP_A_REAL_TEXT_FIELD_WHATEVER_YOU])
-            OutlinedTextField(
+            TextBox(
                 value = probe,
                 onValueChange = { probe = it },
                 label = { Text(strings[Keys.SETUP_TYPE_HERE]) },

@@ -22,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ import com.borderkeys.settings.SPACE_SMALL
 import com.borderkeys.settings.SPACE_TINY
 import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.Dispatchers
@@ -235,21 +235,21 @@ private fun LayoutEditor(
         title = { Text(name.ifBlank { strings[Keys.CUSTOM_LAYOUTS_ADD] }) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
-                OutlinedTextField(
+                TextBox(
                     value = name,
                     onValueChange = { name = it.take(CustomLayout.MAX_NAME_CHARS) },
                     label = { Text(strings[Keys.CUSTOM_LAYOUTS_NAME_HINT]) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                TextBox(
                     value = languageTag,
                     onValueChange = { languageTag = it.take(CustomLayout.MAX_LANGUAGE_TAG_CHARS) },
                     label = { Text(strings[Keys.CUSTOM_LAYOUTS_LANGUAGE_HINT]) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                TextBox(
                     value = json,
                     onValueChange = { json = it.take(CustomLayout.MAX_JSON_CHARS) },
                     label = { Text(strings[Keys.CUSTOM_LAYOUTS_JSON]) },

@@ -9,7 +9,7 @@
 namespace borderkeys {
 
 // The non-letters composed into a word, the marks; the same set as
-// BorderKeysService.isWordCharacter.
+// WordShape.isWordCharacter.
 constexpr uint32_t kApostrophe = 0x27u;
 constexpr uint32_t kHyphen = 0x2Du;
 constexpr uint32_t kMarkCodePoints[] = {kApostrophe, kHyphen};

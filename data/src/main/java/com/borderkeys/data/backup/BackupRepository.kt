@@ -93,6 +93,7 @@ class BackupRepository(
                     lastUsedAt = it.lastUsedAt,
                     deliberateCapitals = it.deliberateCapitals,
                     asserted = it.asserted,
+                    added = it.added,
                 )
             }
         } else {
@@ -295,6 +296,9 @@ class BackupRepository(
                     }
                     if (word.asserted > 0) {
                         database.userWordDao().raiseAsserted(word.word, word.asserted)
+                    }
+                    if (word.added > 0) {
+                        database.userWordDao().raiseAdded(word.word, word.added)
                     }
                 }
                 // A file without languages: each link takes the one its word was learned under, else

@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +52,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -236,7 +236,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             if (entries.isEmpty()) {
                 SettingRow(title = strings[Keys.CLIPBOARD_EMPTY])
             } else {
-                OutlinedTextField(
+                TextBox(
                     value = query,
                     onValueChange = { query = it },
                     label = { Text(strings[Keys.CLIPBOARD_SEARCH]) },
@@ -306,7 +306,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             onDismissRequest = { editing = null },
             title = { Text(strings[Keys.CLIPBOARD_EDIT_TITLE]) },
             text = {
-                OutlinedTextField(
+                TextBox(
                     value = draft,
                     onValueChange = { draft = it },
                     minLines = 3,

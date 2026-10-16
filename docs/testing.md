@@ -28,7 +28,7 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**1,285 test functions across 150 files.** No device and no emulator. Most run as plain JUnit;
+**1,336 test functions across 159 files.** No device and no emulator. Most run as plain JUnit;
 the views, the database and the pipeline tests that write the personal dictionary run under
 Robolectric.
 

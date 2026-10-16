@@ -15,7 +15,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SPACE_GUTTER
 import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.TextBox
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,7 +137,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                     strings[Keys.BACKUP_PASSPHRASE_NOT_NEEDED]
                 },
             )
-            OutlinedTextField(
+            TextBox(
                 value = passphrase,
                 onValueChange = { passphrase = it },
                 label = { Text(strings[Keys.BACKUP_PASSPHRASE]) },

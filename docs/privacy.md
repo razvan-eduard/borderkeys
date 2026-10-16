@@ -183,7 +183,10 @@ clean-up that fades and deletes runs daily, weekly or monthly, weekly by default
 Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
 Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a
 search's matches can be deleted together; the heatmap is drawn on the keyboard preview, and
-switching it off deletes it. The heatmap is left out of backups.
+switching it off deletes it. A word added by hand on the Learned words page is stored as a
+learned word chosen once, with a count of how often it was added, which a backup carries; the
+page lists the words added by hand apart from the words learned by use. The heatmap is left out
+of backups.
 
 ---
 

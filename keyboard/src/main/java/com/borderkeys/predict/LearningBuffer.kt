@@ -4,6 +4,7 @@
 package com.borderkeys.predict
 
 import com.borderkeys.data.PhraseKey
+import com.borderkeys.data.WordShape
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.dao.PairStep
 import com.borderkeys.data.dao.TripleStep
@@ -44,12 +45,12 @@ class LearningBuffer(
 
     /**
      * Whether the buffer takes a pair of [word] after [previousWord], the two as [PhraseKey.word]
-     * keys them: each at most [MAX_WORD_LENGTH] long, neither empty nor refused, and the two
+     * keys them: each at most [WordShape.MAX_LENGTH] long, neither empty nor refused, and the two
      * different.
      */
     fun acceptsPair(previousWord: String, word: String): Boolean {
-        if (!enabled || previousWord.isEmpty() || previousWord.length > MAX_WORD_LENGTH || word.isEmpty() ||
-            word.length > MAX_WORD_LENGTH
+        if (!enabled || previousWord.isEmpty() || previousWord.length > WordShape.MAX_LENGTH || word.isEmpty() ||
+            word.length > WordShape.MAX_LENGTH
         ) {
             return false
         }
@@ -61,8 +62,8 @@ class LearningBuffer(
         if (!enabled || previousWord2.isEmpty() || previousWord1.isEmpty() || word.isEmpty()) {
             return false
         }
-        if (previousWord2.length > MAX_WORD_LENGTH || previousWord1.length > MAX_WORD_LENGTH ||
-            word.length > MAX_WORD_LENGTH
+        if (previousWord2.length > WordShape.MAX_LENGTH || previousWord1.length > WordShape.MAX_LENGTH ||
+            word.length > WordShape.MAX_LENGTH
         ) {
             return false
         }
@@ -270,13 +271,7 @@ class LearningBuffer(
         const val DEFAULT_DEBOUNCE_MILLIS = 4_000L
         const val DEFAULT_MAX_ENTRIES = 64
 
-        /** The longest word recorded. */
-        const val MAX_WORD_LENGTH = 64
-
-        /** The shortest word recorded. */
-        const val MIN_WORD_LENGTH = 2
-
-        /** Whether [word] is one the buffer records: [MIN_WORD_LENGTH] to [MAX_WORD_LENGTH] long. */
-        fun learnable(word: String): Boolean = word.length in MIN_WORD_LENGTH..MAX_WORD_LENGTH
+        /** Whether [word] is one the buffer records: of a word's length ([WordShape.isWordLength]). */
+        fun learnable(word: String): Boolean = WordShape.isWordLength(word)
     }
 }

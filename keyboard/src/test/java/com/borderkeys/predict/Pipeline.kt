@@ -9,6 +9,7 @@ import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.InMemoryDictionary
 import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.data.PhraseRecorder
+import com.borderkeys.data.WordShape
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.Contractions
@@ -115,7 +116,7 @@ internal class Pipeline private constructor(
             val code = keys.codePointAt(index)
             index += Character.charCount(code)
             val word = rig.orchestrator.composingText
-            if (word.isNotEmpty() && !TypingOrchestrator.isWordCharacter(code)) {
+            if (word.isNotEmpty() && !WordShape.isWordCharacter(code)) {
                 reason = rig.orchestrator.commitOutcome(word, code).reason
             }
             rig.press(code)

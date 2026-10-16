@@ -40,4 +40,6 @@ data class UserWord(
      * alone. Never decremented; a word imported from a file arrives asserted.
      */
     val asserted: Int = 0,
+    /** How many times the word was added by hand on the Learned words screen. Never decremented. */
+    val added: Int = 0,
 )

@@ -26,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +66,7 @@ import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.rememberParticleEffectsUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 import kotlinx.coroutines.launch
@@ -757,7 +757,7 @@ private fun ParticlePresetNameDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
+            TextBox(
                 value = name,
                 onValueChange = { name = it.take(maxLength) },
                 singleLine = true,
@@ -803,7 +803,7 @@ private fun ParticleSavePresetDialog(
                         PickerChip(slot.title, slot.key == selectedKey) { selectedKey = slot.key }
                     }
                 }
-                OutlinedTextField(
+                TextBox(
                     value = name,
                     onValueChange = { name = it.take(CustomEffectsPresetEntry.MAX_NAME_LENGTH) },
                     singleLine = true,

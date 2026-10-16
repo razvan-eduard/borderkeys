@@ -664,8 +664,9 @@ the user commits a word — types or swipes it and moves on, or picks it from th
 the entire learning rule.
 
 **Typed and chosen are two different facts.** Every commit raises `count`. Only a choice raises
-`asserted`: a tap on the strip (the typed word's own chip included), or a correction put back
-with backspace. A word no pack holds is *established* — offered as a completion, treated as a
+`asserted`: a tap on the strip (the typed word's own chip included), a correction put back
+with backspace, or an add by hand on the Learned words page, which raises `added` too, the
+count the page's filter reads. A word no pack holds is *established* — offered as a completion, treated as a
 known word by autocorrect, predicted after its context — once it has been asserted at all, or
 written `kMinPersonalEvidence` effective times (three at the balanced setting). Until then it is
 recorded and listed. Words the packs already hold need none of this — `knownSpelling` answers

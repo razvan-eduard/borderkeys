@@ -19,7 +19,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +57,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.VoiceKeyboards
 import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -242,7 +242,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     mutableStateOf(preferences.timestampPattern)
                 }
                 val valid = TimestampPattern.isValid(pattern)
-                OutlinedTextField(
+                TextBox(
                     value = pattern,
                     onValueChange = { value ->
                         pattern = value

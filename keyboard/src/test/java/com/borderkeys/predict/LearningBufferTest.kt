@@ -3,6 +3,7 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.WordShape
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.PairStep
@@ -257,7 +258,7 @@ class LearningBufferTest {
     @Test
     fun `a word longer than the ceiling is still refused`() {
         val buffer = LearningBuffer()
-        val tooLong = "a".repeat(LearningBuffer.MAX_WORD_LENGTH + 1)
+        val tooLong = "a".repeat(WordShape.MAX_LENGTH + 1)
         assertFalse(buffer.record(tooLong, "ro-RO", 1_000))
     }
 

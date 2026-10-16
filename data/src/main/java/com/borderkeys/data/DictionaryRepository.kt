@@ -389,6 +389,40 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
+    /** What [add] did. */
+    enum class Added { ADDED, BLOCKED }
+
+    /**
+     * Adds [word] by hand under [locale] as one chosen use at [now]: its count, its asserted
+     * count and its added count each up by one, a first-letter capital counted as the user's.
+     * A word blocked in any case is unblocked first when [unblock], else left as it is with
+     * [Added.BLOCKED] returned and nothing written.
+     */
+    suspend fun add(word: String, locale: String, now: Long, unblock: Boolean): Added {
+        val added = database.withTransaction {
+            val blocked = casesOf(word, blockedWords.allWords())
+            if (blocked.isNotEmpty()) {
+                if (!unblock) {
+                    return@withTransaction Added.BLOCKED
+                }
+                blocked.forEach { blockedWords.delete(it) }
+            }
+            userWords.increment(
+                word, locale, delta = 1, lastUsedAt = now,
+                deliberateCapitalDelta = if (WordShape.startsWithCapital(word)) 1 else 0,
+                assertedDelta = 1, addedDelta = 1,
+            )
+            Added.ADDED
+        }
+        if (added == Added.ADDED) {
+            edited()
+        }
+        return added
+    }
+
+    /** Whether [word] is blocked, in any case. */
+    suspend fun isBlocked(word: String): Boolean = casesOf(word, blockedWords.allWords()).isNotEmpty()
+
     companion object {
         /** The pairs of one language the native engine holds; matches `UserModel::kMaxBigrams`. */
         const val MAX_BIGRAMS_IN_MEMORY = PhraseBudget.LANGUAGE_CAP

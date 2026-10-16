@@ -5,7 +5,6 @@ package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,63 +18,45 @@ import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SPACE_GUTTER
 import com.borderkeys.settings.SPACE_LARGE
 import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.TextBox
 
-/**
- * The search over a list, and below it the button that deletes what the search lists, while it
- * filters, or [clearAllLabel]'s button otherwise. Each asks first: [deleteListedTitle] over the
- * entries listed when it was pressed, [clearAllTitle] over everything.
- */
+/** The search box over a list. */
 @Composable
-internal fun <T> SearchAndDelete(
-    query: String,
-    onQuery: (String) -> Unit,
-    listed: List<T>,
-    deleteListedLabel: String,
-    deleteListedTitle: String,
-    onDeleteListed: (List<T>) -> Unit,
-    clearAllLabel: String,
-    clearAllTitle: String,
-    clearAllConfirm: String,
-    clearAllEnabled: Boolean,
-    onClearAll: () -> Unit,
-) {
+internal fun SearchBox(query: String, onQuery: (String) -> Unit) {
     val strings = LocalStrings.current
-    var confirmingClearAll by remember { mutableStateOf(false) }
-    var confirmingDelete by remember { mutableStateOf<List<T>?>(null) }
-    OutlinedTextField(
+    TextBox(
         value = query,
         onValueChange = onQuery,
         label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
         modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
     )
-    if (query.isNotBlank()) {
-        TextButton(
-            onClick = { confirmingDelete = listed },
-            enabled = listed.isNotEmpty(),
-            modifier = Modifier.padding(horizontal = SPACE_LARGE),
-        ) { Text(deleteListedLabel) }
-    } else {
-        TextButton(
-            onClick = { confirmingClearAll = true },
-            enabled = clearAllEnabled,
-            modifier = Modifier.padding(horizontal = SPACE_LARGE),
-        ) { Text(clearAllLabel) }
-    }
+}
 
-    if (confirmingClearAll) {
+/**
+ * The button that deletes [listed], enabled while something is listed; it asks first, with
+ * [title] over the entries listed when it was pressed, and hands those to [onDelete].
+ */
+@Composable
+internal fun <T> DeleteListed(
+    label: String,
+    title: String,
+    confirmLabel: String,
+    listed: List<T>,
+    onDelete: (List<T>) -> Unit,
+) {
+    val strings = LocalStrings.current
+    var confirming by remember { mutableStateOf<List<T>?>(null) }
+    TextButton(
+        onClick = { confirming = listed },
+        enabled = listed.isNotEmpty(),
+        modifier = Modifier.padding(horizontal = SPACE_LARGE),
+    ) { Text(label) }
+    confirming?.let { doomed ->
         ConfirmDialog(
-            title = clearAllTitle,
+            title = title,
             text = strings[Keys.COMMON_CANNOT_BE_UNDONE],
-            confirmLabel = clearAllConfirm,
-            onDismiss = { confirmingClearAll = false },
-        ) { onClearAll() }
-    }
-    confirmingDelete?.let { doomed ->
-        ConfirmDialog(
-            title = deleteListedTitle,
-            text = strings[Keys.COMMON_CANNOT_BE_UNDONE],
-            confirmLabel = strings[Keys.DICTIONARY_DELETE],
-            onDismiss = { confirmingDelete = null },
-        ) { onDeleteListed(doomed) }
+            confirmLabel = confirmLabel,
+            onDismiss = { confirming = null },
+        ) { onDelete(doomed) }
     }
 }

@@ -4,6 +4,7 @@
 package com.borderkeys.typing
 
 import android.view.KeyEvent
+import com.borderkeys.data.WordShape
 import com.borderkeys.ime.PhysicalKeys
 
 /**
@@ -29,7 +30,7 @@ class TerminalWriter(private val host: TypingHost) : TypingFlow() {
 
     /** Whether [code] extends the word: a letter starts one, and a word character continues it. */
     fun continuesWord(code: Int): Boolean =
-        if (typedWord.isEmpty()) Character.isLetter(code) else TypingOrchestrator.isWordCharacter(code)
+        if (typedWord.isEmpty()) Character.isLetter(code) else WordShape.isWordCharacter(code)
 
     /** Types [code]; with [letter], from [continuesWord], it extends the word, else ends it. */
     fun type(editor: FieldEditor, code: Int, letter: Boolean) {

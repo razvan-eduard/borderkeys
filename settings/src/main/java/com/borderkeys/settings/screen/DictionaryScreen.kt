@@ -15,7 +15,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +53,7 @@ import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.rememberLearned
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
@@ -274,14 +274,14 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
             }
             var trigger by remember { mutableStateOf("") }
             var expansion by remember { mutableStateOf("") }
-            OutlinedTextField(
+            TextBox(
                 value = trigger,
                 onValueChange = { trigger = it },
                 label = { Text(strings[Keys.DICTIONARY_SHORTCUT_TRIGGER]) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             )
-            OutlinedTextField(
+            TextBox(
                 value = expansion,
                 onValueChange = { expansion = it },
                 label = { Text(strings[Keys.DICTIONARY_SHORTCUT_EXPANSION]) },

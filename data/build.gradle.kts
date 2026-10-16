@@ -36,6 +36,11 @@ android {
         enable = true
     }
 
+    sourceSets {
+        // The exported schemas, read by the migration tests.
+        getByName("test").assets.srcDir("$projectDir/schemas")
+    }
+
     testOptions {
         unitTests {
             isReturnDefaultValues = true
@@ -104,4 +109,5 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
 }

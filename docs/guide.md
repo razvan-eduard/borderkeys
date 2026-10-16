@@ -164,9 +164,12 @@ ships.
   it, and a `Block` (never suggest it again) and a `Delete` (remove it) right beside it — not a
   black box. **Phrases** lists the word pairs and triples it learned, each with a Delete of its
   own; they go with a word when it is deleted, and deleting a pair takes the triples it is part
-  of. Both pages search, and while a search filters the list the button under it deletes exactly
-  what the search found, after asking; without a search it is Forget everything on the Words page
-  (every word, phrase and the heatmap) and Delete all phrases on the Phrases page. The words you
+  of. Both pages search. The Words page adds too: type a word in its search box and tap Add to
+  dictionary, choosing its language when more than one is enabled, and it is suggested and left
+  alone by autocorrect at once; a word you blocked asks first. Its filter lists the words added
+  by hand, the words learned by use, or both. The button under the search deletes exactly what
+  is listed, after asking, and Forget everything (every word, phrase and the heatmap) sits under
+  the page's Advanced settings; on the Phrases page the button deletes the phrases listed. The words you
   open sentences with are learned as well, listed as the word "at the start of a sentence", and
   offered first when a sentence begins. The Learning switch gates the whole of it: off, nothing
   you type is recorded and nothing learned is offered, the dictionaries alone suggest, and

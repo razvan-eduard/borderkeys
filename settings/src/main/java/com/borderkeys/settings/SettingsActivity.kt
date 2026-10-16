@@ -27,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -307,7 +306,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 var probeMode by rememberSaveable { mutableStateOf(ProbeMode.PLAIN) }
                 var probeFocused by remember { mutableStateOf(false) }
                 val labelFloated = probeFocused || probe.isNotEmpty()
-                OutlinedTextField(
+                TextBox(
                     value = probe,
                     onValueChange = { probe = it },
                     label = {
@@ -359,7 +358,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                         }
                         if (current == Screen.Home) {
                             Spacer(Modifier.width(SPACE_XLARGE))
-                            OutlinedTextField(
+                            TextBox(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 placeholder = {

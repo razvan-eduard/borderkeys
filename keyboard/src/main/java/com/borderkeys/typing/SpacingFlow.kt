@@ -3,6 +3,7 @@
 
 package com.borderkeys.typing
 
+import com.borderkeys.data.WordShape
 import com.borderkeys.ime.HabitSpace
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.PunctuationSpace
@@ -157,7 +158,7 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
     private fun endsWithWordCharacterBeforeSpace(editor: FieldEditor): Boolean {
         val before = editor.textBeforeCursor(2) ?: return false
         return before.length == 2 && before[1] == ' ' &&
-            (TypingOrchestrator.isWordCharacter(before[0].code) || before[0].isDigit())
+            (WordShape.isWordCharacter(before[0].code) || before[0].isDigit())
     }
 
     /** Marks that close up against the word before them. */

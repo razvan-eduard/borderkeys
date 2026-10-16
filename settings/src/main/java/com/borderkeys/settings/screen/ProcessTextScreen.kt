@@ -58,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -144,6 +143,7 @@ import com.borderkeys.settings.SPACE_SMALL
 import com.borderkeys.settings.SPACE_TINY
 import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SPACE_XXLARGE
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.millisAtSpeed
 import com.borderkeys.settings.motionMillis
 import com.borderkeys.settings.openKeyboardPicker
@@ -891,7 +891,7 @@ fun ProcessTextScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedTextField(
+                        TextBox(
                             value = promptText,
                             onValueChange = { promptText = it },
                             placeholder = { Text(strings[Keys.COMPOSER_PROMPT_HINT]) },
@@ -1674,7 +1674,7 @@ private fun SavePromptRow(
                     )
                 }
             }
-            OutlinedTextField(
+            TextBox(
                 value = name,
                 onValueChange = onNameChange,
                 placeholder = { Text(strings[Keys.COMPOSER_SAVE_PROMPT_NAME]) },

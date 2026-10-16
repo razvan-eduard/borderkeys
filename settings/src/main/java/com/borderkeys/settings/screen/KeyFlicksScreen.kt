@@ -14,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +43,7 @@ import com.borderkeys.settings.SPACE_TINY
 import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlin.math.roundToInt
 
@@ -214,7 +214,7 @@ private fun FlickDialog(
                     FilterChip(selected = kind == KeyFlick.KEY, onClick = { kind = KeyFlick.KEY }, label = { Text(strings[Keys.FLICK_KIND_KEY]) })
                 }
                 when (kind) {
-                    KeyFlick.TEXT -> OutlinedTextField(
+                    KeyFlick.TEXT -> TextBox(
                         value = text,
                         onValueChange = { text = it.take(KeyFlick.MAX_TEXT_CHARS) },
                         label = { Text(strings[Keys.FLICK_VALUE_TEXT]) },
@@ -246,7 +246,7 @@ private fun FlickDialog(
                         }
                     }
                 }
-                OutlinedTextField(
+                TextBox(
                     value = label,
                     onValueChange = { label = it.take(KeyFlick.MAX_LABEL_CHARS) },
                     label = { Text(strings[Keys.FLICK_LABEL]) },

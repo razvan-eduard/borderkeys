@@ -24,6 +24,16 @@ object PersonalEntries {
         return words.filter { PhraseKey.word(it.word) in entered }
     }
 
+    /** Where a listed word came from: learned by use, added by hand, or either. */
+    enum class Origin { ANY, LEARNED, ADDED }
+
+    /** The words of [words] from [origin]: added by hand when [UserWord.added] is above zero. */
+    fun ofOrigin(words: List<UserWord>, origin: Origin): List<UserWord> = when (origin) {
+        Origin.ANY -> words
+        Origin.LEARNED -> words.filter { it.added == 0 }
+        Origin.ADDED -> words.filter { it.added > 0 }
+    }
+
     /** The phrases of [phrases] used [KeyboardPreferences.learnAfter] times, decayed as of [now]. */
     fun phrases(phrases: List<UserPhrase>, settings: KeyboardPreferences, now: Long): List<UserPhrase> {
         val halfLife = PersonalWordDecay.halfLifeMillis(settings.unlearnHalfLifeDays)

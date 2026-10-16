@@ -17,7 +17,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +45,7 @@ import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SPACE_TINY
 import com.borderkeys.settings.SPACE_XLARGE
 import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.TextBox
 import com.borderkeys.settings.move
 
 /** The drawable for a [CustomIcon]. */
@@ -163,14 +163,14 @@ internal fun CreateCustomActionDialog(
                         )
                     }
                 }
-                OutlinedTextField(
+                TextBox(
                     value = name,
                     onValueChange = { name = it.take(CustomAction.MAX_NAME_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_NAME_HINT]) },
                     singleLine = true,
                     modifier = Modifier.padding(top = SPACE_MEDIUM),
                 )
-                OutlinedTextField(
+                TextBox(
                     value = instruction,
                     onValueChange = { instruction = it.take(CustomAction.MAX_INSTRUCTION_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_INSTRUCTION_HINT]) },
@@ -269,7 +269,7 @@ internal fun CreateCustomQuickActionDialog(
                         )
                     }
                 }
-                OutlinedTextField(
+                TextBox(
                     value = name,
                     onValueChange = { name = it.take(CustomQuickAction.MAX_NAME_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_NAME_HINT]) },

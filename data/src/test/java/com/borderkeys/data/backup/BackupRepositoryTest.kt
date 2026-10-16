@@ -9,10 +9,13 @@ import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.MemoryClocks
 import com.borderkeys.data.MemoryPairs
 import com.borderkeys.data.MemoryTriples
+import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserPairContext
 import com.borderkeys.data.entity.UserPhraseClock
+import com.borderkeys.data.entity.UserWord
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -74,6 +77,29 @@ class BackupRepositoryTest {
         assertEquals(USED_AT, pair.lastUsedAt)
         assertEquals(CONTEXT_TOTAL, target.pairs.contexts.getValue(listOf("ro", "o")).total)
         assertTrue("the device's clocks are not taken from the file", target.clocks.rows.isEmpty())
+    }
+
+    @Test
+    fun `a word added by hand keeps its mark through a backup, and a file without it restores none`() = runTest {
+        val source = Device()
+        val sourceWords = mockk<UserWordDao>(relaxed = true)
+        every { source.database.userWordDao() } returns sourceWords
+        coEvery { sourceWords.topWords(any()) } returns listOf(UserWord("nadia", "en-US", 1, USED_AT, asserted = 1, added = 1))
+        val payload = throughFile(source.backups.gather(DICTIONARY))
+        assertEquals(1, payload.words.single().added)
+
+        val target = Device()
+        val targetWords = mockk<UserWordDao>(relaxed = true)
+        every { target.database.userWordDao() } returns targetWords
+        target.backups.apply(payload, DICTIONARY)
+        coVerify { targetWords.raiseAdded("nadia", 1) }
+
+        val older = payload.copy(words = listOf(BackupWord("nadia", "en-US", 1)))
+        val other = Device()
+        val otherWords = mockk<UserWordDao>(relaxed = true)
+        every { other.database.userWordDao() } returns otherWords
+        other.backups.apply(older, DICTIONARY)
+        coVerify(exactly = 0) { otherWords.raiseAdded(any(), any()) }
     }
 
     @Test

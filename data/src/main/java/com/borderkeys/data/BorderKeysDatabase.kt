@@ -47,7 +47,7 @@ import java.util.Arrays
         UserTripleContext::class,
         UserPhraseClock::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -232,6 +232,16 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) = PhraseMigration.migrate(db, fallbackLanguage())
         }
 
+        /**
+         * Version 11 to 12: how many times a learned word was added by hand, see
+         * [com.borderkeys.data.entity.UserWord.added]. Additive; existing rows start at zero.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `user_words` ADD COLUMN `added` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x does not load its own library.
             System.loadLibrary("sqlcipher")
@@ -251,6 +261,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     migration10To11 { KeyboardSubtypes.language(context) },
+                    MIGRATION_11_12,
                 )
                 // The ":assist" process opens this database too.
                 .enableMultiInstanceInvalidation()

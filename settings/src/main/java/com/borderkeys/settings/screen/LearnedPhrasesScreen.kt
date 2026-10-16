@@ -34,8 +34,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Every pair and triple this device has learned, searchable by the text each row shows, each with
- * Delete. Below the search, Delete all phrases, or, while a search filters the list, Delete
- * filtered phrases.
+ * Delete. Below the search, the button that deletes the phrases listed: the search's matches
+ * while it filters, else every phrase listed.
  */
 @Composable
 fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
@@ -66,20 +66,22 @@ fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
         item {
             SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, listed.size)) {
                 Explanation(strings[Keys.DICTIONARY_PHRASES_NOTE])
-                SearchAndDelete(
-                    query = query,
-                    onQuery = { query = it },
+                SearchBox(query) { query = it }
+                DeleteListed(
+                    label = if (filtering) {
+                        strings.getString(Keys.DICTIONARY_DELETE_FILTERED_PHRASES, listed.size)
+                    } else {
+                        strings[Keys.DICTIONARY_DELETE_ALL_PHRASES]
+                    },
+                    title = if (filtering) {
+                        strings[Keys.DICTIONARY_DELETE_FILTERED_PHRASES_TITLE]
+                    } else {
+                        strings[Keys.DICTIONARY_DELETE_ALL_PHRASES_TITLE]
+                    },
+                    confirmLabel = strings[Keys.DICTIONARY_DELETE],
                     listed = listed,
-                    deleteListedLabel = strings.getString(Keys.DICTIONARY_DELETE_FILTERED_PHRASES, listed.size),
-                    deleteListedTitle = strings[Keys.DICTIONARY_DELETE_FILTERED_PHRASES_TITLE],
                     // The listed phrases; their words and the rest stay.
-                    onDeleteListed = { doomed -> scope.launch { repository.forgetPhrases(doomed) } },
-                    clearAllLabel = strings[Keys.DICTIONARY_DELETE_ALL_PHRASES],
-                    clearAllTitle = strings[Keys.DICTIONARY_DELETE_ALL_PHRASES_TITLE],
-                    clearAllConfirm = strings[Keys.DICTIONARY_DELETE],
-                    clearAllEnabled = phrases.isNotEmpty(),
-                    // Every pair and triple; the words stay.
-                    onClearAll = { scope.launch { repository.forgetAllPhrases() } },
+                    onDelete = { doomed -> scope.launch { repository.forgetPhrases(doomed) } },
                 )
             }
         }

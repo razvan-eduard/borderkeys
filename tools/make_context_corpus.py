@@ -64,7 +64,7 @@ def fetch(directory, repository, name, sha256):
 
 
 def is_word_character(ch):
-    """TypingOrchestrator.isWordCharacter: a letter, an apostrophe or a hyphen."""
+    """WordShape.isWordCharacter: a letter, an apostrophe or a hyphen."""
     return ch.isalpha() or ch == "'" or ch == "-"
 
 

@@ -38,19 +38,21 @@ interface UserWordDao {
 
     /**
      * Adds [delta] to a word's count, inserting it if it is new, in one statement. Two processes
-     * write this table. [deliberateCapitalDelta] and [assertedDelta] are each 0 or 1, added the
-     * same way; see [UserWord.deliberateCapitals] and [UserWord.asserted].
+     * write this table. [deliberateCapitalDelta], [assertedDelta] and [addedDelta] are each 0 or
+     * 1, added the same way; see [UserWord.deliberateCapitals], [UserWord.asserted] and
+     * [UserWord.added].
      */
     @Query(
         """
-        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals, asserted)
-        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta, :assertedDelta)
+        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals, asserted, added)
+        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta, :assertedDelta, :addedDelta)
         ON CONFLICT(word) DO UPDATE SET
             count = count + :delta,
             lastUsedAt = :lastUsedAt,
             locale = :locale,
             deliberateCapitals = deliberateCapitals + :deliberateCapitalDelta,
-            asserted = asserted + :assertedDelta
+            asserted = asserted + :assertedDelta,
+            added = added + :addedDelta
         """,
     )
     suspend fun increment(
@@ -60,6 +62,7 @@ interface UserWordDao {
         lastUsedAt: Long,
         deliberateCapitalDelta: Int,
         assertedDelta: Int,
+        addedDelta: Int,
     )
 
     @Transaction
@@ -69,6 +72,7 @@ interface UserWordDao {
                 entry.word, entry.locale, entry.delta, entry.lastUsedAt,
                 if (entry.deliberateCapital) 1 else 0,
                 if (entry.asserted) 1 else 0,
+                addedDelta = 0,
             )
         }
     }
@@ -80,6 +84,10 @@ interface UserWordDao {
     /** The same for the asserted count -- see [raiseDeliberateCapitals]. */
     @Query("UPDATE user_words SET asserted = MAX(asserted, :count) WHERE word = :word")
     suspend fun raiseAsserted(word: String, count: Int)
+
+    /** The same for the added-by-hand count -- see [raiseDeliberateCapitals]. */
+    @Query("UPDATE user_words SET added = MAX(added, :count) WHERE word = :word")
+    suspend fun raiseAdded(word: String, count: Int)
 
     /**
      * Halves every count above one not used since [cutoff], in one statement, and stamps those

@@ -14,6 +14,13 @@ attestations and the full commit lists are on the
 
 ## Unreleased
 
+- A word can be added to the personal dictionary by hand: type it in the search box of the
+  Learned words page and tap Add to dictionary, choosing its language when more than one is
+  enabled. It is suggested and left alone by autocorrect at once, as a word picked from the
+  strip is, and the clean-up keeps it. The page can list the words added by hand, the words
+  learned by use, or both, and its delete button takes what it lists; Forget everything sits
+  under the page's Advanced settings. A word blocked earlier asks before the block is lifted.
+  Every text box in Settings has a button that clears it.
 - What you write is remembered per language: the word pairs and three-word runs learned in one
   language no longer steer suggestions in another, and the keyboard keeps up to 10,000 of each
   per language, up from 4,096 pairs and 2,048 runs for every language together. When a language

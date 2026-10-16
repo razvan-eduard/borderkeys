@@ -33,6 +33,7 @@ import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.PersonalWordDecay
 import com.borderkeys.data.PhraseRecorder
+import com.borderkeys.data.WordShape
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.entity.ClipEntry
@@ -2548,11 +2549,11 @@ class BorderKeysService :
             return ""
         }
         var end = before.length
-        while (end > 0 && !TypingOrchestrator.isWordCharacter(before[end - 1].code)) {
+        while (end > 0 && !WordShape.isWordCharacter(before[end - 1].code)) {
             end--
         }
         var start = end
-        while (start > 0 && TypingOrchestrator.isWordCharacter(before[start - 1].code)) {
+        while (start > 0 && WordShape.isWordCharacter(before[start - 1].code)) {
             start--
         }
         return before.substring(start, end)
@@ -2570,7 +2571,7 @@ class BorderKeysService :
         val text = extracted.text?.toString() ?: return
         val base = extracted.startOffset
         val range = SentenceCase.wordAt(
-            text, extracted.selectionEnd, TypingOrchestrator::isWordCharacter,
+            text, extracted.selectionEnd, WordShape::isWordCharacter,
         ) ?: return
         val word = text.substring(range.first, range.last + 1)
         val toggled = SentenceCase.toggleInitial(word)
@@ -2807,12 +2808,12 @@ class BorderKeysService :
         val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)?.toString().orEmpty()
         var back = 0
         while (back < before.length &&
-            TypingOrchestrator.isWordCharacter(before[before.length - 1 - back].code)
+            WordShape.isWordCharacter(before[before.length - 1 - back].code)
         ) {
             back++
         }
         var forward = 0
-        while (forward < after.length && TypingOrchestrator.isWordCharacter(after[forward].code)) {
+        while (forward < after.length && WordShape.isWordCharacter(after[forward].code)) {
             forward++
         }
         if (back == 0 && forward == 0) {

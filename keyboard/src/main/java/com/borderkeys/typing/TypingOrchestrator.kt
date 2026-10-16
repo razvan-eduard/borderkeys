@@ -6,6 +6,7 @@ package com.borderkeys.typing
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
+import com.borderkeys.data.WordShape
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.theme.KeyFlick
@@ -652,11 +653,11 @@ class TypingOrchestrator(
             typeIntoTerminal(editor, shifted)
             return
         }
-        // A word starts with a letter; after that, [isWordCharacter] continues it.
+        // A word starts with a letter; after that, [WordShape.isWordCharacter] continues it.
         val letter = if (composing.isEmpty()) {
             Character.isLetter(shifted)
         } else {
-            isWordCharacter(shifted)
+            WordShape.isWordCharacter(shifted)
         }
         // A one-shot shift is spent only by a letter.
         if (letter) {
@@ -1255,14 +1256,14 @@ class TypingOrchestrator(
         requestSuggestions()
     }
 
-    /** Deletes the run of [isWordCharacter] characters before the caret. */
+    /** Deletes the run of [WordShape.isWordCharacter] characters before the caret. */
     private fun deleteWordBeforeCaret(editor: FieldEditor) {
         val before = editor.textBeforeCursor(CONTEXT_WINDOW_CHARS)
         if (before.isNullOrEmpty()) {
             return
         }
         var length = 0
-        while (length < before.length && isWordCharacter(before[before.length - 1 - length].code)) {
+        while (length < before.length && WordShape.isWordCharacter(before[before.length - 1 - length].code)) {
             length++
         }
         if (length > 0) {
@@ -1603,7 +1604,7 @@ class TypingOrchestrator(
         val after = editor.textAfterCursor(CONTEXT_WINDOW_CHARS)
         var tail = 0
         if (after != null && replacesWord) {
-            while (tail < after.length && isWordCharacter(after[tail].code)) {
+            while (tail < after.length && WordShape.isWordCharacter(after[tail].code)) {
                 tail++
             }
         }
@@ -1766,7 +1767,7 @@ class TypingOrchestrator(
     private fun wordAfterCaret(editor: FieldEditor): String {
         val after = editor.textAfterCursor(CONTEXT_WINDOW_CHARS) ?: return ""
         var end = 0
-        while (end < after.length && isWordCharacter(after[end].code)) {
+        while (end < after.length && WordShape.isWordCharacter(after[end].code)) {
             end++
         }
         return after.substring(0, end)
@@ -1892,10 +1893,10 @@ class TypingOrchestrator(
             suggestionFlow.requestAdopted("", WordContext.NONE)
             return
         }
-        // The run of [isWordCharacter] characters before the caret, starting at its first
+        // The run of [WordShape.isWordCharacter] characters before the caret, starting at its first
         // letter, is the word; the words before it are its context.
         var start = before.length
-        while (start > 0 && isWordCharacter(before[start - 1].code)) {
+        while (start > 0 && WordShape.isWordCharacter(before[start - 1].code)) {
             start--
         }
         while (start < before.length && !Character.isLetter(before[start].code)) {
@@ -1940,7 +1941,7 @@ class TypingOrchestrator(
     private fun contextWordsBefore(before: CharSequence, end: Int): Pair<String?, String?> {
         fun wordEndingAt(limit: Int): Pair<String, Int>? {
             var index = limit
-            while (index > 0 && !isWordCharacter(before[index - 1].code)) {
+            while (index > 0 && !WordShape.isWordCharacter(before[index - 1].code)) {
                 if (isSentenceEndingPunctuation(before[index - 1].code) || before[index - 1] == '\n') {
                     return null
                 }
@@ -1950,7 +1951,7 @@ class TypingOrchestrator(
                 return null
             }
             val wordEnd = index
-            while (index > 0 && isWordCharacter(before[index - 1].code)) {
+            while (index > 0 && WordShape.isWordCharacter(before[index - 1].code)) {
                 index--
             }
             return before.substring(index, wordEnd) to index
@@ -1979,10 +1980,10 @@ class TypingOrchestrator(
             return
         }
         var count = 0
-        while (count < before.length && !isWordCharacter(before[before.length - 1 - count].code)) {
+        while (count < before.length && !WordShape.isWordCharacter(before[before.length - 1 - count].code)) {
             count++
         }
-        while (count < before.length && isWordCharacter(before[before.length - 1 - count].code)) {
+        while (count < before.length && WordShape.isWordCharacter(before[before.length - 1 - count].code)) {
             count++
         }
         editor.deleteSurroundingText(count.coerceAtLeast(1), 0)
@@ -2018,9 +2019,5 @@ class TypingOrchestrator(
 
         /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
         const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
-
-        /** A letter, an apostrophe or a hyphen: what continues a word once a letter began it. */
-        fun isWordCharacter(code: Int): Boolean =
-            Character.isLetter(code) || code == '\''.code || code == '-'.code
     }
 }
