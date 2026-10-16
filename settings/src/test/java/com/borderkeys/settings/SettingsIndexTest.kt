@@ -5,11 +5,11 @@ package com.borderkeys.settings
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * The index the build generates from the screen sources, and the search over it, against every

@@ -601,10 +601,20 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `non-letters inside a word in capitals, under the user's caps lock, do not count against capitals throughout`() {
+        learningOn()
+        rig.longPress(KeyCodes.SHIFT)
+        rig.type("o'neil-x ")
+        assertEquals("O'NEIL-X ", rig.editor.text)
+        assertEquals(mapOf("O'NEIL-X" to false), learnedCapitals())
+    }
+
+    @Test
     fun `only the first word of a two-word pick takes the user's capital`() {
         learnPhrase("we go home", maxOf(rig.orchestrator.preferences.learnAfter, PHRASE_SHARE_FLOOR_USES))
         learningOn(phraseSuggestions = true)
         rig.type("we ")
+        assertTrue("a phrase chip at PHRASE_SHARE_FLOOR_USES uses", rig.host.strip.any { ' ' in it.text })
         val phrase = rig.host.strip.first { ' ' in it.text }.text
         assertEquals("go home", phrase)
         rig.press(KeyCodes.SHIFT)
@@ -620,7 +630,9 @@ class TypingScenarioTest {
     fun `a swipe at a sentence start spends the shift auto-capitalise gave`() {
         learningOn(autoCapitalise = true, inputType = SENTENCES_FIELD)
         assertEquals(ShiftState.ON, rig.host.shiftState)
-        rig.swipe("the")
+        rig.swipe("the", reports = false)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.settle()
         assertEquals("The", rig.editor.text)
         assertEquals(ShiftState.OFF, rig.host.shiftState)
         rig.type("n ")
@@ -1588,11 +1600,28 @@ class TypingScenarioTest {
     fun `the learn-after count reaches the engine when a field opens and when it changes`() {
         val opened = KeyboardPreferences.LEARN_AFTER_USES_STEPS.last()
         val changed = KeyboardPreferences.LEARN_AFTER_USES_STEPS.first()
+        val before = rig.engine.learnAfterUses
+        rig.host.viewAttached = false
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, learnAfterUses = opened))
+        assertEquals("nothing reaches the engine with the keyboard down", before, rig.engine.learnAfterUses)
+        rig.host.viewAttached = true
         rig.startField()
-        assertEquals(opened, rig.engine.learnAfterUses)
+        assertEquals("the field's start pushes the count", opened, rig.engine.learnAfterUses)
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, learnAfterUses = changed))
         assertEquals("a change applies in the open field", changed, rig.engine.learnAfterUses)
+    }
+
+    @Test
+    fun `the phrase switch reaches the engine when a field opens and when it changes`() {
+        val before = rig.engine.phraseSuggestions
+        rig.host.viewAttached = false
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, phraseSuggestions = true))
+        assertEquals("nothing reaches the engine with the keyboard down", before, rig.engine.phraseSuggestions)
+        rig.host.viewAttached = true
+        rig.startField()
+        assertEquals("the field's start pushes the switch", true, rig.engine.phraseSuggestions)
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, phraseSuggestions = false))
+        assertEquals("a change applies in the open field", false, rig.engine.phraseSuggestions)
     }
 
     @Test
@@ -2207,17 +2236,12 @@ class TypingScenarioTest {
 
     private companion object {
         /**
-         * The fewest uses at which both links of a three-word phrase clear the engine's phrase
-         * share floor: the second link's share is 4 / (4 + 4.0 × 1.5) = 0.40 against a floor of
-         * 0.34, where 3 uses give 0.33. A phrase is offered from this many uses or learn-after,
-         * whichever is more.
+         * The fewest uses at which the engine offers both links of a three-word phrase; a phrase
+         * is offered from this many uses or learn-after, whichever is more.
          */
         const val PHRASE_SHARE_FLOOR_USES = 4
 
-        /**
-         * ImeSmokeTest's settings: what every scenario starts from. A scenario changes only the
-         * settings it is about, through [learningOn] or a copy.
-         */
+        /** ImeSmokeTest's settings: what every scenario starts from. */
         val SMOKE_SETTINGS = KeyboardPreferences(
             learningEnabled = false,
             autoCorrectOnSpace = true,

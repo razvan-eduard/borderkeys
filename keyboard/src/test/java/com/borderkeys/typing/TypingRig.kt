@@ -31,11 +31,23 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         orchestrator.applySettings(settings)
     }
 
-    /** Swipes through the keys of [word] on the harness's layout, lifts, and settles. */
-    fun swipe(word: String) {
+    /**
+     * Swipes through the keys of [word] on the harness's layout and lifts, then settles; with
+     * [reports] false, delivers the reports the swipe's own edits queued, serves the engine's
+     * answers and holds the reports those queue.
+     */
+    fun swipe(word: String, reports: Boolean = true) {
         val path = SwipePath.through(word, clock)
         orchestrator.onGesture(path.xs, path.ys, path.timestamps, path.count)
-        settle()
+        if (reports) {
+            settle()
+            return
+        }
+        while (true) {
+            val report = editor.takeReport() ?: break
+            orchestrator.onSelectionChanged(report.selectionStart, report.selectionEnd)
+        }
+        while (engine.serveNext()) continue
     }
 
     /** Swipes through the keys of [word] and pauses there, the finger still down, and settles. */

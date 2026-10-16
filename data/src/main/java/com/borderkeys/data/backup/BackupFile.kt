@@ -7,14 +7,14 @@ import com.borderkeys.data.theme.KeyboardPlacement
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * What one keyboard can hand to another, as a file the user picks; also the application's only

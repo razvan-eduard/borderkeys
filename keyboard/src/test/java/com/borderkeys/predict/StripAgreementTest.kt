@@ -4,9 +4,9 @@
 package com.borderkeys.predict
 
 import com.borderkeys.ime.SuggestionRow
-import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /** Over every corpus, the word the space bar commits is the word the row outlines. */
 class StripAgreementTest {

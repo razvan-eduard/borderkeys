@@ -3,9 +3,9 @@
 
 package com.borderkeys.ime
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
  * Credential-encrypted storage is read through `DataGraph` only after the user's first unlock.

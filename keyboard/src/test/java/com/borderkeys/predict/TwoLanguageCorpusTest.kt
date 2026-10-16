@@ -3,9 +3,9 @@
 
 package com.borderkeys.predict
 
-import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * The autocorrect corpora with Romanian and English both on, each word typed right after a
