@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "L'ajouter lève le blocage, et le clavier le propose à nouveau.",
   "dictionary_add_blocked_title": "Ce mot est bloqué",
   "dictionary_add_to_dictionary": "Ajouter au dictionnaire",
+  "dictionary_added_by_hand": "ajoutée à la main",
   "dictionary_added_by_hand_on": "ajouté à la main · %s",
   "dictionary_advanced_note": "À partir de quand les mots sont appris, à quelle vitesse ils s'estompent et à quelle fréquence ils sont nettoyés",
   "dictionary_block": "Bloquer",

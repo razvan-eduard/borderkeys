@@ -169,7 +169,9 @@ ships.
   alone by autocorrect at once; a word you blocked asks first. Its filter lists the words added
   by hand, the words learned by use, or both. The button under the search deletes exactly what
   is listed, after asking, and Forget everything (every word, phrase and the heatmap) sits under
-  the page's Advanced settings; on the Phrases page the button deletes the phrases listed. The words you
+  the page's Advanced settings. The Phrases page adds the same way: two or three words typed in
+  its search box, added in the language chosen, suggested at once, its words added with them;
+  its filter and its delete button work as the Words page's. The words you
   open sentences with are learned as well, listed as the word "at the start of a sentence", and
   offered first when a sentence begins. The Learning switch gates the whole of it: off, nothing
   you type is recorded and nothing learned is offered, the dictionaries alone suggest, and

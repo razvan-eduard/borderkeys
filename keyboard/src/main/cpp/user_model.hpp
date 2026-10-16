@@ -30,20 +30,26 @@ public:
         uint32_t count;
     };
 
-    /** A word this person has been seen to write after another one, and how often. */
+    /**
+     * A word this person has been seen to write after another one, how often, and how many times
+     * the link was chosen on purpose.
+     */
     struct Successor {
         uint32_t entryIndex;
         uint32_t count;
+        uint32_t asserted = 0;
     };
 
     /**
-     * A link after one context, as the budget weighs it: its last word's entry, its count, and how
-     * many times its context had been seen when it last was.
+     * A link after one context, as the budget weighs it: its last word's entry, its count, how
+     * many times its context had been seen when it last was, and how many times it was chosen on
+     * purpose.
      */
     struct ContextLink {
         int32_t nextIndex;
         uint32_t count;
         uint64_t contextSeen;
+        uint32_t asserted = 0;
     };
 
     /** A context's total, its uses no longer held included, and how many times it has been seen. */
@@ -65,11 +71,11 @@ public:
 
     void clear();
 
-    // Replaces everything with the given words, at service start. `deliberateCapitals` and
-    // `asserted` are parallel counts, or null for zeros.
+    // Replaces everything with the given words, at service start. `deliberateCapitals`,
+    // `asserted` and `added` are parallel counts, or null for zeros.
     void bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
                   int count, const int32_t* deliberateCapitals = nullptr,
-                  const int32_t* asserted = nullptr);
+                  const int32_t* asserted = nullptr, const int32_t* added = nullptr);
 
     /**
      * Records that the user committed this word, adding it if new; returns its entry index.
@@ -106,8 +112,12 @@ public:
      */
     bool learnBigram(int32_t store, int32_t previousIndex, int32_t nextIndex);
 
-    /** How many times `next` has followed `previous` in `store`. Zero when the pair is unknown. */
-    uint32_t bigramCount(int32_t store, int32_t previousIndex, int32_t nextIndex) const;
+    /**
+     * How many times `next` has followed `previous` in `store`, zero when the pair is unknown;
+     * `asserted`, when given, gets how many times the pair was chosen on purpose.
+     */
+    uint32_t bigramCount(int32_t store, int32_t previousIndex, int32_t nextIndex,
+                         uint32_t* asserted = nullptr) const;
 
     /**
      * How often `previous` has been followed by anything in `store`, pairs no longer held
@@ -116,8 +126,8 @@ public:
     uint32_t successorTotal(int32_t store, int32_t previousIndex) const;
 
     /**
-     * The words seen after `previous` in `store`, most frequent first and, among equals, the one
-     * recorded first after it, up to `maxOut`.
+     * The words seen after `previous` in `store`, up to `maxOut`: chosen on purpose first, then
+     * most frequent, and among equals the one recorded first after it.
      */
     int successors(int32_t store, int32_t previousIndex, Successor* out, int maxOut) const;
 
@@ -128,9 +138,12 @@ public:
     bool learnTrigram(int32_t store, int32_t previous2Index, int32_t previous1Index,
                       int32_t nextIndex);
 
-    /** How often this exact three-word sequence has been written in `store`. */
+    /**
+     * How often this exact three-word sequence has been written in `store`; `asserted`, when
+     * given, gets how many times it was chosen on purpose.
+     */
     uint32_t trigramCount(int32_t store, int32_t previous2Index, int32_t previous1Index,
-                          int32_t nextIndex) const;
+                          int32_t nextIndex, uint32_t* asserted = nullptr) const;
 
     /**
      * How often those two words have been followed by anything in `store`, triples no longer
@@ -163,10 +176,10 @@ public:
     int triplesHeld(int32_t store) const;
     void pairAt(int32_t store, int index, int32_t* previousIndex, int32_t* nextIndex,
                 uint32_t* count, uint64_t* languageSeen = nullptr,
-                uint32_t* contextTotal = nullptr) const;
+                uint32_t* contextTotal = nullptr, uint32_t* asserted = nullptr) const;
     void tripleAt(int32_t store, int index, int32_t* previous2Index, int32_t* previous1Index,
                   int32_t* nextIndex, uint32_t* count, uint64_t* languageSeen = nullptr,
-                  uint32_t* contextTotal = nullptr) const;
+                  uint32_t* contextTotal = nullptr, uint32_t* asserted = nullptr) const;
 
     /**
      * Replaces every store's pairs. Used at start, from the database: each row goes to the store
@@ -178,7 +191,8 @@ public:
                          const char* const* previous, const size_t* previousLengths,
                          const char* const* next, const size_t* nextLengths,
                          const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                         const uint64_t* languageSeen = nullptr);
+                         const uint64_t* languageSeen = nullptr,
+                         const int32_t* asserted = nullptr);
 
     /** [bulkLoadBigrams], for the three-word sequences and kMaxTrigrams. */
     void bulkLoadTrigrams(const char* const* languages, const size_t* languageLengths,
@@ -186,7 +200,8 @@ public:
                           const char* const* previous1, const size_t* previous1Lengths,
                           const char* const* next, const size_t* nextLengths,
                           const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                          const uint64_t* languageSeen = nullptr);
+                          const uint64_t* languageSeen = nullptr,
+                          const int32_t* asserted = nullptr);
 
     /**
      * Sets how many times each `previous` has been seen in its language's store, held at no less
@@ -248,6 +263,9 @@ public:
     /** How many times this entry was chosen on purpose; see [learn]. */
     uint32_t asserted(uint32_t entryIndex) const;
 
+    /** How many times this entry was added by hand; see [bulkLoad]. */
+    uint32_t added(uint32_t entryIndex) const;
+
     // Words starting with exactly an already folded prefix, in no particular order, up to
     // `maxOut`.
     int completions(const uint32_t* foldedPrefix, int prefixLength, Completion* out,
@@ -267,6 +285,7 @@ private:
         uint32_t count = 0;
         uint32_t deliberateCapitals = 0;
         uint32_t asserted = 0;
+        uint32_t added = 0;
     };
 
     int32_t childOf(int32_t node, uint32_t folded) const;
@@ -301,6 +320,8 @@ private:
         uint32_t count;
         uint64_t contextSeen = 0;
         uint64_t languageSeen = 0;
+        // How many times the pair was chosen on purpose; above zero it is offered as learned.
+        uint32_t asserted = 0;
 
         static constexpr size_t kWords = 2;
         using Key = uint64_t;
@@ -324,6 +345,8 @@ private:
         uint32_t count;
         uint64_t contextSeen = 0;
         uint64_t languageSeen = 0;
+        // As a pair's.
+        uint32_t asserted = 0;
 
         static constexpr size_t kWords = 3;
         using Key = TrigramKey;
@@ -427,7 +450,8 @@ private:
 
     /** The count of the link with `key`; zero when none is held. */
     template <typename Link>
-    static uint32_t countOf(const LinkTable<Link>& table, const typename Link::Key& key);
+    static uint32_t countOf(const LinkTable<Link>& table, const typename Link::Key& key,
+                            uint32_t* asserted = nullptr);
 
     /** The total of the context with `key`; zero when none is held. */
     template <typename Link>
@@ -464,7 +488,7 @@ private:
     void loadLinks(LinkTable<Link> LinkStore::*kind, const char* const* languages,
                    const size_t* languageLengths, const int32_t* counts, int count, bool wordsGiven,
                    int most, const uint64_t* contextSeen, const uint64_t* languageSeen,
-                   LinkAt linkAt);
+                   const int32_t* asserted, LinkAt linkAt);
 
     /**
      * Raises each row's context total in the `kind` of its language's store to the row's, never

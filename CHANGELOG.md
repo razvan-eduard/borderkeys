@@ -16,11 +16,19 @@ attestations and the full commit lists are on the
 
 - A word can be added to the personal dictionary by hand: type it in the search box of the
   Learned words page and tap Add to dictionary, choosing its language when more than one is
-  enabled. It is suggested and left alone by autocorrect at once, as a word picked from the
-  strip is, and the clean-up keeps it. The page can list the words added by hand, the words
+  enabled. It is suggested as strongly as a word used many times and left alone by autocorrect
+  at once, and the clean-up and the word limit keep it. The page can list the words added by
+  hand, the words
   learned by use, or both, and its delete button takes what it lists; Forget everything sits
   under the page's Advanced settings. A word blocked earlier asks before the block is lifted.
   Every text box in Settings has a button that clears it.
+- A phrase of two or three words can be added by hand too: type it in the search box of the
+  Learned phrases page and tap Add to dictionary. It comes first after its context, as the next
+  word and as the phrase, however rarely it has been typed, and its words are added with it; the
+  clean-up and the limits leave it, and a backup carries it as added. The page lists the phrases
+  added by hand, the phrases learned by use, or both, and its delete button takes what it lists.
+- A two-word suggestion climbs over its first word once the second word is what usually follows
+  the first, instead of always sitting under it.
 - What you write is remembered per language: the word pairs and three-word runs learned in one
   language no longer steer suggestions in another, and the keyboard keeps up to 10,000 of each
   per language, up from 4,096 pairs and 2,048 runs for every language together. When a language

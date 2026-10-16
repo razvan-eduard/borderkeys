@@ -71,13 +71,17 @@ fun UserWord.decayed(now: Long, halfLifeMillis: Long): UserWord {
     return copy(count = if (asserted > 0) decayed.coerceAtLeast(PersonalWordDecay.CHOSEN_FLOOR) else decayed)
 }
 
-/** The pair equivalent of [UserWord.decayed]. */
-fun UserBigram.decayed(now: Long, halfLifeMillis: Long): UserBigram =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))
+/** The pair equivalent of [UserWord.decayed], its floor for a pair chosen on purpose. */
+fun UserBigram.decayed(now: Long, halfLifeMillis: Long): UserBigram {
+    val decayed = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis)
+    return copy(count = if (asserted > 0) decayed.coerceAtLeast(PersonalWordDecay.CHOSEN_FLOOR) else decayed)
+}
 
-/** The triple equivalent of [UserWord.decayed]. */
-fun UserTrigram.decayed(now: Long, halfLifeMillis: Long): UserTrigram =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))
+/** The triple equivalent of [UserWord.decayed], its floor for a triple chosen on purpose. */
+fun UserTrigram.decayed(now: Long, halfLifeMillis: Long): UserTrigram {
+    val decayed = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis)
+    return copy(count = if (asserted > 0) decayed.coerceAtLeast(PersonalWordDecay.CHOSEN_FLOOR) else decayed)
+}
 
 /** A pair context's total decayed as [UserBigram.decayed] decays its pairs. */
 fun UserPairContext.decayed(now: Long, halfLifeMillis: Long): UserPairContext =

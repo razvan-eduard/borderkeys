@@ -509,6 +509,7 @@
   "dictionary_add_blocked_text": "添加后将解除屏蔽，键盘会再次推荐它。",
   "dictionary_add_blocked_title": "此词已被屏蔽",
   "dictionary_add_to_dictionary": "添加到词典",
+  "dictionary_added_by_hand": "手动添加",
   "dictionary_added_by_hand_on": "手动添加 · %s",
   "dictionary_advanced_note": "词多快被学会，多快淡去，以及多久清理一次",
   "dictionary_block": "屏蔽",

@@ -36,6 +36,7 @@ internal data class PersonalModelLoad(
             IntArray(words.size) { words[it].count },
             IntArray(words.size) { words[it].deliberateCapitals },
             IntArray(words.size) { words[it].asserted },
+            IntArray(words.size) { words[it].added },
         )
         PersonalLinks.load(handle, pairs, pairContexts, triples, tripleContexts, clocks)
     }

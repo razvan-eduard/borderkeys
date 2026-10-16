@@ -388,25 +388,31 @@ public:
 
     void loadUserWords(const char* const* words, const size_t* lengths, const int32_t* counts,
                        int count, const int32_t* deliberateCapitals = nullptr,
-                       const int32_t* asserted = nullptr);
+                       const int32_t* asserted = nullptr, const int32_t* added = nullptr);
 
     /**
      * Replaces the remembered word pairs, each in the store of its language, with their stamps
-     * (UserModel::bulkLoadBigrams); called after [loadUserWords].
+     * and how often each was chosen on purpose (UserModel::bulkLoadBigrams); called after
+     * [loadUserWords].
      */
     void loadUserBigrams(const char* const* languages, const size_t* languageLengths,
                          const char* const* previous, const size_t* previousLengths,
                          const char* const* next, const size_t* nextLengths,
                          const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                         const uint64_t* languageSeen = nullptr);
+                         const uint64_t* languageSeen = nullptr,
+                         const int32_t* asserted = nullptr);
 
-    /** Replaces the remembered three-word sequences, with their stamps. Called after the pairs. */
+    /**
+     * Replaces the remembered three-word sequences, with their stamps and how often each was
+     * chosen on purpose. Called after the pairs.
+     */
     void loadUserTrigrams(const char* const* languages, const size_t* languageLengths,
                           const char* const* previous2, const size_t* previous2Lengths,
                           const char* const* previous1, const size_t* previous1Lengths,
                           const char* const* next, const size_t* nextLengths,
                           const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                          const uint64_t* languageSeen = nullptr);
+                          const uint64_t* languageSeen = nullptr,
+                          const int32_t* asserted = nullptr);
 
     /**
      * How often each previous word of a pair has been followed, and how many times it has been
@@ -440,7 +446,8 @@ public:
 
     /**
      * A link of `language`'s store as the budget weighs it: the entries of its words, the first
-     * -1 for a pair, its count, when its language last saw it, and its context's total.
+     * -1 for a pair, its count, when its language last saw it, its context's total, and how many
+     * times it was chosen on purpose.
      */
     struct StoredLink {
         int32_t previous2Index;
@@ -449,6 +456,7 @@ public:
         uint32_t count;
         uint64_t languageSeen;
         uint32_t contextTotal;
+        uint32_t asserted;
     };
 
     /** The triple, or pair, at `index` of `language`'s store; false for none. */

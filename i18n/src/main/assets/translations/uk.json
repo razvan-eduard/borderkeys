@@ -539,6 +539,7 @@
   "dictionary_add_blocked_text": "Додавання знімає блокування, і клавіатура знову його пропонує.",
   "dictionary_add_blocked_title": "Це слово заблоковано",
   "dictionary_add_to_dictionary": "Додати до словника",
+  "dictionary_added_by_hand": "додано вручну",
   "dictionary_added_by_hand_on": "додано вручну · %s",
   "dictionary_advanced_note": "Як скоро слова запам’ятовуються, як швидко забуваються і як часто словник очищується",
   "dictionary_block": "Заблокувати",

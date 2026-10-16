@@ -34,12 +34,21 @@ interface UserBigramDao {
     @Query("SELECT * FROM user_bigrams WHERE previousWord = :word OR word = :word")
     suspend fun involving(word: String): List<UserBigram>
 
-    /** The pairs used at most [uses] times. */
-    @Query("SELECT * FROM user_bigrams WHERE count <= :uses")
+    /** The pairs used at most [uses] times and never chosen on purpose. */
+    @Query("SELECT * FROM user_bigrams WHERE count <= :uses AND asserted = 0")
     suspend fun usedAtMost(uses: Int): List<UserBigram>
 
     @Upsert
     suspend fun upsert(pair: UserBigram)
+
+    /** Lifts a pair's chosen and added counts to at least [asserted] and [added], for a restore. */
+    @Query(
+        """
+        UPDATE user_bigrams SET asserted = MAX(asserted, :asserted), added = MAX(added, :added)
+        WHERE language = :language AND previousWord = :previousWord AND word = :word
+        """,
+    )
+    suspend fun raiseMarks(language: String, previousWord: String, word: String, asserted: Int, added: Int)
 
     @Delete
     suspend fun delete(pairs: List<UserBigram>)
@@ -106,7 +115,10 @@ interface UserBigramDao {
     suspend fun deleteEmptyContexts()
 }
 
-/** One pending pair update, as accumulated in memory between flushes; its words in lower case. */
+/**
+ * One pending pair update, as accumulated in memory between flushes; its words in lower case.
+ * [asserted] and [added] are the counts a restore lifts the pair's marks to; a flush passes 0.
+ */
 data class LearnedBigram(
     /** The primary language subtag the pair was written in. */
     val language: String,
@@ -114,6 +126,8 @@ data class LearnedBigram(
     val word: String,
     val delta: Int,
     val lastUsedAt: Long,
+    val asserted: Int = 0,
+    val added: Int = 0,
 )
 
 /**

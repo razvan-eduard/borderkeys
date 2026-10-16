@@ -45,6 +45,7 @@ internal object PersonalLinks {
             IntArray(pairs.size) { pairs[it].count },
             LongArray(pairs.size) { pairs[it].contextSeen },
             LongArray(pairs.size) { pairs[it].languageSeen },
+            IntArray(pairs.size) { pairs[it].asserted },
         )
         if (pairContexts.isNotEmpty()) {
             NativePredictor.nativeLoadUserPairTotals(
@@ -64,6 +65,7 @@ internal object PersonalLinks {
             IntArray(triples.size) { triples[it].count },
             LongArray(triples.size) { triples[it].contextSeen },
             LongArray(triples.size) { triples[it].languageSeen },
+            IntArray(triples.size) { triples[it].asserted },
         )
         if (tripleContexts.isNotEmpty()) {
             NativePredictor.nativeLoadUserTripleTotals(
@@ -157,19 +159,23 @@ internal object PersonalLinks {
         val context = listOfNotNull(previous2, previous1)
         val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
         val held = NativePredictor.nativeContextLinks(
-            handle, language, previous2, previous1, emptyArray(), IntArray(0), LongArray(0), counted,
+            handle, language, previous2, previous1, emptyArray(), IntArray(0), LongArray(0), IntArray(0), counted,
         )
         val words = arrayOfNulls<String>(held)
         val counts = IntArray(held)
         val seen = LongArray(held)
-        NativePredictor.nativeContextLinks(handle, language, previous2, previous1, words, counts, seen, counted)
+        val asserted = IntArray(held)
+        NativePredictor.nativeContextLinks(
+            handle, language, previous2, previous1, words, counts, seen, asserted, counted,
+        )
         val links = (0 until held).mapNotNull { at ->
-            words[at]?.let { LinkRow(language, context, it, counts[at], 0L, seen[at], 0L) }
+            words[at]?.let { LinkRow(language, context, it, counts[at], 0L, seen[at], 0L, asserted = asserted[at]) }
         }
         val kept = links.firstOrNull { it.word == word } ?: return null
         val triples = previous2 != null
         val gone = PhraseBudget.overflow(
             links, kept, counted[NativePredictor.CONTEXT_SEEN], limits, { it.count }, { it.contextSeen },
+            { it.asserted > 0 },
         )
         drop(handle, gone, triples)
         val pruned = prune(handle, language, kept, triples)
@@ -193,8 +199,9 @@ internal object PersonalLinks {
         val counts = IntArray(held)
         val languageSeen = LongArray(held)
         val totals = LongArray(held)
+        val asserted = IntArray(held)
         val written = NativePredictor.nativeLanguageLinks(
-            handle, language, triples, previous2, previous1, words, counts, languageSeen, totals,
+            handle, language, triples, previous2, previous1, words, counts, languageSeen, totals, asserted,
         )
         val contextTotals = HashMap<List<String>, Long>()
         val links = (0 until written).mapNotNull { at ->
@@ -202,7 +209,7 @@ internal object PersonalLinks {
             val word = words[at] ?: return@mapNotNull null
             val context = if (triples) listOf(previous2[at] ?: return@mapNotNull null, before1) else listOf(before1)
             contextTotals[context] = totals[at]
-            LinkRow(language, context, word, counts[at], 0L, 0L, languageSeen[at])
+            LinkRow(language, context, word, counts[at], 0L, 0L, languageSeen[at], asserted = asserted[at])
         }
         val clock = links.firstOrNull { it.context == kept.context && it.word == kept.word }?.languageSeen ?: 0L
         return languageGone(links, contextTotals, clock, kept)

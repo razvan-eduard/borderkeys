@@ -210,7 +210,9 @@ internal object PhraseMigration {
             )
         }
         links = links - links.groupBy { listOf(it.language) + it.context }.flatMap { (key, inContext) ->
-            PhraseBudget.overflow(inContext, null, contexts.getValue(key).seen, limits, { it.count }, { it.contextSeen })
+            PhraseBudget.overflow(
+                inContext, null, contexts.getValue(key).seen, limits, { it.count }, { it.contextSeen }, { false },
+            )
         }.toSet()
         links = links - links.groupBy { it.language }.flatMap { (language, inLanguage) ->
             languageGone(

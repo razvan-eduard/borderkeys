@@ -13,6 +13,7 @@ import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserPairContext
 import com.borderkeys.data.entity.UserPhraseClock
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -100,6 +101,38 @@ class BackupRepositoryTest {
         every { other.database.userWordDao() } returns otherWords
         other.backups.apply(older, DICTIONARY)
         coVerify(exactly = 0) { otherWords.raiseAdded(any(), any()) }
+    }
+
+    @Test
+    fun `a link's chosen and added marks travel through a backup and lift the restored link's, and an old file lifts none`() = runTest {
+        val source = source()
+        source.pairs.upsert(
+            UserBigram("ro", "o", "cana", LINK_USES, USED_AT, contextSeen = SEEN, languageSeen = CLOCK, asserted = 1, added = 1),
+        )
+        source.triples.upsert(
+            UserTrigram("ro", "a", "o", "cana", LINK_USES, USED_AT, contextSeen = SEEN, languageSeen = CLOCK, asserted = 1, added = 1),
+        )
+        val payload = throughFile(source.backups.gather(DICTIONARY))
+        assertEquals(1 to 1, payload.bigrams.single().let { it.asserted to it.added })
+        assertEquals(1 to 1, payload.trigrams.single().let { it.asserted to it.added })
+
+        val target = Device()
+        target.backups.apply(payload, DICTIONARY)
+        val restored = target.pairs.rows.getValue(listOf("ro", "o", "cana"))
+        assertEquals(1 to 1, restored.asserted to restored.added)
+        val restoredTriple = target.triples.rows.getValue(listOf("ro", "a", "o", "cana"))
+        assertEquals(1 to 1, restoredTriple.asserted to restoredTriple.added)
+
+        val older = payload.copy(
+            bigrams = payload.bigrams.map { BackupBigram(it.previous, it.word, it.count, it.language) },
+            trigrams = payload.trigrams.map { BackupTrigram(it.previous2, it.previous1, it.word, it.count, it.language) },
+        )
+        val other = Device()
+        other.backups.apply(older, DICTIONARY)
+        val plain = other.pairs.rows.getValue(listOf("ro", "o", "cana"))
+        assertEquals(0 to 0, plain.asserted to plain.added)
+        val plainTriple = other.triples.rows.getValue(listOf("ro", "a", "o", "cana"))
+        assertEquals(0 to 0, plainTriple.asserted to plainTriple.added)
     }
 
     @Test

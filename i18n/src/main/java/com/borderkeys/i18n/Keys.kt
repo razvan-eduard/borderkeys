@@ -530,6 +530,7 @@ object Keys {
     const val DICTIONARY_ADD_BLOCKED_TEXT = "dictionary_add_blocked_text"
     const val DICTIONARY_ADD_BLOCKED_TITLE = "dictionary_add_blocked_title"
     const val DICTIONARY_ADD_TO_DICTIONARY = "dictionary_add_to_dictionary"
+    const val DICTIONARY_ADDED_BY_HAND = "dictionary_added_by_hand"
     const val DICTIONARY_ADDED_BY_HAND_ON = "dictionary_added_by_hand_on"
     const val DICTIONARY_ADVANCED_NOTE = "dictionary_advanced_note"
     const val DICTIONARY_BLOCK = "dictionary_block"

@@ -115,6 +115,12 @@ constexpr float kUserChainPreference = 1.5f;
 /** Observations at which the preference above reaches half its ceiling. */
 constexpr float kUserChainHalfLife = 3.0f;
 
+/** The preference a link used [count] times earns: half of kUserChainPreference at the half-life. */
+float chainPreference(uint32_t count) {
+    const float uses = static_cast<float>(count);
+    return kUserChainPreference * (uses / (uses + kUserChainHalfLife));
+}
+
 constexpr int kMaxEndpoints = 96;
 
 // How many trie nodes a request may visit, by prefix length.
@@ -1238,13 +1244,13 @@ void Engine::loadUserTrigrams(const char* const* languages, const size_t* langua
                               const char* const* previous1, const size_t* previous1Lengths,
                               const char* const* next, const size_t* nextLengths,
                               const int32_t* counts, int count, const uint64_t* contextSeen,
-                              const uint64_t* languageSeen) {
+                              const uint64_t* languageSeen, const int32_t* asserted) {
     if (!created_) {
         return;
     }
     userModel_.bulkLoadTrigrams(languages, languageLengths, previous2, previous2Lengths, previous1,
                                 previous1Lengths, next, nextLengths, counts, count, contextSeen,
-                                languageSeen);
+                                languageSeen, asserted);
 }
 
 void Engine::setLearnAfterUses(int uses) {
@@ -1784,9 +1790,10 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         userModel_.successors(personal_.store(), personal_.context1(), first, kMaxFirst);
 
     for (int i = 0; i < firstCount && phraseCount_ < kMaxPhrases; ++i) {
-        // Each link has to be learned as a phrase's link and hold its share of its context.
-        if (!personal_.phraseLinkLearned(first[i].count) ||
-            PersonalScore::share(first[i].count, firstTotal) < PersonalScore::kPhraseMinShare) {
+        // Each link has to be learned as a phrase's link and hold its share of its context, or
+        // be chosen on purpose.
+        if (!personal_.phraseLink(first[i].count, first[i].asserted,
+                                  PersonalScore::share(first[i].count, firstTotal))) {
             continue;
         }
 
@@ -1797,8 +1804,8 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         }
         UserModel::Successor second[1];
         if (userModel_.successors(personal_.store(), middle, second, 1) != 1 ||
-            !personal_.phraseLinkLearned(second[0].count) ||
-            PersonalScore::share(second[0].count, secondTotal) < PersonalScore::kPhraseMinShare) {
+            !personal_.phraseLink(second[0].count, second[0].asserted,
+                                  PersonalScore::share(second[0].count, secondTotal))) {
             continue;
         }
 
@@ -1835,16 +1842,13 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
         phraseLength_[slot] = static_cast<int>(needed);
         ++phraseCount_;
 
-        // Scored as both links together, each share smoothed, plus the first link's preference.
-        const float firstShare = static_cast<float>(first[i].count) /
-                                 (static_cast<float>(firstTotal) + PersonalScore::kUserBigramPrior);
-        const float secondShare =
-            static_cast<float>(second[0].count) /
-            (static_cast<float>(secondTotal) + PersonalScore::kUserBigramPrior);
-        const float score = std::log(firstShare) + std::log(secondShare) +
-                            kUserChainPreference *
-                                (static_cast<float>(first[i].count) /
-                                 (static_cast<float>(first[i].count) + kUserChainHalfLife));
+        // Scored as its first link as the next word, plus its second link as the next word after
+        // the first.
+        const float score =
+            PersonalScore::linkLogShare(first[i].count, first[i].asserted, firstTotal) +
+            chainPreference(first[i].count) +
+            std::log(PersonalScore::smoothedShare(second[0].count, secondTotal)) +
+            chainPreference(second[0].count);
         offerCandidate(heap, Candidate{Candidate::kPhrasePack, slot, score}, target,
                        static_cast<uint32_t>(needed));
     }
@@ -1855,49 +1859,51 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
         return;
     }
 
-    // The triples after the last two words first, else the pairs after the last one.
+    // The triples after the last two words, then the pairs after the last one; a word both
+    // offer keeps its better score.
     constexpr int kMaxSuccessors = 8;
     UserModel::Successor successors[kMaxSuccessors];
-    int found = 0;
-    uint32_t total = 0u;
+    const auto offerLinks = [&](int found, uint32_t total) {
+        for (int i = 0; i < found; ++i) {
+            // A pair or triple is offered once learned, or chosen on purpose.
+            if (!personal_.linkLearned(successors[i].count, successors[i].asserted)) {
+                continue;
+            }
+            // The log of its smoothed share, or the chosen boost, plus the preference its uses
+            // earn.
+            const float score =
+                PersonalScore::linkLogShare(successors[i].count, successors[i].asserted, total) +
+                chainPreference(successors[i].count);
+            uint32_t textLength = 0;
+            const Candidate candidate{Candidate::kUserPack,
+                                      static_cast<int32_t>(successors[i].entryIndex), score};
+            const char* const text = candidateText(candidate, &textLength);
+            if (text == nullptr || textLength == 0) {
+                continue;
+            }
+            // The word itself has to be established, or a pack's own.
+            if (!personal_.established(successors[i].entryIndex) &&
+                !anyPackKnows(text, textLength)) {
+                continue;
+            }
+            offerCandidate(heap, candidate, text, textLength);
+        }
+    };
     if (personal_.context2() >= 0) {
-        total = userModel_.trigramTotal(personal_.store(), personal_.context2(),
-                                        personal_.context1());
-        if (total > 0u) {
-            found = userModel_.trigramSuccessors(personal_.store(), personal_.context2(),
-                                                 personal_.context1(), successors, kMaxSuccessors);
+        const uint32_t tripleTotal = userModel_.trigramTotal(
+            personal_.store(), personal_.context2(), personal_.context1());
+        if (tripleTotal > 0u) {
+            offerLinks(userModel_.trigramSuccessors(personal_.store(), personal_.context2(),
+                                                    personal_.context1(), successors,
+                                                    kMaxSuccessors),
+                       tripleTotal);
         }
     }
-    if (found == 0) {
-        total = userModel_.successorTotal(personal_.store(), personal_.context1());
-        if (total == 0u) {
-            return;
-        }
-        found = userModel_.successors(personal_.store(), personal_.context1(), successors,
-                                      kMaxSuccessors);
-    }
-    for (int i = 0; i < found; ++i) {
-        // A pair or triple is offered once learned.
-        if (!personal_.learned(successors[i].count)) {
-            continue;
-        }
-        // A smoothed conditional probability plus the preference.
-        const float count = static_cast<float>(successors[i].count);
-        const float share = count / (static_cast<float>(total) + PersonalScore::kUserBigramPrior);
-        const float confidence = count / (count + kUserChainHalfLife);
-        const float score = std::log(share) + kUserChainPreference * confidence;
-        uint32_t textLength = 0;
-        const Candidate candidate{Candidate::kUserPack,
-                                  static_cast<int32_t>(successors[i].entryIndex), score};
-        const char* const text = candidateText(candidate, &textLength);
-        if (text == nullptr || textLength == 0) {
-            continue;
-        }
-        // The word itself has to be established, or a pack's own.
-        if (!personal_.established(successors[i].entryIndex) && !anyPackKnows(text, textLength)) {
-            continue;
-        }
-        offerCandidate(heap, candidate, text, textLength);
+    const uint32_t pairTotal = userModel_.successorTotal(personal_.store(), personal_.context1());
+    if (pairTotal > 0u) {
+        offerLinks(userModel_.successors(personal_.store(), personal_.context1(), successors,
+                                         kMaxSuccessors),
+                   pairTotal);
     }
 }
 
@@ -2008,7 +2014,7 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
             continue;
         }
         // kUserOnlyLogProb plus the boost a dictionary word would get, plus its context bonus.
-        const float score = kUserOnlyLogProb + personal_.wordBoostForCount(completions[i].count) +
+        const float score = kUserOnlyLogProb + personal_.wordBoost(completions[i].entryIndex) +
                             personal_.contextBonus(completions[i].entryIndex);
         const Candidate candidate{Candidate::kUserPack,
                                   static_cast<int32_t>(completions[i].entryIndex), score};
@@ -2639,11 +2645,11 @@ Engine::Learned Engine::learn(const char* word, size_t wordLength, const char* p
 
 void Engine::loadUserWords(const char* const* words, const size_t* lengths,
                            const int32_t* counts, int count, const int32_t* deliberateCapitals,
-                           const int32_t* asserted) {
+                           const int32_t* asserted, const int32_t* added) {
     if (!created_) {
         return;
     }
-    userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals, asserted);
+    userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals, asserted, added);
     // Reserves the sentence-start context the pairs loaded next refer to.
     userModel_.reserve(kUserSentenceStart, kUserSentenceStartLength);
 }
@@ -2652,12 +2658,12 @@ void Engine::loadUserBigrams(const char* const* languages, const size_t* languag
                              const char* const* previous, const size_t* previousLengths,
                              const char* const* next, const size_t* nextLengths,
                              const int32_t* counts, int count, const uint64_t* contextSeen,
-                             const uint64_t* languageSeen) {
+                             const uint64_t* languageSeen, const int32_t* asserted) {
     if (!created_) {
         return;
     }
     userModel_.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
-                               nextLengths, counts, count, contextSeen, languageSeen);
+                               nextLengths, counts, count, contextSeen, languageSeen, asserted);
 }
 
 void Engine::loadUserPairTotals(const char* const* languages, const size_t* languageLengths,
@@ -2726,13 +2732,14 @@ bool Engine::userLinkAt(const char* language, size_t languageLength, bool triple
     if (index < 0 || index >= held) {
         return false;
     }
-    *out = StoredLink{-1, -1, -1, 0u, 0u, 0u};
+    *out = StoredLink{-1, -1, -1, 0u, 0u, 0u, 0u};
     if (triples) {
         userModel_.tripleAt(store, index, &out->previous2Index, &out->previous1Index,
-                            &out->nextIndex, &out->count, &out->languageSeen, &out->contextTotal);
+                            &out->nextIndex, &out->count, &out->languageSeen, &out->contextTotal,
+                            &out->asserted);
     } else {
         userModel_.pairAt(store, index, &out->previous1Index, &out->nextIndex, &out->count,
-                          &out->languageSeen, &out->contextTotal);
+                          &out->languageSeen, &out->contextTotal, &out->asserted);
     }
     return true;
 }

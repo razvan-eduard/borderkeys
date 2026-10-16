@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "Door het toe te voegen vervalt de blokkering en biedt het toetsenbord het weer aan.",
   "dictionary_add_blocked_title": "Dit woord is geblokkeerd",
   "dictionary_add_to_dictionary": "Aan woordenboek toevoegen",
+  "dictionary_added_by_hand": "handmatig toegevoegd",
   "dictionary_added_by_hand_on": "handmatig toegevoegd · %s",
   "dictionary_advanced_note": "Hoe snel woorden geleerd worden, hoe snel ze vervagen en hoe vaak er wordt opgeschoond",
   "dictionary_block": "Blokkeren",

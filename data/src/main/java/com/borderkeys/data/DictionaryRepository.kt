@@ -23,6 +23,7 @@ import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.entity.UserWord
+import com.borderkeys.language.LanguageTags
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,6 +59,9 @@ class DictionaryRepository internal constructor(
 
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val wordCount: Flow<Int> = userWords.observeCount()
+
+    /** How many words the *Words kept* limit can take: those not added by hand. */
+    val cappedWordCount: Flow<Int> = userWords.observeCountNotAdded()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
 
     /** Every learned pair and triple, most used first. */
@@ -98,8 +102,9 @@ class DictionaryRepository internal constructor(
     suspend fun blockedWordSet(): Set<String> = blockedWords.allWords().toSet()
 
     /**
-     * The pairs the native engine loads at service start: each language's [MAX_BIGRAMS_IN_MEMORY]
-     * most used, in the order each was first recorded.
+     * The pairs the native engine loads at service start: each language's links chosen on
+     * purpose, then its [MAX_BIGRAMS_IN_MEMORY] most used others, in the order each was first
+     * recorded.
      */
     suspend fun pairsToLoad(): List<UserBigram> = loadedPairs(userBigrams.all())
 
@@ -116,12 +121,12 @@ class DictionaryRepository internal constructor(
     suspend fun phraseClocks(): List<UserPhraseClock> = userPhraseClocks.all()
 
     /**
-     * What the keyboard loads into the engine's personal model: the [wordLimit] words used most
-     * ([topWords]), [pairsToLoad], [pairContexts], [triplesToLoad], [tripleContexts] and
-     * [phraseClocks].
+     * What the keyboard loads into the engine's personal model: every word added by hand and
+     * then the [wordLimit] others used most, [pairsToLoad], [pairContexts], [triplesToLoad],
+     * [tripleContexts] and [phraseClocks].
      */
     suspend fun personalRows(wordLimit: Int): PersonalRows = PersonalRows(
-        words = topWords(wordLimit),
+        words = userWords.addedWords() + userWords.topWordsNotAdded(wordLimit),
         pairs = pairsToLoad(),
         pairContexts = pairContexts(),
         triples = triplesToLoad(),
@@ -187,7 +192,7 @@ class DictionaryRepository internal constructor(
      * Halves the stored count of every word, pair and triple, and the total of every context,
      * nobody has written in a [halfLifeMillis] or longer, then deletes the words written once and
      * unused for [unconfirmedLifeMillis] (none when it is null) and those past the [keep] used
-     * most, with the phrases of those no case of which is left.
+     * most among the words not added by hand, with the phrases of those no case of which is left.
      */
     suspend fun decayStaleEntries(
         keep: Int,
@@ -389,7 +394,7 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
-    /** What [add] did. */
+    /** What [add] or [addPhrase] did. */
     enum class Added { ADDED, BLOCKED }
 
     /**
@@ -398,20 +403,37 @@ class DictionaryRepository internal constructor(
      * A word blocked in any case is unblocked first when [unblock], else left as it is with
      * [Added.BLOCKED] returned and nothing written.
      */
-    suspend fun add(word: String, locale: String, now: Long, unblock: Boolean): Added {
+    suspend fun add(word: String, locale: String, now: Long, unblock: Boolean): Added =
+        addWords(listOf(word), locale, now, unblock, phrase = false)
+
+    /**
+     * Adds [words], two or three, as a phrase by hand: each word as [add] adds one, and the pair
+     * of two, or the two pairs and the triple of three, under [locale]'s primary language subtag
+     * ([PhraseRecorder.addPhrase]); a blocked word among them as [add] handles one.
+     */
+    suspend fun addPhrase(words: List<String>, locale: String, now: Long, unblock: Boolean): Added =
+        addWords(words, locale, now, unblock, phrase = true)
+
+    private suspend fun addWords(words: List<String>, locale: String, now: Long, unblock: Boolean, phrase: Boolean): Added {
         val added = database.withTransaction {
-            val blocked = casesOf(word, blockedWords.allWords())
+            val stored = blockedWords.allWords()
+            val blocked = words.flatMap { casesOf(it, stored) }.distinct()
             if (blocked.isNotEmpty()) {
                 if (!unblock) {
                     return@withTransaction Added.BLOCKED
                 }
                 blocked.forEach { blockedWords.delete(it) }
             }
-            userWords.increment(
-                word, locale, delta = 1, lastUsedAt = now,
-                deliberateCapitalDelta = if (WordShape.startsWithCapital(word)) 1 else 0,
-                assertedDelta = 1, addedDelta = 1,
-            )
+            for (word in words) {
+                userWords.increment(
+                    word, locale, delta = 1, lastUsedAt = now,
+                    deliberateCapitalDelta = if (WordShape.startsWithCapital(word)) 1 else 0,
+                    assertedDelta = 1, addedDelta = 1,
+                )
+            }
+            if (phrase) {
+                phraseRecorder.addPhrase(LanguageTags.primary(locale), words, now)
+            }
             Added.ADDED
         }
         if (added == Added.ADDED) {
@@ -421,7 +443,13 @@ class DictionaryRepository internal constructor(
     }
 
     /** Whether [word] is blocked, in any case. */
-    suspend fun isBlocked(word: String): Boolean = casesOf(word, blockedWords.allWords()).isNotEmpty()
+    suspend fun isBlocked(word: String): Boolean = isBlocked(listOf(word))
+
+    /** Whether any of [words] is blocked, in any case. */
+    suspend fun isBlocked(words: List<String>): Boolean {
+        val stored = blockedWords.allWords()
+        return words.any { casesOf(it, stored).isNotEmpty() }
+    }
 
     companion object {
         /** The pairs of one language the native engine holds; matches `UserModel::kMaxBigrams`. */
@@ -430,25 +458,30 @@ class DictionaryRepository internal constructor(
         /** [MAX_BIGRAMS_IN_MEMORY], for the triples; matches `UserModel::kMaxTrigrams`. */
         const val MAX_TRIGRAMS_IN_MEMORY = PhraseBudget.LANGUAGE_CAP
 
-        /** Of [pairs], in their order, the ones [pairsToLoad] gives. */
+        /** Of [pairs], the ones [pairsToLoad] gives, the chosen first and the rest in their order. */
         fun loadedPairs(pairs: List<UserBigram>): List<UserBigram> =
-            mostUsedPerLanguage(pairs, MAX_BIGRAMS_IN_MEMORY, UserBigram::language, UserBigram::count)
+            mostUsedPerLanguage(pairs, MAX_BIGRAMS_IN_MEMORY, UserBigram::language, UserBigram::count) { it.asserted > 0 }
 
-        /** Of [triples], in their order, the ones [triplesToLoad] gives. */
+        /** Of [triples], the ones [triplesToLoad] gives, the chosen first and the rest in their order. */
         fun loadedTriples(triples: List<UserTrigram>): List<UserTrigram> =
-            mostUsedPerLanguage(triples, MAX_TRIGRAMS_IN_MEMORY, UserTrigram::language, UserTrigram::count)
+            mostUsedPerLanguage(triples, MAX_TRIGRAMS_IN_MEMORY, UserTrigram::language, UserTrigram::count) { it.asserted > 0 }
 
-        /** Of [links], in their order, each language's [most] with the highest counts. */
+        /**
+         * Of [links], every one [assertedOf] answers true for, first, then each language's [most]
+         * others with the highest counts, in the links' order.
+         */
         private fun <T> mostUsedPerLanguage(
             links: List<T>,
             most: Int,
             languageOf: (T) -> String,
             countOf: (T) -> Int,
+            assertedOf: (T) -> Boolean,
         ): List<T> {
-            val kept = links.groupBy(languageOf).values.flatMap { inLanguage ->
+            val (chosen, others) = links.partition(assertedOf)
+            val kept = others.groupBy(languageOf).values.flatMap { inLanguage ->
                 if (inLanguage.size <= most) inLanguage else inLanguage.sortedByDescending(countOf).take(most)
             }.toHashSet()
-            return links.filter { it in kept }
+            return chosen + others.filter { it in kept }
         }
     }
 }

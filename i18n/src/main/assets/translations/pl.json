@@ -539,6 +539,7 @@
   "dictionary_add_blocked_text": "Dodanie zdejmuje blokadę, a klawiatura znów je podpowiada.",
   "dictionary_add_blocked_title": "To słowo jest zablokowane",
   "dictionary_add_to_dictionary": "Dodaj do słownika",
+  "dictionary_added_by_hand": "dodana ręcznie",
   "dictionary_added_by_hand_on": "dodane ręcznie · %s",
   "dictionary_advanced_note": "Jak szybko słowa są zapamiętywane, jak szybko blakną i jak często słownik jest porządkowany",
   "dictionary_block": "Zablokuj",

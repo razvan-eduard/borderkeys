@@ -59,10 +59,16 @@ class MemoryPairs : UserBigramDao {
     override suspend fun inContext(language: String, previousWord: String) = table.inContext(listOf(language, previousWord))
     override suspend fun inLanguage(language: String) = table.rows.values.filter { it.language == language }
     override suspend fun countIn(language: String) = table.countIn(language)
-    override suspend fun usedAtMost(uses: Int) = table.rows.values.filter { it.count <= uses }
+    override suspend fun usedAtMost(uses: Int) = table.rows.values.filter { it.count <= uses && it.asserted == 0 }
     override suspend fun involving(word: String) =
         table.rows.values.filter { it.previousWord == word || it.word == word }
     override suspend fun upsert(pair: UserBigram) = table.put(pair)
+    override suspend fun raiseMarks(language: String, previousWord: String, word: String, asserted: Int, added: Int) {
+        val held = table.rows.values.firstOrNull {
+            it.language == language && it.previousWord == previousWord && it.word == word
+        } ?: return
+        table.put(held.copy(asserted = maxOf(held.asserted, asserted), added = maxOf(held.added, added)))
+    }
     override suspend fun delete(pairs: List<UserBigram>) = pairs.forEach(table::remove)
     override suspend fun decayStale(cutoff: Long, now: Long) {
         table.rows.values.filter { it.lastUsedAt < cutoff && it.count > PersonalWordDecay.STALE_FLOOR }
@@ -114,9 +120,23 @@ class MemoryTriples : UserTrigramDao {
         table.inContext(listOf(language, previousWord2, previousWord1))
     override suspend fun inLanguage(language: String) = table.rows.values.filter { it.language == language }
     override suspend fun countIn(language: String) = table.countIn(language)
-    override suspend fun usedAtMost(uses: Int) = table.rows.values.filter { it.count <= uses }
+    override suspend fun usedAtMost(uses: Int) = table.rows.values.filter { it.count <= uses && it.asserted == 0 }
     override suspend fun involving(word: String) =
         table.rows.values.filter { it.previousWord2 == word || it.previousWord1 == word || it.word == word }
+    override suspend fun raiseMarks(
+        language: String,
+        previousWord2: String,
+        previousWord1: String,
+        word: String,
+        asserted: Int,
+        added: Int,
+    ) {
+        val held = table.rows.values.firstOrNull {
+            it.language == language && it.previousWord2 == previousWord2 && it.previousWord1 == previousWord1 &&
+                it.word == word
+        } ?: return
+        table.put(held.copy(asserted = maxOf(held.asserted, asserted), added = maxOf(held.added, added)))
+    }
     override suspend fun containingPair(language: String, first: String, second: String) =
         table.rows.values.filter {
             it.language == language &&

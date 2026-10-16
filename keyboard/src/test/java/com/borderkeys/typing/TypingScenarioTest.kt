@@ -7,6 +7,8 @@ import android.text.InputType
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
@@ -19,6 +21,8 @@ import com.borderkeys.ime.ShiftState
 import com.borderkeys.language.LanguageTags
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.LearningBuffer
+import com.borderkeys.predict.PersonalModelLoad
+import com.borderkeys.predict.PersonalSnapshot
 import com.borderkeys.predict.Pipeline
 import com.borderkeys.predict.RefusedWords
 import org.junit.After
@@ -638,6 +642,55 @@ class TypingScenarioTest {
         rig.startField()
         rig.type("we ")
         assertTrue("a phrase at twice learn-after", rig.host.strip.any { ' ' in it.text })
+    }
+
+    @Test
+    fun `a phrase added by hand is offered at once, and one typed once is not`() {
+        learningOn(phraseSuggestions = true)
+        rig.engine.loadPersonal(phraseModel(asserted = 1))
+        rig.settle()
+        rig.type("we ")
+        assertTrue(rig.host.strip.map { it.text }.toString(), rig.host.strip.any { it.text == "go home" })
+        rig.startField()
+        rig.engine.loadPersonal(phraseModel(asserted = 0))
+        rig.settle()
+        rig.type("we ")
+        assertFalse("a phrase typed once is not offered", rig.host.strip.any { ' ' in it.text })
+    }
+
+    @Test
+    fun `a word added by hand at one use is offered before a word learned by use at five`() {
+        learningOn(capitaliseNames = false)
+        val now = rig.clock.now
+        rig.engine.loadPersonal(
+            PersonalSnapshot.EMPTY.copy(
+                words = listOf(
+                    UserWord("nadia", rig.host.subtype, 1, now, asserted = 1, added = 1),
+                    UserWord("nadir", rig.host.subtype, 5, now),
+                ),
+            ),
+        )
+        rig.settle()
+        rig.type("nad")
+        val texts = rig.host.strip.map { it.text }
+        val addedAt = texts.indexOf("nadia")
+        assertTrue(texts.toString(), addedAt >= 0 && addedAt < texts.indexOf("nadir"))
+    }
+
+    /** The links of "we go home" at count 1, each chosen on purpose [asserted] times, under the rig's language. */
+    private fun phraseModel(asserted: Int): PersonalModelLoad {
+        val language = LanguageTags.primary(rig.host.subtype)
+        val now = rig.clock.now
+        return PersonalSnapshot.EMPTY.copy(
+            pairs = listOf(
+                UserBigram(language, "we", "go", 1, now, 1L, 1L, asserted = asserted),
+                UserBigram(language, "go", "home", 1, now, 1L, 1L, asserted = asserted),
+            ),
+            pairContexts = listOf(
+                UserPairContext(language, "we", 1L, now, 1L),
+                UserPairContext(language, "go", 1L, now, 1L),
+            ),
+        )
     }
 
     @Test

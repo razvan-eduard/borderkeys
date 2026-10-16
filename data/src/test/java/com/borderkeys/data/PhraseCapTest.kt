@@ -27,6 +27,14 @@ class PhraseCapTest {
     }
 
     @Test
+    fun `the load keeps a language's links chosen on purpose beyond its most used, listed first`() {
+        val most = DictionaryRepository.MAX_BIGRAMS_IN_MEMORY
+        val english = (1..most).map { UserBigram("en", "w$it", "x", 2, 1L, 1L, 1L) }
+        val chosen = UserBigram("en", "see", "you", 1, 1L, 1L, 1L, asserted = 1)
+        assertEquals(listOf(chosen) + english, DictionaryRepository.loadedPairs(english + chosen))
+    }
+
+    @Test
     fun `the load keeps each language's most used triples, in the order they were first recorded`() {
         val most = DictionaryRepository.MAX_TRIGRAMS_IN_MEMORY
         val more = 2

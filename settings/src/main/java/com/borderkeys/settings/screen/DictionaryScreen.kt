@@ -71,7 +71,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     var wordLimitDraft by remember { mutableStateOf<Int?>(null) }
     var confirmingWordLimit by remember { mutableStateOf<Int?>(null) }
 
-    val wordCount by repository.wordCount.collectAsStateWithLifecycle(initialValue = 0)
+    val cappedWordCount by repository.cappedWordCount.collectAsStateWithLifecycle(initialValue = 0)
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
     val savedWords by repository.words.collectAsStateWithLifecycle(initialValue = emptyList())
     val savedPhrases by repository.phrases.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -328,7 +328,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     when {
                         chosen == null -> Unit
                         chosen == preferences.learnedWordLimit -> wordLimitDraft = null
-                        chosen < wordCount -> confirmingWordLimit = chosen
+                        chosen < cappedWordCount -> confirmingWordLimit = chosen
                         else -> update { it.copy(learnedWordLimit = chosen) }
                     }
                 },
@@ -370,7 +370,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     confirmingWordLimit?.let { limit ->
         ConfirmDialog(
             title = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_TITLE],
-            text = strings.counted(Keys.DICTIONARY_WORDS_KEPT_TRIM_TEXT, wordCount - limit),
+            text = strings.counted(Keys.DICTIONARY_WORDS_KEPT_TRIM_TEXT, cappedWordCount - limit),
             confirmLabel = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_CONFIRM],
             onDismiss = {
                 confirmingWordLimit = null

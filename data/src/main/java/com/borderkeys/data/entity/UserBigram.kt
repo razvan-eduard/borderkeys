@@ -34,6 +34,10 @@ data class UserBigram(
     val contextSeen: Long,
     /** The language's pair clock when this pair was last seen. */
     val languageSeen: Long,
+    /** How many times this pair was chosen on purpose: added by hand. Never decremented. */
+    val asserted: Int = 0,
+    /** How many times this pair was added by hand on the Learned phrases screen. Never decremented. */
+    val added: Int = 0,
 ) {
 
     companion object {

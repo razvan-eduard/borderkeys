@@ -321,12 +321,12 @@ internal class Pipeline private constructor(
      */
     fun heldAfter(language: String, previous: String, before: String? = null): Set<String> {
         val held = NativePredictor.nativeContextLinks(
-            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0),
+            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0), IntArray(0),
             LongArray(NativePredictor.CONTEXT_SLOTS),
         )
         val words = arrayOfNulls<String>(held)
         NativePredictor.nativeContextLinks(
-            handle, language, before, previous, words, IntArray(held), LongArray(held),
+            handle, language, before, previous, words, IntArray(held), LongArray(held), IntArray(held),
             LongArray(NativePredictor.CONTEXT_SLOTS),
         )
         return words.filterNotNull().toSet()
@@ -339,7 +339,7 @@ internal class Pipeline private constructor(
     fun contextCounts(language: String, previous: String, before: String? = null): List<Long> {
         val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
         NativePredictor.nativeContextLinks(
-            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0), counted,
+            handle, language, before, previous, emptyArray(), IntArray(0), LongArray(0), IntArray(0), counted,
         )
         return counted.toList()
     }

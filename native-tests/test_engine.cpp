@@ -221,11 +221,13 @@ struct LoadedEngine {
     }
 
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
-    int rankOf(const char* composing, const char* expected, const char* previous = nullptr) {
+    int rankOf(const char* composing, const char* expected, const char* previous = nullptr,
+               const char* previous2 = nullptr) {
         Candidate out[Engine::kMaxCandidates];
         const int found = engine.suggest(composing, std::strlen(composing), previous,
-                                         previous != nullptr ? std::strlen(previous) : 0, nullptr,
-                                         0, out, Engine::kMaxCandidates);
+                                         previous != nullptr ? std::strlen(previous) : 0,
+                                         previous2, previous2 != nullptr ? std::strlen(previous2) : 0,
+                                         out, Engine::kMaxCandidates);
         for (int i = 0; i < found; ++i) {
             uint32_t length = 0;
             const char* const text = engine.candidateText(out[i], &length);
@@ -1774,6 +1776,194 @@ void runEngineTests() {
         check(!alone.pair && !alone.triple, "nor a word with none before it");
     }
 
+    section("a link chosen on purpose is offered whatever its count and share, and keeps its mark");
+    {
+        // "we" has twenty followers written six times each and one, "go", written once but
+        // chosen on purpose; "home" follows "go" the same way.
+        constexpr int kFollowers = 20;
+        constexpr int kPairs = kFollowers + 2;
+        constexpr int32_t kUses = 6;
+        char followers[kFollowers][8] = {};
+        const char* words[kFollowers + 3] = {"we", "go", "home"};
+        size_t wordLengths[kFollowers + 3] = {2, 2, 4};
+        int32_t wordCounts[kFollowers + 3] = {};
+        for (int i = 0; i < kFollowers; ++i) {
+            std::snprintf(followers[i], sizeof(followers[i]), "zq%02d", i);
+            words[3 + i] = followers[i];
+            wordLengths[3 + i] = std::strlen(followers[i]);
+        }
+        for (int i = 0; i < kFollowers + 3; ++i) {
+            wordCounts[i] = kUses;
+        }
+        const char* languages[kPairs];
+        size_t languageLengths[kPairs];
+        const char* previous[kPairs];
+        size_t previousLengths[kPairs];
+        const char* next[kPairs];
+        size_t nextLengths[kPairs];
+        int32_t pairCounts[kPairs];
+        int32_t chosen[kPairs] = {};
+        for (int i = 0; i < kPairs; ++i) {
+            languages[i] = "ro";
+            languageLengths[i] = 2;
+            previous[i] = i == kPairs - 1 ? "go" : "we";
+            previousLengths[i] = 2;
+            next[i] = i == 0 ? "go" : i == kPairs - 1 ? "home" : followers[i - 1];
+            nextLengths[i] = std::strlen(next[i]);
+            pairCounts[i] = i == 0 || i == kPairs - 1 ? 1 : kUses;
+        }
+        chosen[0] = 1;
+        chosen[kPairs - 1] = 1;
+
+        const auto load = [&](Engine& engine, const int32_t* marks) {
+            engine.setPhraseSuggestions(true);
+            engine.loadUserWords(words, wordLengths, wordCounts, kFollowers + 3);
+            engine.loadUserBigrams(languages, languageLengths, previous, previousLengths, next,
+                                   nextLengths, pairCounts, kPairs, nullptr, nullptr, marks);
+        };
+        LoadedEngine plain;
+        check(plain.open(), "the engine loads");
+        load(plain.engine, nullptr);
+        check(plain.rankOf("", followers[0], "we") >= 0, "an established follower is the next word");
+        check(plain.rankOf("", "go", "we") < 0,
+              "a pair written once among twenty established ones is not the next word");
+        check(plain.rankOf("", "go home", "we") < 0, "nor a phrase");
+
+        LoadedEngine marked;
+        check(marked.open(), "the engine loads");
+        load(marked.engine, chosen);
+        const int chosenAt = marked.rankOf("", "go", "we");
+        check(chosenAt >= 0 && chosenAt < marked.rankOf("", followers[0], "we"),
+              "chosen on purpose, it is offered as the next word, above every established follower");
+        check(marked.rankOf("", "go home", "we") >= 0, "and as a phrase, with the chosen link after it");
+
+        UserModel::ContextLink links[kPairs] = {};
+        UserModel::ContextCount context{};
+        const int held = marked.engine.userContextLinks("ro", 2, nullptr, 0, "we", 2, links, kPairs,
+                                                        &context);
+        int chosenLinks = 0;
+        for (int i = 0; i < held && i < kPairs; ++i) {
+            chosenLinks += links[i].asserted > 0u ? 1 : 0;
+        }
+        check(held == kFollowers + 1 && chosenLinks == 1, "the context read carries the mark");
+        int storedChosen = 0;
+        Engine::StoredLink stored{};
+        for (int i = 0; marked.engine.userLinkAt("ro", 2, false, i, &stored); ++i) {
+            storedChosen += stored.asserted > 0u ? 1 : 0;
+        }
+        check(storedChosen == 2, "and so does the store read");
+
+        marked.engine.learn("go", 2, "we", 2, nullptr, 0, false, false, "ro", 2);
+        const int again = marked.engine.userContextLinks("ro", 2, nullptr, 0, "we", 2, links, kPairs,
+                                                         &context);
+        bool keptMark = false;
+        for (int i = 0; i < again && i < kPairs; ++i) {
+            keptMark = keptMark || (links[i].asserted > 0u && links[i].count == 2u);
+        }
+        check(keptMark, "a learn of the chosen pair raises its count and keeps the mark");
+
+        // "we" followed by the pack word "time" a hundred times, and by "go" once, chosen; "home"
+        // after "go" once, chosen, then six times in six.
+        const char* strongWords[4] = {"we", "go", "home", "time"};
+        const size_t strongLengths[4] = {2, 2, 4, 4};
+        const int32_t strongCounts[4] = {kUses, kUses, kUses, 100};
+        const char* strongLanguages[3] = {"ro", "ro", "ro"};
+        const size_t strongLanguageLengths[3] = {2, 2, 2};
+        const char* strongPrevious[3] = {"we", "go", "we"};
+        const size_t strongPreviousLengths[3] = {2, 2, 2};
+        const char* strongNext[3] = {"go", "home", "time"};
+        const size_t strongNextLengths[3] = {2, 4, 4};
+        const int32_t strongChosen[3] = {1, 1, 0};
+        const auto loadStrong = [&](Engine& engine, int32_t homeUses) {
+            const int32_t strongPairs[3] = {1, homeUses, 100};
+            engine.setPhraseSuggestions(true);
+            engine.loadUserWords(strongWords, strongLengths, strongCounts, 4);
+            engine.loadUserBigrams(strongLanguages, strongLanguageLengths, strongPrevious,
+                                   strongPreviousLengths, strongNext, strongNextLengths,
+                                   strongPairs, 3, nullptr, nullptr, strongChosen);
+        };
+        LoadedEngine strong;
+        check(strong.open(), "the engine loads");
+        loadStrong(strong.engine, 1);
+        const int chosenOnce = strong.rankOf("", "go", "we");
+        check(chosenOnce >= 0 && chosenOnce < strong.rankOf("", "time", "we"),
+              "chosen at one use, it ranks above a pack word written a hundred times after the "
+              "same context");
+        const int chipOnce = strong.rankOf("", "go home", "we");
+        check(chipOnce > chosenOnce && chipOnce < strong.rankOf("", "time", "we"),
+              "its chip, both links chosen at one use, sits under it and above that word");
+        LoadedEngine climbed;
+        check(climbed.open(), "the engine loads");
+        loadStrong(climbed.engine, kUses);
+        const int chipClimbed = climbed.rankOf("", "go home", "we");
+        check(chipClimbed >= 0 && chipClimbed < climbed.rankOf("", "go", "we"),
+              "and above it once its second word follows the first six times in six");
+
+        // "nadia" added by hand and written once; "nadir" written five times.
+        const char* addedWords[2] = {"nadia", "nadir"};
+        const size_t addedLengths[2] = {5, 5};
+        const int32_t addedCounts[2] = {1, 5};
+        const int32_t addedChosen[2] = {1, 0};
+        const int32_t addedByHand[2] = {1, 0};
+        LoadedEngine added;
+        check(added.open(), "the engine loads");
+        added.engine.loadUserWords(addedWords, addedLengths, addedCounts, 2, nullptr, addedChosen,
+                                   addedByHand);
+        const int addedAt = added.rankOf("nad", "nadia");
+        check(addedAt >= 0 && addedAt < added.rankOf("nad", "nadir"),
+              "a word added by hand at one use completes before a word learned by use at five");
+
+        // After "go": "home" chosen at one use, "hope" written six times; "ho" typed.
+        const char* afterGoWords[3] = {"go", "home", "hope"};
+        const size_t afterGoLengths[3] = {2, 4, 4};
+        const int32_t afterGoCounts[3] = {kUses, kUses, kUses};
+        const char* afterGoLanguages[2] = {"ro", "ro"};
+        const size_t afterGoLanguageLengths[2] = {2, 2};
+        const char* afterGoPrevious[2] = {"go", "go"};
+        const size_t afterGoPreviousLengths[2] = {2, 2};
+        const char* afterGoNext[2] = {"home", "hope"};
+        const size_t afterGoNextLengths[2] = {4, 4};
+        const int32_t afterGoPairs[2] = {1, kUses};
+        const int32_t afterGoChosen[2] = {1, 0};
+        LoadedEngine afterGo;
+        check(afterGo.open(), "the engine loads");
+        afterGo.engine.loadUserWords(afterGoWords, afterGoLengths, afterGoCounts, 3);
+        afterGo.engine.loadUserBigrams(afterGoLanguages, afterGoLanguageLengths, afterGoPrevious,
+                                       afterGoPreviousLengths, afterGoNext, afterGoNextLengths,
+                                       afterGoPairs, 2, nullptr, nullptr, afterGoChosen);
+        const int homeAt = afterGo.rankOf("ho", "home", "go");
+        check(homeAt >= 0 && homeAt < afterGo.rankOf("ho", "hope", "go"),
+              "with a prefix typed after the context, a word chosen there at one use ranks above "
+              "one written six times after it");
+
+        // "I see that" written three times; "see → you" chosen at one use; after "I see".
+        LoadedEngine twoWords;
+        check(twoWords.open(), "the engine loads");
+        const char* seeWords[4] = {"I", "see", "that", "you"};
+        const size_t seeLengths[4] = {1, 3, 4, 3};
+        const int32_t seeCounts[4] = {kUses, kUses, kUses, kUses};
+        const char* seeLanguages[1] = {"ro"};
+        const size_t seeLanguageLengths[1] = {2};
+        const char* seePrevious[1] = {"see"};
+        const size_t seePreviousLengths[1] = {3};
+        const char* seeNext[1] = {"you"};
+        const size_t seeNextLengths[1] = {3};
+        const int32_t seePairs[1] = {1};
+        const int32_t seeChosen[1] = {1};
+        twoWords.engine.loadUserWords(seeWords, seeLengths, seeCounts, 4);
+        twoWords.engine.loadUserBigrams(seeLanguages, seeLanguageLengths, seePrevious,
+                                        seePreviousLengths, seeNext, seeNextLengths, seePairs, 1,
+                                        nullptr, nullptr, seeChosen);
+        for (int i = 0; i < 3; ++i) {
+            twoWords.engine.learn("that", 4, "see", 3, "I", 1);
+        }
+        const int youAt = twoWords.rankOf("", "you", "see", "I");
+        const int thatAt = twoWords.rankOf("", "that", "see", "I");
+        check(thatAt >= 0, "after two words, a triple learned after them is offered");
+        check(youAt >= 0 && youAt < thatAt,
+              "and a pair chosen on purpose after the last one is offered beside it, above it");
+    }
+
     section("the engine reads a context's links and a store's links by their words");
     {
         Engine unopened;
@@ -2355,6 +2545,32 @@ void runEngineTests() {
         check(personal.ceiling() == PersonalScore::kMaxUserBoost,
               "a context with nothing learned leaves the ceiling at the word boost's cap");
 
+        // After "key": "theme" chosen on purpose at one use, "there" written four times.
+        UserModel marked;
+        const int32_t markedStore = marked.storeFor("ro", 2);
+        const int32_t markedKey = marked.reserve("key", 3);
+        const int32_t markedTheme = marked.reserve("theme", 5);
+        const int32_t markedThere = marked.reserve("there", 5);
+        const char* languages[2] = {"ro", "ro"};
+        const size_t languageLengths[2] = {2, 2};
+        const char* previous[2] = {"key", "key"};
+        const size_t previousLengths[2] = {3, 3};
+        const char* next[2] = {"theme", "there"};
+        const size_t nextLengths[2] = {5, 5};
+        const int32_t counts[2] = {1, 4};
+        const int32_t chosen[2] = {1, 0};
+        marked.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
+                               nextLengths, counts, 2, nullptr, nullptr, chosen);
+        PersonalScore markedScore(marked, uses);
+        markedScore.resolve(markedStore, markedKey, -1);
+        check(bonusOf(markedScore, markedTheme) == PersonalScore::kMaxUserBigramBoost,
+              "a word chosen on purpose after the context takes the whole bonus at one use");
+        check(bonusOf(markedScore, markedThere) == personalShareOf(4, 5),
+              "a word learned there takes its share");
+        check(markedScore.ceiling() ==
+                  PersonalScore::kMaxUserBoost + PersonalScore::kMaxUserBigramBoost,
+              "and the ceiling is the most the two add");
+
         personal.setLearnAfterUses(uses);
         personal.resolve(store, -1, -1);
         check(bonusOf(personal, theme) == 0.0f && personal.ceiling() == PersonalScore::kMaxUserBoost,
@@ -2755,9 +2971,26 @@ void runEngineTests() {
         check(on.rankOf("", "test keys", "the") < 0,
               "one use short of twice learn-after is no phrase");
         write(on, "the", "test", "keys");
-        check(on.rankOf("", "test keys", "the") > 0, "twice learn-after is");
-        check(on.rankOf("", "test", "the") == 0,
-              "and never ahead of its own first word, which is still there alone");
+        const int phraseAt = on.rankOf("", "test keys", "the");
+        check(phraseAt >= 0, "twice learn-after is");
+        check(phraseAt < on.rankOf("", "test", "the"),
+              "and ahead of its own first word, which \"keys\" follows six times in six");
+
+        // "test" followed by "keys" six times and by eight other pack words once each.
+        LoadedEngine shared;
+        shared.open();
+        shared.engine.setPhraseSuggestions(true);
+        for (int i = 0; i < phraseUses; ++i) {
+            write(shared, "the", "test", "keys");
+        }
+        const char* alsoAfterTest[8] = {"time", "water", "keyboard", "key",
+                                        "border", "theme", "them", "there"};
+        for (const char* other : alsoAfterTest) {
+            shared.engine.learn(other, std::strlen(other), "test", 4, "the", 3);
+        }
+        const int sharedAt = shared.rankOf("", "test keys", "the");
+        check(sharedAt >= 0 && sharedAt > shared.rankOf("", "test", "the"),
+              "under its own first word while \"keys\" is one of several words that follow it");
 
         LoadedEngine soon;
         soon.open();
@@ -2914,7 +3147,7 @@ void runEngineTests() {
             phrases.engine.learn("test", 4, "the", 3, nullptr, 0);
             phrases.engine.learn("keys", 4, "test", 4, "the", 3);
         }
-        check(phrases.rankOf("", "test keys", "the") > 0, "a phrase is offered");
+        check(phrases.rankOf("", "test keys", "the") >= 0, "a phrase is offered");
         const char* blockedWord[1] = {"keys"};
         const size_t blockedLength[1] = {4};
         phrases.engine.setBlockedWords(blockedWord, blockedLength, 1);

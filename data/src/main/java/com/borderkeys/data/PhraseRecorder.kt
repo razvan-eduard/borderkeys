@@ -137,7 +137,7 @@ class PhraseRecorder(
             val context = table.inContext(recorded.language, recorded.context)
             val gone = PhraseBudget.overflow(
                 context.map { if (it.word == recorded.word) recorded else it }, recorded,
-                recorded.contextSeen, table.limits, { it.count }, { it.contextSeen },
+                recorded.contextSeen, table.limits, { it.count }, { it.contextSeen }, { it.asserted > 0 },
             )
             table.delete(gone)
             dropped += gone
@@ -169,7 +169,11 @@ class PhraseRecorder(
         }
         val contexts = LinkedHashSet<Pair<String, List<String>>>()
         for (update in imported) {
-            val recorded = add(table, update, advancesClock = false)
+            // The file's marks lift the link's.
+            val recorded = add(table, update.copy(asserted = 0, added = 0), advancesClock = false)
+            if (update.asserted > 0 || update.added > 0) {
+                table.raiseMarks(recorded, update.asserted, update.added)
+            }
             contexts += recorded.language to recorded.context
         }
         val dropped = ArrayList<LinkRow>()
@@ -177,6 +181,7 @@ class PhraseRecorder(
             val seen = table.context(language, context)?.seen ?: 0L
             val gone = PhraseBudget.overflow(
                 table.inContext(language, context), null, seen, table.limits, { it.count }, { it.contextSeen },
+                { it.asserted > 0 },
             )
             table.delete(gone)
             dropped += gone
@@ -229,10 +234,35 @@ class PhraseRecorder(
         val recorded = LinkRow(
             update.language, update.context, update.word, (held?.count ?: 0) + update.delta,
             maxOf(held?.lastUsedAt ?: 0L, update.lastUsedAt), contextSeen = seen, languageSeen = tick,
+            asserted = (held?.asserted ?: 0) + update.asserted, added = (held?.added ?: 0) + update.added,
         )
         table.upsert(recorded)
         return recorded
     }
+
+    /**
+     * Records [words] as a phrase added by hand in [language] at [now]: the pair of two words, or
+     * the two pairs and the triple of three, each one use chosen on purpose and added by hand, as
+     * [recordPairs] records a use; a pair of one key twice is left out. Returns what the budget
+     * gave up around them.
+     */
+    suspend fun addPhrase(language: String, words: List<String>, now: Long): Dropped {
+        val pairs = words.zipWithNext { previous, word -> addedUpdate(language, listOf(previous), word, now) }
+        val triples = if (words.size == UserPhrase.TRIPLE_WORDS) {
+            listOf(addedUpdate(language, words.take(UserPhrase.PAIR_WORDS), words.last(), now))
+        } else {
+            emptyList()
+        }
+        return Dropped(recordAdded(pairTable, pairs).map { it.toBigram() }, recordAdded(tripleTable, triples).map { it.toTrigram() })
+    }
+
+    /** One use of [word] after [context] in [language] at [now], chosen on purpose and added by hand. */
+    private fun addedUpdate(language: String, context: List<String>, word: String, now: Long) =
+        LinkUpdate(language, context, word, delta = 1, lastUsedAt = now, asserted = 1, added = 1)
+
+    /** [record], for [updates] added by hand, each a use with nothing dropped before it. */
+    private suspend fun recordAdded(table: LinkTable, updates: List<LinkUpdate>): List<LinkRow> =
+        record(table, updates.filterNot(::followsItself).map { LinkStep(it, emptyList()) })
 
     /** The uses a context's [carried] count holds beyond the [imported] its links bring, never below none. */
     private fun beyondLinks(carried: Long, imported: Long): Long = maxOf(0L, carried - imported)

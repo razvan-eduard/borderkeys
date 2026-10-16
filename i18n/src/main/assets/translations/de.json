@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "Mit dem Hinzufügen fällt die Sperre, und die Tastatur bietet es wieder an.",
   "dictionary_add_blocked_title": "Dieses Wort ist gesperrt",
   "dictionary_add_to_dictionary": "Zum Wörterbuch hinzufügen",
+  "dictionary_added_by_hand": "von Hand hinzugefügt",
   "dictionary_added_by_hand_on": "von Hand hinzugefügt · %s",
   "dictionary_advanced_note": "Wann Wörter gelernt werden, wie schnell sie verblassen und wie oft aufgeräumt wird",
   "dictionary_block": "Blockieren",

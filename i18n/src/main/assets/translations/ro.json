@@ -529,6 +529,7 @@
   "dictionary_add_blocked_text": "Adăugarea ridică blocarea, iar tastatura îl propune din nou.",
   "dictionary_add_blocked_title": "Acest cuvânt este blocat",
   "dictionary_add_to_dictionary": "Adaugă în dicționar",
+  "dictionary_added_by_hand": "adăugată manual",
   "dictionary_added_by_hand_on": "adăugat manual · %s",
   "dictionary_advanced_note": "Cât de repede se învață cuvintele, cât de repede se estompează și cât de des se curăță",
   "dictionary_block": "Blochează",

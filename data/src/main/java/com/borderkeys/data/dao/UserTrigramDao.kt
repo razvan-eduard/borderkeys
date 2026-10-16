@@ -39,9 +39,26 @@ interface UserTrigramDao {
     @Query("SELECT * FROM user_trigrams WHERE previousWord2 = :word OR previousWord1 = :word OR word = :word")
     suspend fun involving(word: String): List<UserTrigram>
 
-    /** The triples used at most [uses] times. */
-    @Query("SELECT * FROM user_trigrams WHERE count <= :uses")
+    /** The triples used at most [uses] times and never chosen on purpose. */
+    @Query("SELECT * FROM user_trigrams WHERE count <= :uses AND asserted = 0")
     suspend fun usedAtMost(uses: Int): List<UserTrigram>
+
+    /** Lifts a triple's chosen and added counts to at least [asserted] and [added], for a restore. */
+    @Query(
+        """
+        UPDATE user_trigrams SET asserted = MAX(asserted, :asserted), added = MAX(added, :added)
+        WHERE language = :language AND previousWord2 = :previousWord2 AND previousWord1 = :previousWord1
+          AND word = :word
+        """,
+    )
+    suspend fun raiseMarks(
+        language: String,
+        previousWord2: String,
+        previousWord1: String,
+        word: String,
+        asserted: Int,
+        added: Int,
+    )
 
     /** The triples that run through the pair [first] [second] in [language], on either side. */
     @Query(
@@ -137,6 +154,9 @@ data class LearnedTrigram(
     val word: String,
     val delta: Int,
     val lastUsedAt: Long,
+    /** See [LearnedBigram.asserted]. */
+    val asserted: Int = 0,
+    val added: Int = 0,
 )
 
 /** [PairStep], for the triples. */

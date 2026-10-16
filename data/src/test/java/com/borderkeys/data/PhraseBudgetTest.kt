@@ -9,12 +9,12 @@ import org.junit.Test
 
 class PhraseBudgetTest {
 
-    private class Link(val name: String, val count: Int, val seen: Long)
+    private class Link(val name: String, val count: Int, val seen: Long, val asserted: Boolean = false)
 
     private val limits = PhraseBudget.Limits(established = 3, newcomers = 2, promotion = 3, halfLife = 10)
 
     private fun overflow(links: List<Link>, kept: Link?, total: Long) =
-        PhraseBudget.overflow(links, kept, total, limits, { it.count }, { it.seen }).map { it.name }
+        PhraseBudget.overflow(links, kept, total, limits, { it.count }, { it.seen }, { it.asserted }).map { it.name }
 
     @Test
     fun `a context within its limit keeps everything`() {
@@ -82,10 +82,53 @@ class PhraseBudgetTest {
         val two = PhraseBudget.Limits(established = 1, newcomers = 1, promotion = limits.promotion, halfLife = halfLife)
         val gone = PhraseBudget.overflow(
             listOf(recent, older, Link("established", limits.promotion, clock)), null, clock, two,
-            { it.count }, { it.seen },
+            { it.count }, { it.seen }, { it.asserted },
         )
         assertEquals(listOf("older"), gone.map { it.name })
     }
+
+    @Test
+    fun `a link chosen on purpose is never the victim, as a newcomer or among established links`() {
+        val established = (1..3).map { Link("e$it", 9, 20) }
+        val chosen = Link("chosen", 1, 10, asserted = true)
+        val newcomers = listOf(Link("n1", 1, 19), Link("n2", 1, 20))
+        val recorded = Link("new", 1, 21)
+        assertEquals(listOf("n1"), overflow(established + chosen + newcomers + recorded, recorded, 21))
+        val chosenAll = (1..6).map { Link("c$it", 1, it.toLong(), asserted = true) }
+        assertEquals(emptyList<String>(), overflow(chosenAll, null, 6))
+    }
+
+    @Test
+    fun `links chosen on purpose are not counted against the context's limit`() {
+        val established = (1..5).map { Link("e$it", 9, 20) }
+        val chosen = (1..2).map { Link("c$it", 1, 10, asserted = true) }
+        assertEquals(emptyList<String>(), overflow(established + chosen, established[0], 21))
+        val oneMore = established + Link("e6", 9, 21) + chosen
+        assertEquals(1, overflow(oneMore, oneMore[5], 21).size)
+    }
+
+    @Test
+    fun `chosen newcomers do not count against the newcomers' places`() {
+        val established = (1..4).map { Link("e$it", 9, 20) }
+        val chosen = (1..3).map { Link("c$it", 1, 10, asserted = true) }
+        val newcomer = Link("n1", 1, 19)
+        val recorded = Link("new", 1, 21)
+        val gone = overflow(established + chosen + newcomer + recorded, recorded, 21)
+        assertTrue(gone.toString(), gone.single() in established.map { it.name })
+    }
+
+    @Test
+    fun `a language's cap counts the links not chosen on purpose`() {
+        val unchosen = (1..PhraseBudget.LANGUAGE_CAP).map { row("w$it", asserted = 0) }
+        val chosen = row("chosen", asserted = 1)
+        assertEquals(emptyList<LinkRow>(), languageGone(unchosen + chosen, emptyMap(), clock = 0L, kept = null))
+        val oneMore = unchosen + row("more", asserted = 0) + chosen
+        val gone = languageGone(oneMore, emptyMap(), clock = 0L, kept = null)
+        assertEquals(PhraseBudget.LANGUAGE_CAP + 1 - PhraseBudget.LANGUAGE_KEEP, gone.size)
+        assertTrue(gone.none { it.asserted > 0 })
+    }
+
+    private fun row(word: String, asserted: Int) = LinkRow("en", listOf("x"), word, 1, 0L, 0L, 0L, asserted = asserted)
 
     @Test
     fun `a language prune takes the lowest aged scores and never the kept link`() {
@@ -98,6 +141,22 @@ class PhraseBudgetTest {
         val gone = PhraseBudget.languageOverflow(
             links, 2, PhraseBudget.LANGUAGE_HALF_LIFE.toLong(),
             isKept = { it.name == "kept" }, countOf = { it.count }, seenOf = { it.seen }, tieBreak = { 0.0 },
+            assertedOf = { it.asserted },
+        )
+        assertEquals(listOf("rare", "old"), gone.map { it.name })
+    }
+
+    @Test
+    fun `a language prune never takes a link chosen on purpose`() {
+        val links = sequenceOf(
+            Link("chosen", 1, 0, asserted = true),
+            Link("old", 10, 0),
+            Link("rare", 1, PhraseBudget.LANGUAGE_HALF_LIFE.toLong()),
+        )
+        val gone = PhraseBudget.languageOverflow(
+            links, 2, PhraseBudget.LANGUAGE_HALF_LIFE.toLong(),
+            isKept = { false }, countOf = { it.count }, seenOf = { it.seen }, tieBreak = { 0.0 },
+            assertedOf = { it.asserted },
         )
         assertEquals(listOf("rare", "old"), gone.map { it.name })
     }

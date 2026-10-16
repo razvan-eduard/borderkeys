@@ -185,8 +185,10 @@ Learned words and Learned phrases pages list every word and phrase, each with a 
 search's matches can be deleted together; the heatmap is drawn on the keyboard preview, and
 switching it off deletes it. A word added by hand on the Learned words page is stored as a
 learned word chosen once, with a count of how often it was added, which a backup carries; the
-page lists the words added by hand apart from the words learned by use. The heatmap is left out
-of backups.
+page lists the words added by hand apart from the words learned by use. A phrase added by hand
+on the Learned phrases page is stored the same way, its pairs and triple each with a count of
+how often it was chosen and how often added, and its words with it. The heatmap is left out of
+backups.
 
 ---
 

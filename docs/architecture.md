@@ -122,7 +122,7 @@ one from the other, and it never was the answer to that question.
    | `OtherPacks` | a restriction applied, the lock is not strict, and another pack could read the letters more closely than `Primary`'s closest reading | every other pack, keeping only [closer readings](#closer-readings) | by length, lowered to what outmatches `Primary` | yes |
    | `UserModel` | something is typed | the personal trie | — | yes |
    | `Wide` | something is typed and nothing has been found | every pack | `kFallbackEditCost` | no, the strip only |
-   | `NextWord` | nothing is typed | the personal successors and phrases | — | yes |
+   | `NextWord` | nothing is typed | the personal successors (the triples after the last two words, then the pairs after the last one) and phrases | — | yes |
 
    A pack is walked by `collectEndpoints()` over the fuzzy neighbourhood, `collectWords()`
    descending from each endpoint, and `searchFrequentWithPrefix()` for short prefixes the budget
@@ -491,14 +491,15 @@ left out under the strict distance setting.
 | Constant | Value | Meaning |
 |---|---|---|
 | `kUserOnlyLogProb` | −8.0 | The log-probability for a word that exists *only* in the personal dictionary. Deliberately pessimistic and fixed: the model's own totals cannot be used, because a word confirmed 40 times out of 50 would be three quarters of that distribution — likelier than `the`. |
-| `kMaxUserBoost` | 3.0 | The ceiling on what personal evidence adds. |
+| `kMaxUserBoost` | 3.0 | The ceiling on what personal evidence adds; a word added by hand takes it at any count. |
 | `kMinPersonalEvidence` | 3.0 | Effective counts (raw × learning speed) at which repetition alone *establishes* a word no pack holds — offered from the personal model, treated as a known word by autocorrect, predicted as a successor. At the cautious 0.35 multiplier that is ~9 repetitions; at the immediate 3.0 the first use clears it. One assertion (a tap on the strip, a reverted correction) establishes a word at any count. The word is learned and listed the whole time. |
 | `kUserBigramPrior` | 4.0 | Smoothing, in observations. One `vreau să` out of one `vreau` is not evidence that `să` always follows. Four, not one, because this competes with a corpus. |
-| `kMaxUserBigramBoost` | 2.5 | Ceiling on what a personal pair adds. |
+| `kMaxUserBigramBoost` | 2.5 | Ceiling on what a personal pair adds; a link chosen on purpose takes it at any count, its share certain. |
 | `kUserChainPreference` | 1.5 | How far a phrase *this* person writes may outrank what the corpus says follows. Scaled by confidence: +0.4 once, +0.8 at three, +1.3 at twenty. |
 | `kUserChainHalfLife` | 3.0 | Observations to reach half that ceiling. |
 | `kPhraseUsesPerWordUses` | 2 | Each link of a two-word phrase needs this many times the learn-after uses: the phrase note's "about twice as many repetitions", at every setting of the slider. |
 | `kPhraseMinShare` | 0.34 | Share of its context a link must hold, count over the context's total, unsmoothed. Not a count: followed by one thing nine times in ten is a habit; followed by nine different things is not. |
+| `kChosenLinkBoost` | 5.5 (`kMaxPersonalScore`) | What a link chosen on purpose, added by hand on the Learned phrases page, carries as a next word and as a phrase's first link in place of the log of its share, counted as certain: the most the word boost and the context bonus add to any other candidate, so it ranks above them all after its context, and the chain preference orders chosen links by count among themselves. Such a link also passes the two rules above at any count, ranks before unchosen links among a context's successors, and is never the budget's, the prune's or the purge's victim. A two-word suggestion scores as its first link as the next word plus its second link as the next word after the first, each the log of its smoothed share plus `kUserChainPreference` by its count, so it starts under its first word and climbs over it once the second word is what usually follows the first. |
 
 ### Search bounds
 
@@ -727,8 +728,12 @@ engine holds what it loads and mirrors what the store gives up.
 | Links a language keeps | 10,000 (`LANGUAGE_CAP`, `UserModel::kMaxBigrams`) | 10,000 |
 | Past the cap | pruned to 9,000 by count × ½^(links recorded since ÷ 10,000) | the same |
 
-The link just recorded never goes. While a context's newcomers outnumber their places, the
-newcomer seen longest ago goes; otherwise the established link with the lowest aged score. A
+The link just recorded never goes, nor a link chosen on purpose (`asserted`, raised by an add
+by hand), however many a context holds: the context's limit, its newcomers' places and the
+language's cap count the links not chosen on purpose, so a hand add never costs a learned link;
+the prune and the clean-up's purge leave such a link too, and its count never decays below
+one. While a context's newcomers outnumber their places,
+the newcomer seen longest ago goes; otherwise the established link with the lowest aged score. A
 restore, with nothing just recorded, lets every link compete on its aged score. A context's
 total counts every use, those of links it gave up included, so a share stays a share of what
 followed; forgetting a word takes its uses out. Each link carries the context's total and the
@@ -738,8 +743,10 @@ budget and hands what it gave up to `EnginePort.dropLinks`. The wall-clock fade 
 stale counts and stale totals alike.
 
 Words are capped by the *Words kept* setting (`learnedWordLimit`, 20,000 by default, 1,000 to
-50,000): the daily sweep deletes the words past that many, by count and then recency, and the
-engine loads the same words in the same order. A word's phrases go when no case of it is left.
+50,000): the daily sweep deletes the words past that many among those not added by hand, by
+count and then recency, and the engine loads every word added by hand and then the same words
+the sweep keeps, in the same order; a word added by hand is never capped away. A word's phrases
+go when no case of it is left.
 Lowering the setting below the words already learned asks first, then deletes them at once
 (`keepWords`). `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
 

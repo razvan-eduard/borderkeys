@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "Kapag idinagdag, maaalis ang block at iaalok itong muli ng keyboard.",
   "dictionary_add_blocked_title": "Naka-block ang salitang ito",
   "dictionary_add_to_dictionary": "Idagdag sa diksiyunaryo",
+  "dictionary_added_by_hand": "idinagdag nang mano-mano",
   "dictionary_added_by_hand_on": "idinagdag nang mano-mano · %s",
   "dictionary_advanced_note": "Gaano kabilis natututunan at kumukupas ang mga salita, at gaano kadalas nililinis",
   "dictionary_block": "I-block",

@@ -3,15 +3,12 @@
 
 package com.borderkeys.settings.screen
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,10 +28,7 @@ import com.borderkeys.data.PersonalEntries
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.PickerChip
-import com.borderkeys.settings.SPACE_GUTTER
 import com.borderkeys.settings.SPACE_LARGE
-import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSectionCard
@@ -65,10 +59,9 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
     val words = remember(found, learned, origin) {
         PersonalEntries.ofOrigin(found.filter { it.word in learned }, origin)
     }
-    // The search box's text as a word to add, once no stored row is that spelling.
-    val stored = remember(saved) { saved.mapTo(HashSet()) { it.word } }
+    // The search box's text as a word to add, once no listed word is that spelling.
     val candidate = query.trim()
-    val canAdd = addable(candidate, stored)
+    val canAdd = addable(candidate, learned)
     val languages = remember(canAdd) {
         languageChoices(
             KeyboardSubtypes.enabledTags(context),
@@ -118,26 +111,9 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(horizontal = SPACE_LARGE),
                 ) { Text(strings[Keys.DICTIONARY_ADD_TO_DICTIONARY]) }
                 if (canAdd && languages.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
-                        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
-                    ) {
-                        for (tag in languages) {
-                            PickerChip(displayNameFor(tag), selected = tag == language) { language = tag }
-                        }
-                    }
+                    LanguageChips(languages, language) { language = it }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
-                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
-                ) {
-                    for ((value, labelKey) in ORIGIN_LABELS) {
-                        PickerChip(strings[labelKey], selected = origin == value) { origin = value }
-                    }
-                }
+                OriginChips(origin) { origin = it }
                 DeleteListed(
                     label = strings.getString(deleteKey, words.size),
                     title = strings[deleteTitleKey],
@@ -208,10 +184,3 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
         }
     }
 }
-
-/** The filter chips, in order: each origin with its label's key. */
-private val ORIGIN_LABELS = listOf(
-    PersonalEntries.Origin.ANY to Keys.DICTIONARY_FILTER_ALL,
-    PersonalEntries.Origin.LEARNED to Keys.DICTIONARY_FILTER_LEARNED,
-    PersonalEntries.Origin.ADDED to Keys.DICTIONARY_FILTER_ADDED,
-)

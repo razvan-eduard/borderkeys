@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "A hozzáadás feloldja a tiltást, és a billentyűzet újra felajánlja.",
   "dictionary_add_blocked_title": "Ez a szó tiltva van",
   "dictionary_add_to_dictionary": "Hozzáadás a szótárhoz",
+  "dictionary_added_by_hand": "kézzel hozzáadva",
   "dictionary_added_by_hand_on": "kézzel hozzáadva · %s",
   "dictionary_advanced_note": "Milyen hamar tanulja meg a szavakat, milyen gyorsan halványulnak el, és milyen gyakran tisztul",
   "dictionary_block": "Letiltás",

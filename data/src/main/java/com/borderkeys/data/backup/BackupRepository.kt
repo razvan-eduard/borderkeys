@@ -109,6 +109,8 @@ class BackupRepository(
                     lastUsedAt = it.lastUsedAt,
                     contextSeen = it.contextSeen,
                     languageSeen = it.languageSeen,
+                    asserted = it.asserted,
+                    added = it.added,
                 )
             }
         } else {
@@ -125,6 +127,8 @@ class BackupRepository(
                     lastUsedAt = it.lastUsedAt,
                     contextSeen = it.contextSeen,
                     languageSeen = it.languageSeen,
+                    asserted = it.asserted,
+                    added = it.added,
                 )
             }
         } else {
@@ -316,6 +320,8 @@ class BackupRepository(
                             word = PhraseKey.word(it.word),
                             delta = it.count,
                             lastUsedAt = usedAt(it.lastUsedAt),
+                            asserted = it.asserted,
+                            added = it.added,
                         )
                     },
                     payload.trigrams.filter { it.count > 0 }.map {
@@ -326,6 +332,8 @@ class BackupRepository(
                             word = PhraseKey.word(it.word),
                             delta = it.count,
                             lastUsedAt = usedAt(it.lastUsedAt),
+                            asserted = it.asserted,
+                            added = it.added,
                         )
                     },
                     payload.pairContexts.map {

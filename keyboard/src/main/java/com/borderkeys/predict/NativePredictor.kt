@@ -182,13 +182,17 @@ internal object NativePredictor {
         outTexts: Array<String?>,
     ): Int
 
-    /** Replaces the personal dictionary's words, with their per-word counts. */
+    /**
+     * Replaces the personal dictionary's words, each with its count, its deliberate capitals, how
+     * many times it was chosen on purpose and how many times it was added by hand.
+     */
     external fun nativeLoadUserWords(
         handle: Long,
         words: Array<String>,
         counts: IntArray,
         deliberateCapitals: IntArray,
         asserted: IntArray,
+        added: IntArray,
     )
 
     /**
@@ -295,9 +299,13 @@ internal object NativePredictor {
         counts: IntArray,
         contextSeen: LongArray,
         languageSeen: LongArray,
+        asserted: IntArray,
     )
 
-    /** Replaces the personal word pairs, each in the store of its language, stamped as the triples. */
+    /**
+     * Replaces the personal word pairs, each in the store of its language, stamped as the
+     * triples, [asserted] how many times each was chosen on purpose.
+     */
     external fun nativeLoadUserBigrams(
         handle: Long,
         languages: Array<String>,
@@ -306,6 +314,7 @@ internal object NativePredictor {
         counts: IntArray,
         contextSeen: LongArray,
         languageSeen: LongArray,
+        asserted: IntArray,
     )
 
     /**
@@ -341,9 +350,10 @@ internal object NativePredictor {
     /**
      * The links after [previous2] and [previous1] in [language]'s store, pairs when [previous2] is
      * null, in the order recorded: each next word's key into [outWords], its count into
-     * [outCounts] and how many times its context had been seen when it last was into
-     * [outContextSeen], up to their size; [outContext] gets [CONTEXT_TOTAL] and [CONTEXT_SEEN],
-     * zeros for a context not held. Returns how many links follow it.
+     * [outCounts], how many times its context had been seen when it last was into
+     * [outContextSeen] and how many times it was chosen on purpose into [outAsserted], up to
+     * their size; [outContext] gets [CONTEXT_TOTAL] and [CONTEXT_SEEN], zeros for a context not
+     * held. Returns how many links follow it.
      */
     external fun nativeContextLinks(
         handle: Long,
@@ -353,6 +363,7 @@ internal object NativePredictor {
         outWords: Array<String?>,
         outCounts: IntArray,
         outContextSeen: LongArray,
+        outAsserted: IntArray,
         outContext: LongArray,
     ): Int
 
@@ -377,8 +388,8 @@ internal object NativePredictor {
     /**
      * Every triple, or pair, of [language]'s store, up to the arrays' size: the keys of the words
      * before its last into [outPrevious2] (left as is for a pair) and [outPrevious1], its last
-     * into [outWords], its count, when its language last saw it, and its context's total. Returns
-     * how many were written.
+     * into [outWords], its count, when its language last saw it, its context's total, and how
+     * many times it was chosen on purpose into [outAsserted]. Returns how many were written.
      */
     external fun nativeLanguageLinks(
         handle: Long,
@@ -390,6 +401,7 @@ internal object NativePredictor {
         outCounts: IntArray,
         outLanguageSeen: LongArray,
         outContextTotals: LongArray,
+        outAsserted: IntArray,
     ): Int
 
     /** Drops the pairs the budget gave up, each from its language's store. */

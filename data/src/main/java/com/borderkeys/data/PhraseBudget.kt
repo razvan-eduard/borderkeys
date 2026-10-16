@@ -10,14 +10,15 @@ import com.borderkeys.data.theme.KeyboardPreferences
  * more.
  *
  * A context keeps up to [Limits.established] links that reached [Limits.promotion] uses, and
- * [Limits.newcomers] more that have not. Past that, one link goes at a time, never the one just
- * recorded: while the newcomers outnumber their slots, the newcomer seen longest ago; otherwise
- * the established link with the lowest [agedScore], the one seen longest ago among equals. With
- * nothing just recorded, as on an import, every link competes on its aged score.
+ * [Limits.newcomers] more that have not; links chosen on purpose are kept beside them, uncounted.
+ * Past that, one link goes at a time, never the one just recorded: while the newcomers outnumber
+ * their slots, the newcomer seen longest ago; otherwise the established link with the lowest
+ * [agedScore], the one seen longest ago among equals. With nothing just recorded, as on an
+ * import, every link competes on its aged score.
  *
  * A link's staleness in its context is how many times the context was seen since the link was;
  * in its language, how many links the language recorded since. A language past [LANGUAGE_CAP]
- * pairs or triples is pruned to [LANGUAGE_KEEP] by aged score on that clock.
+ * pairs or triples not chosen on purpose is pruned to [LANGUAGE_KEEP] by aged score on that clock.
  */
 object PhraseBudget {
 
@@ -86,10 +87,11 @@ object PhraseBudget {
         count * PersonalWordDecay.remaining(staleness.coerceAtLeast(0L).toDouble() / halfLife)
 
     /**
-     * The links of one context that go so that it keeps at most [Limits.most], in the order they
-     * go. [kept] is the link recorded in this call, compared by identity, or null; [contextTotal]
-     * is how many times the context has been seen; [seenOf] is that total when a link was last
-     * seen.
+     * The links of one context that go so that it keeps at most [Limits.most] links not chosen on
+     * purpose, in the order they go. [kept] is the link recorded in this call, compared by
+     * identity, or null; [contextTotal] is how many times the context has been seen; [seenOf] is
+     * that total when a link was last seen; a link [assertedOf] answers true for, chosen on
+     * purpose, is not counted and never goes.
      */
     fun <T> overflow(
         links: List<T>,
@@ -98,15 +100,18 @@ object PhraseBudget {
         limits: Limits,
         countOf: (T) -> Int,
         seenOf: (T) -> Long,
+        assertedOf: (T) -> Boolean,
     ): List<T> {
         val remaining = links.toMutableList()
         val gone = ArrayList<T>()
-        while (remaining.size > limits.most) {
-            val at = victimIn(remaining, kept, contextTotal, limits, countOf, seenOf)
+        var counted = remaining.count { !assertedOf(it) }
+        while (counted > limits.most) {
+            val at = victimIn(remaining, kept, contextTotal, limits, countOf, seenOf, assertedOf)
             if (at < 0) {
                 break
             }
             gone += remaining.removeAt(at)
+            counted--
         }
         return gone
     }
@@ -118,15 +123,16 @@ object PhraseBudget {
         limits: Limits,
         countOf: (T) -> Int,
         seenOf: (T) -> Long,
+        assertedOf: (T) -> Boolean,
     ): Int {
         val imported = kept == null
-        val newcomers = links.count { countOf(it) < limits.promotion }
+        val newcomers = links.count { !assertedOf(it) && countOf(it) < limits.promotion }
         val newcomerGoes = newcomers > limits.newcomers
         var best = -1
         var bestScore = Double.MAX_VALUE
         var bestSeen = Long.MAX_VALUE
         for ((index, link) in links.withIndex()) {
-            if (link === kept) {
+            if (link === kept || assertedOf(link)) {
                 continue
             }
             val newcomer = countOf(link) < limits.promotion
@@ -149,13 +155,17 @@ object PhraseBudget {
         return best
     }
 
-    /** How many links a language holding [held] gives up: none up to [LANGUAGE_CAP], else down to [LANGUAGE_KEEP]. */
+    /**
+     * How many links a language holding [held] links not chosen on purpose gives up: none up to
+     * [LANGUAGE_CAP], else down to [LANGUAGE_KEEP].
+     */
     fun languageExcess(held: Int): Int = if (held > LANGUAGE_CAP) held - LANGUAGE_KEEP else 0
 
     /**
      * The [count] links of a language that its prune removes, in the order they go: the lowest
      * [agedScore] on the language's [clock] first, then the one seen longest ago, then the lowest
-     * [tieBreak]; never one [isKept] holds. [seenOf] is the clock when a link was last seen.
+     * [tieBreak]; never one [isKept] holds, nor one [assertedOf] does. [seenOf] is the clock when
+     * a link was last seen.
      */
     fun <T> languageOverflow(
         links: Sequence<T>,
@@ -165,12 +175,13 @@ object PhraseBudget {
         countOf: (T) -> Int,
         seenOf: (T) -> Long,
         tieBreak: (T) -> Double,
+        assertedOf: (T) -> Boolean,
     ): List<T> {
         if (count <= 0) {
             return emptyList()
         }
         return links
-            .filterNot(isKept)
+            .filterNot { isKept(it) || assertedOf(it) }
             .map { Scored(it, agedScore(countOf(it), clock - seenOf(it), LANGUAGE_HALF_LIFE), seenOf(it), tieBreak(it)) }
             .sortedWith(compareBy<Scored<T>>({ it.score }, { it.seen }, { it.tie }))
             .take(count)

@@ -26,14 +26,16 @@ void PersonalScore::resolve(int32_t store, int32_t context1, int32_t context2) {
     if (context1_ < 0) {
         return;
     }
-    // The largest bonus: the most used link's, after one word and after two.
+    // The largest bonus: the first link's, chosen on purpose or else the most used, after one
+    // word and after two.
     UserModel::Successor top{};
     if (model_.successors(store_, context1_, &top, 1) == 1) {
-        largestBonus_ = bonusFor(top.count, model_.successorTotal(store_, context1_));
+        largestBonus_ = bonusFor(top.count, top.asserted, model_.successorTotal(store_, context1_));
     }
     if (context2_ >= 0 && model_.trigramSuccessors(store_, context2_, context1_, &top, 1) == 1) {
-        largestBonus_ = std::max(
-            largestBonus_, bonusFor(top.count, model_.trigramTotal(store_, context2_, context1_)));
+        largestBonus_ = std::max(largestBonus_,
+                                 bonusFor(top.count, top.asserted,
+                                          model_.trigramTotal(store_, context2_, context1_)));
     }
 }
 
@@ -57,11 +59,11 @@ float PersonalScore::shareBonus(uint32_t count, uint32_t total) {
     return kMaxUserBigramBoost * share;
 }
 
-float PersonalScore::bonusFor(uint32_t count, uint32_t total) const {
-    if (!learned(count) || total == 0u) {
+float PersonalScore::bonusFor(uint32_t count, uint32_t asserted, uint32_t total) const {
+    if (!linkLearned(count, asserted) || total == 0u) {
         return 0.0f;
     }
-    return shareBonus(count, total);
+    return asserted > 0u ? kMaxUserBigramBoost : shareBonus(count, total);
 }
 
 float PersonalScore::contextBonus(uint32_t entry) const {
@@ -70,17 +72,25 @@ float PersonalScore::contextBonus(uint32_t entry) const {
     }
     const auto next = static_cast<int32_t>(entry);
     if (context2_ >= 0) {
-        const uint32_t triple = model_.trigramCount(store_, context2_, context1_, next);
-        if (learned(triple)) {
-            return bonusFor(triple, model_.trigramTotal(store_, context2_, context1_));
+        uint32_t tripleAsserted = 0u;
+        const uint32_t triple =
+            model_.trigramCount(store_, context2_, context1_, next, &tripleAsserted);
+        if (linkLearned(triple, tripleAsserted)) {
+            return bonusFor(triple, tripleAsserted,
+                            model_.trigramTotal(store_, context2_, context1_));
         }
     }
-    return bonusFor(model_.bigramCount(store_, context1_, next),
-                    model_.successorTotal(store_, context1_));
+    uint32_t pairAsserted = 0u;
+    const uint32_t pair = model_.bigramCount(store_, context1_, next, &pairAsserted);
+    return bonusFor(pair, pairAsserted, model_.successorTotal(store_, context1_));
+}
+
+float PersonalScore::wordBoost(uint32_t entry) const {
+    return model_.added(entry) > 0u ? kMaxUserBoost : wordBoostForCount(model_.entryCount(entry));
 }
 
 float PersonalScore::scoreForEntry(uint32_t entry) const {
-    const float boost = established(entry) ? wordBoostForCount(model_.entryCount(entry)) : 0.0f;
+    const float boost = established(entry) ? wordBoost(entry) : 0.0f;
     return boost + contextBonus(entry);
 }
 

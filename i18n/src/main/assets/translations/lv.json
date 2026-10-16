@@ -529,6 +529,7 @@
   "dictionary_add_blocked_text": "Pievienojot bloķējums tiek noņemts, un tastatūra to atkal piedāvā.",
   "dictionary_add_blocked_title": "Šis vārds ir bloķēts",
   "dictionary_add_to_dictionary": "Pievienot vārdnīcai",
+  "dictionary_added_by_hand": "pievienota manuāli",
   "dictionary_added_by_hand_on": "pievienots manuāli · %s",
   "dictionary_advanced_note": "Cik drīz vārdi tiek iemācīti, cik ātri tie izgaist un cik bieži tiek tīrīts",
   "dictionary_block": "Bloķēt",

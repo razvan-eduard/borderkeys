@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "Ao adicioná-la o bloqueio é removido e o teclado volta a oferecê-la.",
   "dictionary_add_blocked_title": "Esta palavra está bloqueada",
   "dictionary_add_to_dictionary": "Adicionar ao dicionário",
+  "dictionary_added_by_hand": "adicionada à mão",
   "dictionary_added_by_hand_on": "adicionada à mão · %s",
   "dictionary_advanced_note": "Quão cedo as palavras são aprendidas, quão depressa se apagam e com que frequência são limpas",
   "dictionary_block": "Bloquear",

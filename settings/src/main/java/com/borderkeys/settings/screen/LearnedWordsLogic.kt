@@ -7,9 +7,9 @@ import com.borderkeys.data.PersonalEntries
 import com.borderkeys.data.WordShape
 import com.borderkeys.i18n.Keys
 
-/** Whether [candidate] can be added: a word by shape, and no stored row is that exact spelling. */
-internal fun addable(candidate: String, stored: Set<String>): Boolean =
-    WordShape.isWord(candidate) && candidate !in stored
+/** Whether [candidate] can be added: a word by shape, and no listed word is that exact spelling. */
+internal fun addable(candidate: String, listed: Set<String>): Boolean =
+    WordShape.isWord(candidate) && candidate !in listed
 
 /** The enabled language tags with [current] first, when it is one of them. */
 internal fun languageChoices(enabled: List<String>, current: String?): List<String> =

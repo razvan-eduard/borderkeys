@@ -87,6 +87,17 @@ class DictionaryAddTest {
         assertEquals(listed, PersonalEntries.ofOrigin(listed, PersonalEntries.Origin.ANY))
     }
 
+    @Test
+    fun `a word added by hand is loaded past the words-kept limit`() = runTest {
+        repository.applyLearning(
+            listOf(LearnedWord("often", LOCALE, 5, AT), LearnedWord("also", LOCALE, 4, AT)),
+            emptyList(),
+            emptyList(),
+        )
+        repository.add("nadia", LOCALE, AT, unblock = false)
+        assertEquals(listOf("nadia", "often", "also"), repository.personalRows(2).words.map { it.word })
+    }
+
     private companion object {
         const val LOCALE = "en-US"
         const val AT = 1_000L

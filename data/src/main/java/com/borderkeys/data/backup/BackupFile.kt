@@ -99,6 +99,9 @@ data class BackupBigram(
     val lastUsedAt: Long = 0L,
     val contextSeen: Long = 0L,
     val languageSeen: Long = 0L,
+    /** How often the pair was chosen on purpose and added by hand; a file without them reads 0. */
+    val asserted: Int = 0,
+    val added: Int = 0,
 )
 
 /** One learned triple; its fields as for [BackupBigram]. */
@@ -112,6 +115,9 @@ data class BackupTrigram(
     val lastUsedAt: Long = 0L,
     val contextSeen: Long = 0L,
     val languageSeen: Long = 0L,
+    /** See [BackupBigram.asserted]. */
+    val asserted: Int = 0,
+    val added: Int = 0,
 )
 
 /** One previous word's uses in a language ([com.borderkeys.data.entity.UserPairContext]). */

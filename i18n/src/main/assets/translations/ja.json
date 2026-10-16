@@ -509,6 +509,7 @@
   "dictionary_add_blocked_text": "追加するとブロックが解除され、キーボードが再び提案します。",
   "dictionary_add_blocked_title": "この単語はブロックされています",
   "dictionary_add_to_dictionary": "辞書に追加",
+  "dictionary_added_by_hand": "手動で追加",
   "dictionary_added_by_hand_on": "手動で追加 · %s",
   "dictionary_advanced_note": "単語を学習するまでの早さ、薄れていく速さ、整理する頻度",
   "dictionary_block": "ブロック",

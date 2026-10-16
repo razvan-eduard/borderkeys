@@ -509,6 +509,7 @@
   "dictionary_add_blocked_text": "추가하면 차단이 해제되고 키보드가 다시 제안합니다.",
   "dictionary_add_blocked_title": "이 단어는 차단되어 있습니다",
   "dictionary_add_to_dictionary": "사전에 추가",
+  "dictionary_added_by_hand": "직접 추가",
   "dictionary_added_by_hand_on": "직접 추가 · %s",
   "dictionary_advanced_note": "단어를 학습하는 속도, 잊혀 가는 속도, 정리하는 주기",
   "dictionary_block": "차단",

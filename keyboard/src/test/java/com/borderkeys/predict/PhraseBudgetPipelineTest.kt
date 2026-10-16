@@ -7,6 +7,10 @@ import com.borderkeys.data.PhraseBudget
 import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.SharedNativeTextRunner
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertEquals
@@ -74,19 +78,57 @@ class PhraseBudgetPipelineTest {
             val words = arrayOfNulls<String>(SLOTS)
             val counts = IntArray(SLOTS)
             val seen = LongArray(SLOTS)
+            val asserted = IntArray(SLOTS)
             val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
-            assertEquals(1, NativePredictor.nativeContextLinks(handle, language, null, CONTEXT, words, counts, seen, counted))
-            assertEquals(listOf("cat", 1), listOf(words[0], counts[0]))
+            assertEquals(
+                1,
+                NativePredictor.nativeContextLinks(handle, language, null, CONTEXT, words, counts, seen, asserted, counted),
+            )
+            assertEquals(listOf("cat", 1, 0), listOf(words[0], counts[0], asserted[0]))
             assertEquals(1L, counted[NativePredictor.CONTEXT_TOTAL])
             assertEquals(1L, counted[NativePredictor.CONTEXT_SEEN])
             val empty = LongArray(NativePredictor.CONTEXT_SLOTS) { Long.MAX_VALUE }
             assertEquals(
                 0,
                 NativePredictor.nativeContextLinks(
-                    handle, language, null, "cat", arrayOfNulls(SLOTS), IntArray(SLOTS), LongArray(SLOTS), empty,
+                    handle, language, null, "cat", arrayOfNulls(SLOTS), IntArray(SLOTS), LongArray(SLOTS),
+                    IntArray(SLOTS), empty,
                 ),
             )
             assertEquals(listOf(0L, 0L), empty.toList())
+        } finally {
+            NativePredictor.nativeDestroy(handle)
+        }
+    }
+
+    @Test
+    fun `a loaded pair's and triple's chosen marks reach the engine and are read back`() {
+        Pipeline.require()
+        val handle = NativePredictor.nativeCreate()
+        try {
+            val language = LanguageTags.primary(ENGLISH)
+            PersonalLinks.load(
+                handle,
+                pairs = listOf(UserBigram(language, CONTEXT, "cat", 1, AT, 1L, 1L, asserted = 1)),
+                pairContexts = listOf(UserPairContext(language, CONTEXT, 1L, AT, 1L)),
+                triples = listOf(UserTrigram(language, "a", CONTEXT, "cat", 1, AT, 1L, 1L, asserted = 1)),
+                tripleContexts = listOf(UserTripleContext(language, "a", CONTEXT, 1L, AT, 1L)),
+                clocks = emptyList(),
+            )
+            val words = arrayOfNulls<String>(SLOTS)
+            val asserted = IntArray(SLOTS)
+            val held = NativePredictor.nativeContextLinks(
+                handle, language, null, CONTEXT, words, IntArray(SLOTS), LongArray(SLOTS), asserted,
+                LongArray(NativePredictor.CONTEXT_SLOTS),
+            )
+            assertEquals(listOf("cat", 1), listOf(words[0], asserted[0]))
+            assertEquals(1, held)
+            val tripleAsserted = IntArray(SLOTS)
+            val triplesHeld = NativePredictor.nativeContextLinks(
+                handle, language, "a", CONTEXT, arrayOfNulls(SLOTS), IntArray(SLOTS), LongArray(SLOTS),
+                tripleAsserted, LongArray(NativePredictor.CONTEXT_SLOTS),
+            )
+            assertEquals(listOf(1, 1), listOf(triplesHeld, tripleAsserted[0]))
         } finally {
             NativePredictor.nativeDestroy(handle)
         }

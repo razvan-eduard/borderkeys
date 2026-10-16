@@ -29,6 +29,14 @@ interface UserWordDao {
     @Query("SELECT * FROM user_words ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
     suspend fun topWords(limit: Int): List<UserWord>
 
+    /** Every word added by hand, by count and then by recency. */
+    @Query("SELECT * FROM user_words WHERE added > 0 ORDER BY count DESC, lastUsedAt DESC")
+    suspend fun addedWords(): List<UserWord>
+
+    /** The first [limit] words not added by hand, by count and then by recency. */
+    @Query("SELECT * FROM user_words WHERE added = 0 ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
+    suspend fun topWordsNotAdded(limit: Int): List<UserWord>
+
     @Query("SELECT * FROM user_words WHERE word = :word LIMIT 1")
     suspend fun find(word: String): UserWord?
 
@@ -111,12 +119,13 @@ interface UserWordDao {
     suspend fun unconfirmedBefore(cutoff: Long): List<String>
 
     /**
-     * The words past the first [keep], ordered by count and then by recency, worst last.
-     * `LIMIT -1` is SQLite's "no limit".
+     * The words past the first [keep] not added by hand, ordered by count and then by recency,
+     * worst last. `LIMIT -1` is SQLite's "no limit".
      */
     @Query(
         """
         SELECT word FROM user_words
+        WHERE added = 0
         ORDER BY count DESC, lastUsedAt DESC
         LIMIT -1 OFFSET :keep
         """,
@@ -134,6 +143,10 @@ interface UserWordDao {
 
     @Query("SELECT COUNT(*) FROM user_words")
     fun observeCount(): Flow<Int>
+
+    /** How many words the cap can take: those not added by hand. */
+    @Query("SELECT COUNT(*) FROM user_words WHERE added = 0")
+    fun observeCountNotAdded(): Flow<Int>
 
     companion object {
         /** The rows the single-use clean-up removes: written once, never chosen on purpose, unused since the cutoff. */

@@ -27,6 +27,10 @@ data class LinkRow(
     val lastUsedAt: Long,
     val contextSeen: Long,
     val languageSeen: Long,
+    /** How many times it was chosen on purpose; see [com.borderkeys.data.entity.UserBigram.asserted]. */
+    val asserted: Int = 0,
+    /** How many times it was added by hand. */
+    val added: Int = 0,
 )
 
 /** The words a pair or triple follows: its language, the words, their total, last use and observations. */
@@ -38,27 +42,36 @@ internal data class ContextRow(
     val seen: Long,
 )
 
-/** Uses of a pair or triple to record: its language, the words before its last, its last word, how many, when. */
+/**
+ * Uses of a pair or triple to record: its language, the words before its last, its last word,
+ * how many, when; [asserted] and [added] are what the record adds to its marks, or what an
+ * import lifts them to.
+ */
 internal data class LinkUpdate(
     val language: String,
     val context: List<String>,
     val word: String,
     val delta: Int,
     val lastUsedAt: Long,
+    val asserted: Int = 0,
+    val added: Int = 0,
 )
 
 internal fun UserBigram.row() =
-    LinkRow(language, listOf(previousWord), word, count, lastUsedAt, contextSeen, languageSeen)
+    LinkRow(language, listOf(previousWord), word, count, lastUsedAt, contextSeen, languageSeen, asserted, added)
 
 fun LinkRow.toBigram() =
-    UserBigram(language, context.single(), word, count, lastUsedAt, contextSeen, languageSeen)
+    UserBigram(language, context.single(), word, count, lastUsedAt, contextSeen, languageSeen, asserted, added)
 
-internal fun UserTrigram.row() =
-    LinkRow(language, listOf(previousWord2, previousWord1), word, count, lastUsedAt, contextSeen, languageSeen)
+internal fun UserTrigram.row() = LinkRow(
+    language, listOf(previousWord2, previousWord1), word, count, lastUsedAt, contextSeen, languageSeen, asserted, added,
+)
 
 fun LinkRow.toTrigram(): UserTrigram {
     val (previousWord2, previousWord1) = context
-    return UserTrigram(language, previousWord2, previousWord1, word, count, lastUsedAt, contextSeen, languageSeen)
+    return UserTrigram(
+        language, previousWord2, previousWord1, word, count, lastUsedAt, contextSeen, languageSeen, asserted, added,
+    )
 }
 
 internal fun UserPairContext.row() = ContextRow(language, listOf(previousWord), total, lastUsedAt, seen)
@@ -73,10 +86,11 @@ internal fun ContextRow.toTripleContext(): UserTripleContext {
     return UserTripleContext(language, previousWord2, previousWord1, total, lastUsedAt, seen)
 }
 
-internal fun LearnedBigram.update() = LinkUpdate(language, listOf(previousWord), word, delta, lastUsedAt)
+internal fun LearnedBigram.update() =
+    LinkUpdate(language, listOf(previousWord), word, delta, lastUsedAt, asserted, added)
 
 internal fun LearnedTrigram.update() =
-    LinkUpdate(language, listOf(previousWord2, previousWord1), word, delta, lastUsedAt)
+    LinkUpdate(language, listOf(previousWord2, previousWord1), word, delta, lastUsedAt, asserted, added)
 
 /** A use the engine recorded, or none, and the links it dropped right after, either kind. */
 internal class LinkStep(val use: LinkUpdate?, val dropped: List<LinkRow>)
@@ -105,6 +119,9 @@ internal interface LinkTable {
     suspend fun inContext(language: String, context: List<String>): List<LinkRow>
 
     suspend fun upsert(link: LinkRow)
+
+    /** Lifts [link]'s marks to at least [asserted] and [added]. */
+    suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int)
 
     suspend fun delete(links: List<LinkRow>)
 
@@ -141,6 +158,9 @@ internal class PairTable(private val dao: UserBigramDao) : LinkTable {
         dao.inContext(language, context.single()).map { it.row() }
 
     override suspend fun upsert(link: LinkRow) = dao.upsert(link.toBigram())
+
+    override suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int) =
+        dao.raiseMarks(link.language, link.context.single(), link.word, asserted, added)
 
     override suspend fun delete(links: List<LinkRow>) = dao.delete(links.map { it.toBigram() })
 
@@ -179,6 +199,11 @@ internal class TripleTable(private val dao: UserTrigramDao) : LinkTable {
 
     override suspend fun upsert(link: LinkRow) = dao.upsert(link.toTrigram())
 
+    override suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int) {
+        val (previousWord2, previousWord1) = link.context
+        dao.raiseMarks(link.language, previousWord2, previousWord1, link.word, asserted, added)
+    }
+
     override suspend fun delete(links: List<LinkRow>) = dao.delete(links.map { it.toTrigram() })
 
     override suspend fun countIn(language: String) = dao.countIn(language)
@@ -196,9 +221,10 @@ internal class TripleTable(private val dao: UserTrigramDao) : LinkTable {
 
 /**
  * The [links] of one language its prune removes, in the order they go: as many as
- * [PhraseBudget.languageExcess] gives for them, by [PhraseBudget.languageOverflow] on the language's
- * [clock], ties going to the smaller share of the context's total in [contextTotals] (keyed by the
- * context's words, and held at no less than its links' counts together); never [kept].
+ * [PhraseBudget.languageExcess] gives for those not chosen on purpose, by
+ * [PhraseBudget.languageOverflow] on the language's [clock], ties going to the smaller share of the
+ * context's total in [contextTotals] (keyed by the context's words, and held at no less than its
+ * links' counts together); never [kept].
  */
 fun languageGone(
     links: List<LinkRow>,
@@ -209,11 +235,12 @@ fun languageGone(
     val sums = links.groupingBy { it.context }.fold(0L) { sum, link -> sum + link.count }
     val totals = sums.mapValues { (context, sum) -> maxOf(contextTotals[context] ?: 0L, sum) }
     return PhraseBudget.languageOverflow(
-        links.asSequence(), PhraseBudget.languageExcess(links.size), clock,
+        links.asSequence(), PhraseBudget.languageExcess(links.count { it.asserted == 0 }), clock,
         isKept = { kept != null && it.context == kept.context && it.word == kept.word },
         countOf = { it.count },
         seenOf = { it.languageSeen },
         tieBreak = { share(it.count, totals[it.context]) },
+        assertedOf = { it.asserted > 0 },
     )
 }
 

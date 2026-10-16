@@ -17,8 +17,9 @@ import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 
 /**
- * The single-use clean-up's SQL ([DictionaryRepository.decayStaleEntries]) on a database in
- * memory: which words written once it removes with their phrases, and which it leaves.
+ * The clean-up's SQL ([DictionaryRepository.decayStaleEntries]) on a database in memory: which
+ * words written once, and which words past the cap, it removes with their phrases, and which it
+ * leaves.
  */
 @RunWith(SharedNativeTextRunner::class)
 @Config(sdk = [SharedNativeTextRunner.SDK])
@@ -65,6 +66,20 @@ class SingleUseSweepSqlTest {
         val rows = repository.personalRows(LIMIT)
         assertEquals(listOf("once"), rows.words.map { it.word })
         assertEquals(listOf("once"), rows.pairs.map { it.word })
+    }
+
+    @Test
+    fun `past the cap, a word added by hand stays with its phrase, a word learned once goes`() = runTest {
+        repository.applyLearning(
+            listOf(LearnedWord("big", LANGUAGE, 5, AT), LearnedWord("once", LANGUAGE, 1, AT)),
+            emptyList(),
+            emptyList(),
+        )
+        repository.addPhrase(listOf("hi", "nadia"), LANGUAGE, AT, unblock = false)
+        repository.decayStaleEntries(keep = 1, HALF_LIFE, unconfirmedLifeMillis = null, now = AT)
+        val rows = repository.personalRows(LIMIT)
+        assertEquals(listOf("big", "hi", "nadia"), rows.words.map { it.word }.sorted())
+        assertEquals(listOf("nadia"), rows.pairs.map { it.word })
     }
 
     private companion object {

@@ -14,12 +14,12 @@ import org.junit.Test
 class LearnedWordsLogicTest {
 
     @Test
-    fun `a word is addable unless a stored row is that exact spelling`() {
-        val stored = setOf("paris", "Nadia")
-        assertTrue(addable("Paris", stored))
-        assertTrue(addable("kubernetes", stored))
-        assertFalse(addable("paris", stored))
-        assertFalse(addable("Nadia", stored))
+    fun `a word is addable unless a listed word is that exact spelling`() {
+        val listed = setOf("paris", "Nadia")
+        assertTrue(addable("Paris", listed))
+        assertTrue(addable("kubernetes", listed))
+        assertFalse(addable("paris", listed))
+        assertFalse(addable("Nadia", listed))
     }
 
     @Test

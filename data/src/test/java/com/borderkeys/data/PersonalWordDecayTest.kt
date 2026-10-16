@@ -3,6 +3,8 @@
 
 package com.borderkeys.data
 
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyboardPreferences
 import org.junit.Assert.assertEquals
@@ -77,6 +79,17 @@ class PersonalWordDecayTest {
         assertEquals(1, chosen.decayed(now = later, halfLifeMillis = halfLife).count)
         assertEquals(0, never.decayed(now = later, halfLifeMillis = halfLife).count)
         assertEquals(1, chosen.decayed(now = later, halfLifeMillis = halfLife).asserted)
+    }
+
+    @Test
+    fun `a pair or triple chosen on purpose never decays below one use, one never chosen decays to none`() {
+        val later = 3 * halfLife
+        val pair = UserBigram("en", "we", "go", count = 1, lastUsedAt = 0, contextSeen = 1, languageSeen = 1)
+        val triple = UserTrigram("en", "we", "go", "home", count = 1, lastUsedAt = 0, contextSeen = 1, languageSeen = 1)
+        assertEquals(0, pair.decayed(now = later, halfLifeMillis = halfLife).count)
+        assertEquals(1, pair.copy(asserted = 1).decayed(now = later, halfLifeMillis = halfLife).count)
+        assertEquals(0, triple.decayed(now = later, halfLifeMillis = halfLife).count)
+        assertEquals(1, triple.copy(asserted = 1).decayed(now = later, halfLifeMillis = halfLife).count)
     }
 
     @Test

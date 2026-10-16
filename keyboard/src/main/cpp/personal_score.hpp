@@ -4,6 +4,7 @@
 #ifndef BORDERKEYS_PERSONAL_SCORE_HPP
 #define BORDERKEYS_PERSONAL_SCORE_HPP
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -37,6 +38,12 @@ public:
     /** The most the word boost and the context bonus add together. */
     static constexpr float kMaxPersonalScore = kMaxUserBoost + kMaxUserBigramBoost;
 
+    /**
+     * What a link chosen on purpose carries above the log of its share, counted as certain: the
+     * most the word boost and the context bonus add to any other candidate.
+     */
+    static constexpr float kChosenLinkBoost = kMaxPersonalScore;
+
     PersonalScore(const UserModel& model, uint32_t learnAfterUses);
 
     void setEnabled(bool enabled) { enabled_ = enabled; }
@@ -50,6 +57,36 @@ public:
     /** Whether [count] uses make a link part of a phrase. */
     bool phraseLinkLearned(uint32_t count) const {
         return count >= kPhraseUsesPerWordUses * learnAfterUses_;
+    }
+
+    /** Whether a link used [count] times, chosen on purpose [asserted] times, counts as learned. */
+    bool linkLearned(uint32_t count, uint32_t asserted) const {
+        return asserted > 0u || learned(count);
+    }
+
+    /**
+     * Whether a link used [count] times, chosen on purpose [asserted] times, holding [share] of
+     * its context, is part of a phrase: chosen at all, or learned as a phrase's link with at least
+     * [kPhraseMinShare].
+     */
+    bool phraseLink(uint32_t count, uint32_t asserted, float share) const {
+        return asserted > 0u || (phraseLinkLearned(count) && share >= kPhraseMinShare);
+    }
+
+    /**
+     * The share of a context seen [total] times that a link used [count] times holds, smoothed
+     * by [kUserBigramPrior].
+     */
+    static float smoothedShare(uint32_t count, uint32_t total) {
+        return static_cast<float>(count) / (static_cast<float>(total) + kUserBigramPrior);
+    }
+
+    /**
+     * The log of the smoothed share a link used [count] times holds of a context seen [total]
+     * times; [kChosenLinkBoost] once chosen on purpose [asserted] times, its share certain.
+     */
+    static float linkLogShare(uint32_t count, uint32_t asserted, uint32_t total) {
+        return asserted > 0u ? kChosenLinkBoost : std::log(smoothedShare(count, total));
     }
 
     /**
@@ -76,6 +113,9 @@ public:
     /** A learned word's boost for [count] uses: logarithmic, up to kMaxUserBoost. */
     static float wordBoostForCount(uint32_t count);
 
+    /** The word boost of [entry]: kMaxUserBoost once added by hand, else [wordBoostForCount] of its uses. */
+    float wordBoost(uint32_t entry) const;
+
     /**
      * The bonus of a link used [count] times in a context seen [total] times: its smoothed share
      * of the context, bounded by kMaxUserBigramBoost.
@@ -101,8 +141,12 @@ public:
     float ceiling() const { return kMaxUserBoost + largestBonus_; }
 
 private:
-    /** [shareBonus] of a link used [count] times in a context seen [total] times; 0 below learn-after. */
-    float bonusFor(uint32_t count, uint32_t total) const;
+    /**
+     * The bonus of a link used [count] times, chosen on purpose [asserted] times, in a context
+     * seen [total] times: kMaxUserBigramBoost once chosen, its share certain; else [shareBonus];
+     * 0 below learn-after.
+     */
+    float bonusFor(uint32_t count, uint32_t asserted, uint32_t total) const;
 
     const UserModel& model_;
     uint32_t learnAfterUses_;

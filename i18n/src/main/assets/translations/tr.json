@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "Eklenince engel kalkar ve klavye onu yeniden önerir.",
   "dictionary_add_blocked_title": "Bu sözcük engellenmiş",
   "dictionary_add_to_dictionary": "Sözlüğe ekle",
+  "dictionary_added_by_hand": "elle eklendi",
   "dictionary_added_by_hand_on": "elle eklendi · %s",
   "dictionary_advanced_note": "Sözcüklerin ne kadar çabuk öğrenildiği, ne kadar hızlı silikleştiği ve ne sıklıkla temizlendiği",
   "dictionary_block": "Engelle",

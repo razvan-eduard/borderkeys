@@ -519,6 +519,7 @@
   "dictionary_add_blocked_text": "با افزودنش مسدودی برداشته می‌شود و صفحه‌کلید دوباره آن را پیشنهاد می‌دهد.",
   "dictionary_add_blocked_title": "این واژه مسدود است",
   "dictionary_add_to_dictionary": "افزودن به واژه‌نامه",
+  "dictionary_added_by_hand": "دستی افزوده شده",
   "dictionary_added_by_hand_on": "دستی افزوده شده · %s",
   "dictionary_advanced_note": "واژه‌ها چه زود آموخته می‌شوند، چه زود کم‌رنگ می‌شوند و هر چند وقت پاک‌سازی می‌شوند",
   "dictionary_block": "مسدود کردن",

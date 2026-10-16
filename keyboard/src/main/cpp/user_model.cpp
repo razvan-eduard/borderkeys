@@ -39,14 +39,17 @@ void relink(std::vector<uint32_t>& slots, uint32_t from, uint32_t to) {
 }
 
 /**
- * The best `maxOut` of the links at `slots`, most frequent first and, among equals, in the order of
- * `slots`; `linkAt` gives a slot's next entry and count.
+ * The best `maxOut` of the links at `slots`: chosen on purpose first, then most frequent, and
+ * among equals in the order of `slots`; `linkAt` gives a slot's next entry, count and mark.
  */
 template <typename LinkAt>
 int bestSuccessors(const std::vector<uint32_t>& slots, LinkAt linkAt, UserModel::Successor* out,
                    int maxOut) {
+    // A link chosen on purpose ranks before one that was not; among the rest, the higher count.
     const auto before = [](const UserModel::Successor& a, const UserModel::Successor& b) {
-        return a.count > b.count;
+        const bool aChosen = a.asserted > 0u;
+        const bool bChosen = b.asserted > 0u;
+        return aChosen != bChosen ? aChosen : a.count > b.count;
     };
     int written = 0;
     for (const uint32_t slot : slots) {
@@ -267,6 +270,7 @@ bool UserModel::add(LinkTable<Link>& table, const Link& link, int most) {
     if (found != table.slots.end()) {
         Link& held = table.links[found->second];
         held.count = saturatingAdd(held.count, link.count);
+        held.asserted = std::max(held.asserted, link.asserted);
         held.contextSeen = std::max(held.contextSeen, link.contextSeen);
         held.languageSeen = std::max(held.languageSeen, link.languageSeen);
         Successors& context = table.contexts[link.contextKey()];
@@ -309,9 +313,14 @@ void UserModel::drop(LinkTable<Link>& table, const typename Link::Key& key) {
 }
 
 template <typename Link>
-uint32_t UserModel::countOf(const LinkTable<Link>& table, const typename Link::Key& key) {
+uint32_t UserModel::countOf(const LinkTable<Link>& table, const typename Link::Key& key,
+                            uint32_t* asserted) {
     const auto found = table.slots.find(key);
-    return found == table.slots.end() ? 0u : table.links[found->second].count;
+    const Link* const link = found == table.slots.end() ? nullptr : &table.links[found->second];
+    if (asserted != nullptr) {
+        *asserted = link == nullptr ? 0u : link->asserted;
+    }
+    return link == nullptr ? 0u : link->count;
 }
 
 template <typename Link>
@@ -334,7 +343,7 @@ int UserModel::successorsOf(const LinkTable<Link>& table, const typename Link::C
         found->second.slots,
         [&table](uint32_t slot) {
             const Link& link = table.links[slot];
-            return Successor{static_cast<uint32_t>(link.nextIndex), link.count};
+            return Successor{static_cast<uint32_t>(link.nextIndex), link.count, link.asserted};
         },
         out, maxOut);
 }
@@ -355,7 +364,7 @@ int UserModel::linksAfter(const LinkTable<Link>& table, const typename Link::Con
     const std::vector<uint32_t>& slots = found->second.slots;
     for (size_t i = 0; out != nullptr && i < slots.size() && static_cast<int>(i) < maxOut; ++i) {
         const Link& link = table.links[slots[i]];
-        out[i] = ContextLink{link.nextIndex, link.count, link.contextSeen};
+        out[i] = ContextLink{link.nextIndex, link.count, link.contextSeen, link.asserted};
     }
     return static_cast<int>(slots.size());
 }
@@ -387,7 +396,7 @@ template <typename Link, typename LinkAt>
 void UserModel::loadLinks(LinkTable<Link> LinkStore::*kind, const char* const* languages,
                           const size_t* languageLengths, const int32_t* counts, int count,
                           bool wordsGiven, int most, const uint64_t* contextSeen,
-                          const uint64_t* languageSeen, LinkAt linkAt) {
+                          const uint64_t* languageSeen, const int32_t* asserted, LinkAt linkAt) {
     for (LinkStore& store : stores_) {
         LinkTable<Link>& table = store.*kind;
         table.links.clear();
@@ -409,6 +418,7 @@ void UserModel::loadLinks(LinkTable<Link> LinkStore::*kind, const char* const* l
         }
         link.contextSeen = contextSeen != nullptr ? contextSeen[i] : 0u;
         link.languageSeen = languageSeen != nullptr ? languageSeen[i] : 0u;
+        link.asserted = asserted != nullptr && asserted[i] > 0 ? static_cast<uint32_t>(asserted[i]) : 0u;
         add(links->*kind, link, most);
     }
 }
@@ -501,11 +511,16 @@ void UserModel::dropTrigrams(const char* const* languages, const size_t* languag
 }
 
 uint32_t UserModel::trigramCount(int32_t store, int32_t previous2Index, int32_t previous1Index,
-                                 int32_t nextIndex) const {
+                                 int32_t nextIndex, uint32_t* asserted) const {
     const LinkStore* const links = storeAt(store);
-    return links == nullptr || !named(previous2Index, previous1Index, nextIndex)
-               ? 0u
-               : countOf(links->triples, Trigram::keyOf(previous2Index, previous1Index, nextIndex));
+    if (links == nullptr || !named(previous2Index, previous1Index, nextIndex)) {
+        if (asserted != nullptr) {
+            *asserted = 0u;
+        }
+        return 0u;
+    }
+    return countOf(links->triples, Trigram::keyOf(previous2Index, previous1Index, nextIndex),
+                   asserted);
 }
 
 uint32_t UserModel::trigramTotal(int32_t store, int32_t previous2Index,
@@ -563,7 +578,7 @@ int UserModel::triplesHeld(int32_t store) const {
 
 void UserModel::tripleAt(int32_t store, int index, int32_t* previous2Index,
                          int32_t* previous1Index, int32_t* nextIndex, uint32_t* count,
-                         uint64_t* languageSeen, uint32_t* contextTotal) const {
+                         uint64_t* languageSeen, uint32_t* contextTotal, uint32_t* asserted) const {
     const LinkStore* const links = storeAt(store);
     const Trigram* const trigram = links == nullptr ? nullptr : linkAt(links->triples, index);
     if (trigram == nullptr) {
@@ -573,6 +588,7 @@ void UserModel::tripleAt(int32_t store, int index, int32_t* previous2Index,
     if (previous1Index != nullptr) *previous1Index = trigram->previous1Index;
     if (nextIndex != nullptr) *nextIndex = trigram->nextIndex;
     if (count != nullptr) *count = trigram->count;
+    if (asserted != nullptr) *asserted = trigram->asserted;
     if (languageSeen != nullptr) *languageSeen = trigram->languageSeen;
     if (contextTotal != nullptr) *contextTotal = totalOf(links->triples, trigram->contextKey());
 }
@@ -582,21 +598,26 @@ void UserModel::bulkLoadTrigrams(const char* const* languages, const size_t* lan
                                  const char* const* previous1, const size_t* previous1Lengths,
                                  const char* const* next, const size_t* nextLengths,
                                  const int32_t* counts, int count, const uint64_t* contextSeen,
-                                 const uint64_t* languageSeen) {
+                                 const uint64_t* languageSeen, const int32_t* asserted) {
     loadLinks(&LinkStore::triples, languages, languageLengths, counts, count,
               previous2 != nullptr && previous1 != nullptr && next != nullptr, kMaxTrigrams,
-              contextSeen, languageSeen, [&](int i, uint32_t uses) {
+              contextSeen, languageSeen, asserted, [&](int i, uint32_t uses) {
                   return Trigram{reserve(previous2[i], previous2Lengths[i]),
                                  reserve(previous1[i], previous1Lengths[i]),
                                  reserve(next[i], nextLengths[i]), uses};
               });
 }
 
-uint32_t UserModel::bigramCount(int32_t store, int32_t previousIndex, int32_t nextIndex) const {
+uint32_t UserModel::bigramCount(int32_t store, int32_t previousIndex, int32_t nextIndex,
+                                uint32_t* asserted) const {
     const LinkStore* const links = storeAt(store);
-    return links == nullptr || !named(previousIndex, nextIndex)
-               ? 0u
-               : countOf(links->pairs, Bigram::keyOf(previousIndex, nextIndex));
+    if (links == nullptr || !named(previousIndex, nextIndex)) {
+        if (asserted != nullptr) {
+            *asserted = 0u;
+        }
+        return 0u;
+    }
+    return countOf(links->pairs, Bigram::keyOf(previousIndex, nextIndex), asserted);
 }
 
 uint32_t UserModel::successorTotal(int32_t store, int32_t previousIndex) const {
@@ -616,7 +637,8 @@ int UserModel::successors(int32_t store, int32_t previousIndex, Successor* out,
 }
 
 void UserModel::pairAt(int32_t store, int index, int32_t* previousIndex, int32_t* nextIndex,
-                       uint32_t* count, uint64_t* languageSeen, uint32_t* contextTotal) const {
+                       uint32_t* count, uint64_t* languageSeen, uint32_t* contextTotal,
+                       uint32_t* asserted) const {
     const LinkStore* const links = storeAt(store);
     const Bigram* const bigram = links == nullptr ? nullptr : linkAt(links->pairs, index);
     if (bigram == nullptr) {
@@ -625,6 +647,7 @@ void UserModel::pairAt(int32_t store, int index, int32_t* previousIndex, int32_t
     if (previousIndex != nullptr) *previousIndex = bigram->previousIndex;
     if (nextIndex != nullptr) *nextIndex = bigram->nextIndex;
     if (count != nullptr) *count = bigram->count;
+    if (asserted != nullptr) *asserted = bigram->asserted;
     if (languageSeen != nullptr) *languageSeen = bigram->languageSeen;
     if (contextTotal != nullptr) *contextTotal = totalOf(links->pairs, bigram->contextKey());
 }
@@ -633,10 +656,10 @@ void UserModel::bulkLoadBigrams(const char* const* languages, const size_t* lang
                                 const char* const* previous, const size_t* previousLengths,
                                 const char* const* next, const size_t* nextLengths,
                                 const int32_t* counts, int count, const uint64_t* contextSeen,
-                                const uint64_t* languageSeen) {
+                                const uint64_t* languageSeen, const int32_t* asserted) {
     loadLinks(&LinkStore::pairs, languages, languageLengths, counts, count,
               previous != nullptr && next != nullptr, kMaxBigrams, contextSeen, languageSeen,
-              [&](int i, uint32_t uses) {
+              asserted, [&](int i, uint32_t uses) {
                   return Bigram{reserve(previous[i], previousLengths[i]),
                                 reserve(next[i], nextLengths[i]), uses};
               });
@@ -697,7 +720,8 @@ std::string primaryLanguageOf(const char* tag, size_t length) {
 }
 
 void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
-                         int count, const int32_t* deliberateCapitals, const int32_t* asserted) {
+                         int count, const int32_t* deliberateCapitals, const int32_t* asserted,
+                         const int32_t* added) {
     clear();
     if (words == nullptr || lengths == nullptr || counts == nullptr) {
         return;
@@ -725,6 +749,9 @@ void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const 
         }
         if (asserted != nullptr && asserted[i] > 0) {
             entry.asserted = saturatingAdd(entry.asserted, static_cast<uint32_t>(asserted[i]));
+        }
+        if (added != nullptr && added[i] > 0) {
+            entry.added = saturatingAdd(entry.added, static_cast<uint32_t>(added[i]));
         }
         totalCount_ = saturatingAdd(totalCount_, static_cast<uint32_t>(stored));
     }
@@ -763,6 +790,10 @@ uint32_t UserModel::deliberateCapitals(uint32_t entryIndex) const {
 
 uint32_t UserModel::asserted(uint32_t entryIndex) const {
     return (entryIndex < entries_.size()) ? entries_[entryIndex].asserted : 0u;
+}
+
+uint32_t UserModel::added(uint32_t entryIndex) const {
+    return (entryIndex < entries_.size()) ? entries_[entryIndex].added : 0u;
 }
 
 void UserModel::collect(int32_t node, Completion* out, int maxOut, int* written) const {

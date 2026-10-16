@@ -837,9 +837,10 @@ void copyRows(JNIEnv* env, jobjectArray languages, const std::array<jobjectArray
 template <size_t kWords, typename Load>
 void loadLinkRows(JNIEnv* env, jlong handle, jobjectArray languages,
                   const std::array<jobjectArray, kWords>& words, jintArray counts,
-                  jlongArray contextSeen, jlongArray languageSeen, Load load) {
+                  jlongArray contextSeen, jlongArray languageSeen, jintArray asserted, Load load) {
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || !given(languages, words) || counts == nullptr) {
+    if (engine == nullptr || !given(languages, words) || counts == nullptr ||
+        asserted == nullptr) {
         return;
     }
     const jsize rows = env->GetArrayLength(words.front());
@@ -847,24 +848,27 @@ void loadLinkRows(JNIEnv* env, jlong handle, jobjectArray languages,
     std::array<StringColumn, kWords> wordColumns;
     // An empty list clears the links the engine holds.
     if (rows == 0) {
-        load(*engine, languageColumn, wordColumns, nullptr, nullptr, nullptr, 0);
+        load(*engine, languageColumn, wordColumns, nullptr, nullptr, nullptr, nullptr, 0);
         return;
     }
-    if (rows < 0 || !hold(env, languages, words, rows) || env->GetArrayLength(counts) < rows) {
+    if (rows < 0 || !hold(env, languages, words, rows) || env->GetArrayLength(counts) < rows ||
+        env->GetArrayLength(asserted) < rows) {
         return;
     }
     NumberColumn<int32_t> countValues(rows);
+    NumberColumn<int32_t> assertedValues(rows);
     NumberColumn<uint64_t> contextSeenValues(rows);
     NumberColumn<uint64_t> languageSeenValues(rows);
     if (!allocate(rows, languageColumn, wordColumns) || !countValues.valid() ||
-        !contextSeenValues.valid() || !languageSeenValues.valid() ||
-        !readInts(env, counts, countValues) || !readLongs(env, contextSeen, contextSeenValues) ||
+        !assertedValues.valid() || !contextSeenValues.valid() || !languageSeenValues.valid() ||
+        !readInts(env, counts, countValues) || !readInts(env, asserted, assertedValues) ||
+        !readLongs(env, contextSeen, contextSeenValues) ||
         !readLongs(env, languageSeen, languageSeenValues)) {
         return;
     }
     copyRows(env, languages, words, languageColumn, wordColumns);
     load(*engine, languageColumn, wordColumns, countValues.data(), contextSeenValues.data(),
-         languageSeenValues.data(), static_cast<int>(rows));
+         languageSeenValues.data(), assertedValues.data(), static_cast<int>(rows));
 }
 
 /**
@@ -922,17 +926,18 @@ void dropLinkRows(JNIEnv* env, jlong handle, jobjectArray languages,
 /** Loads the remembered three-word sequences, as parallel arrays, after the pairs. */
 void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
                             jobjectArray previous2, jobjectArray previous1, jobjectArray next,
-                            jintArray counts, jlongArray contextSeen, jlongArray languageSeen) {
+                            jintArray counts, jlongArray contextSeen, jlongArray languageSeen,
+                            jintArray asserted) {
     loadLinkRows(env, handle, languages, std::array{previous2, previous1, next}, counts,
-                 contextSeen, languageSeen,
+                 contextSeen, languageSeen, asserted,
                  [](Engine& engine, const StringColumn& language, const auto& words,
                     const int32_t* uses, const uint64_t* byContext, const uint64_t* byLanguage,
-                    int rows) {
+                    const int32_t* chosen, int rows) {
                      const auto& [before2, before1, after] = words;
                      engine.loadUserTrigrams(language.data(), language.lengths(), before2.data(),
                                              before2.lengths(), before1.data(), before1.lengths(),
                                              after.data(), after.lengths(), uses, rows, byContext,
-                                             byLanguage);
+                                             byLanguage, chosen);
                  });
 }
 
@@ -1024,10 +1029,11 @@ void setNumber(JNIEnv* env, Array array, jsize slot, Value value, Write write) {
  */
 jint nativeContextLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring language,
                         jstring previous2, jstring previous1, jobjectArray outWords,
-                        jintArray outCounts, jlongArray outContextSeen, jlongArray outContext) {
+                        jintArray outCounts, jlongArray outContextSeen, jintArray outAsserted,
+                        jlongArray outContext) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outCounts == nullptr ||
-        outContextSeen == nullptr || outContext == nullptr ||
+        outContextSeen == nullptr || outAsserted == nullptr || outContext == nullptr ||
         env->GetArrayLength(outContext) < kContextSlots) {
         return 0;
     }
@@ -1072,13 +1078,16 @@ jint nativeContextLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring lan
     counted[kContextSeen] = static_cast<jlong>(context.seen);
     env->SetLongArrayRegion(outContext, 0, kContextSlots, counted);
     const jsize capacity = std::min({env->GetArrayLength(outWords), env->GetArrayLength(outCounts),
-                                     env->GetArrayLength(outContextSeen)});
+                                     env->GetArrayLength(outContextSeen),
+                                     env->GetArrayLength(outAsserted)});
     for (jsize i = 0; i < held && i < capacity; ++i) {
         setEntryKey(env, *engine, outWords, i, links[i].nextIndex);
         setNumber(env, outCounts, i, static_cast<jint>(links[i].count),
                   &JNIEnv::SetIntArrayRegion);
         setNumber(env, outContextSeen, i, static_cast<jlong>(links[i].contextSeen),
                   &JNIEnv::SetLongArrayRegion);
+        setNumber(env, outAsserted, i, static_cast<jint>(links[i].asserted),
+                  &JNIEnv::SetIntArrayRegion);
     }
     return held;
 }
@@ -1133,11 +1142,11 @@ jint nativeLinksHeld(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring langua
 jint nativeLanguageLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring language,
                          jboolean triples, jobjectArray outPrevious2, jobjectArray outPrevious1,
                          jobjectArray outWords, jintArray outCounts, jlongArray outLanguageSeen,
-                         jlongArray outContextTotals) {
+                         jlongArray outContextTotals, jintArray outAsserted) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outPrevious2 == nullptr || outPrevious1 == nullptr ||
         outWords == nullptr || outCounts == nullptr || outLanguageSeen == nullptr ||
-        outContextTotals == nullptr) {
+        outContextTotals == nullptr || outAsserted == nullptr) {
         return 0;
     }
     char languageBuffer[kStringBufferBytes];
@@ -1148,7 +1157,8 @@ jint nativeLanguageLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring la
     const jsize capacity = std::min(
         {env->GetArrayLength(outPrevious2), env->GetArrayLength(outPrevious1),
          env->GetArrayLength(outWords), env->GetArrayLength(outCounts),
-         env->GetArrayLength(outLanguageSeen), env->GetArrayLength(outContextTotals)});
+         env->GetArrayLength(outLanguageSeen), env->GetArrayLength(outContextTotals),
+         env->GetArrayLength(outAsserted)});
     jsize written = 0;
     Engine::StoredLink link{};
     while (written < capacity &&
@@ -1163,6 +1173,8 @@ jint nativeLanguageLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring la
                   &JNIEnv::SetLongArrayRegion);
         setNumber(env, outContextTotals, written, static_cast<jlong>(link.contextTotal),
                   &JNIEnv::SetLongArrayRegion);
+        setNumber(env, outAsserted, written, static_cast<jint>(link.asserted),
+                  &JNIEnv::SetIntArrayRegion);
         ++written;
     }
     return written;
@@ -1485,37 +1497,40 @@ void nativeSetLanguageEvidence(JNIEnv* env, jobject /*thiz*/, jlong handle, jstr
 
 void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
                            jobjectArray previous, jobjectArray next, jintArray counts,
-                           jlongArray contextSeen, jlongArray languageSeen) {
+                           jlongArray contextSeen, jlongArray languageSeen, jintArray asserted) {
     loadLinkRows(env, handle, languages, std::array{previous, next}, counts, contextSeen,
-                 languageSeen,
+                 languageSeen, asserted,
                  [](Engine& engine, const StringColumn& language, const auto& words,
                     const int32_t* uses, const uint64_t* byContext, const uint64_t* byLanguage,
-                    int rows) {
+                    const int32_t* chosen, int rows) {
                      const auto& [before, after] = words;
                      engine.loadUserBigrams(language.data(), language.lengths(), before.data(),
                                             before.lengths(), after.data(), after.lengths(), uses,
-                                            rows, byContext, byLanguage);
+                                            rows, byContext, byLanguage, chosen);
                  });
 }
 
 void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
-                         jintArray counts, jintArray deliberateCapitals, jintArray asserted) {
+                         jintArray counts, jintArray deliberateCapitals, jintArray asserted,
+                         jintArray added) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || words == nullptr || counts == nullptr ||
-        deliberateCapitals == nullptr || asserted == nullptr) {
+        deliberateCapitals == nullptr || asserted == nullptr || added == nullptr) {
         return;
     }
     const jsize wordCount = env->GetArrayLength(words);
     const jsize countLength = env->GetArrayLength(counts);
     const jsize capsLength = env->GetArrayLength(deliberateCapitals);
     const jsize assertedLength = env->GetArrayLength(asserted);
+    const jsize addedLength = env->GetArrayLength(added);
     // An empty list clears the words the engine holds.
     if (wordCount == 0) {
-        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr, nullptr);
+        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr, nullptr, nullptr);
         return;
     }
     if (wordCount < 0 || countLength < wordCount || capsLength < wordCount ||
-        assertedLength < wordCount || wordCount > kMaxUserWordsPerCall) {
+        assertedLength < wordCount || addedLength < wordCount ||
+        wordCount > kMaxUserWordsPerCall) {
         return;
     }
 
@@ -1523,22 +1538,24 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     NumberColumn<int32_t> countValues(wordCount);
     NumberColumn<int32_t> capsValues(wordCount);
     NumberColumn<int32_t> assertedValues(wordCount);
+    NumberColumn<int32_t> addedValues(wordCount);
     if (!column.valid() || !countValues.valid() || !capsValues.valid() ||
-        !assertedValues.valid()) {
+        !assertedValues.valid() || !addedValues.valid()) {
         return;
     }
 
     if (!readInts(env, counts, countValues) || !readInts(env, deliberateCapitals, capsValues) ||
-        !readInts(env, asserted, assertedValues)) {
+        !readInts(env, asserted, assertedValues) || !readInts(env, added, addedValues)) {
         return;
     }
 
-    // Compacted: a dropped word's count, capital flag and assertion drop with it.
+    // Compacted: a dropped word's count, capital flag, assertion and add drop with it.
     char** const storage = column.data();
     size_t* const lengths = column.lengths();
     int32_t* const counts32 = countValues.data();
     int32_t* const caps32 = capsValues.data();
     int32_t* const asserted32 = assertedValues.data();
+    int32_t* const added32 = addedValues.data();
     jsize kept = 0;
     for (jsize i = 0; i < wordCount; ++i) {
         char* copy = nullptr;
@@ -1551,11 +1568,12 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         counts32[kept] = counts32[i];
         caps32[kept] = caps32[i];
         asserted32[kept] = asserted32[i];
+        added32[kept] = added32[i];
         ++kept;
     }
 
     engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept), caps32,
-                          asserted32);
+                          asserted32, added32);
 }
 
 /** Replaces the blocked words; an empty array clears them. */
@@ -1666,12 +1684,12 @@ const JNINativeMethod kMethods[] = {
     {"nativeLearn",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZLjava/lang/String;Z)I",
      reinterpret_cast<void*>(nativeLearn)},
-    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",
+    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
     {"nativeSetBlockedWords", "(J[Ljava/lang/String;)V",
      reinterpret_cast<void*>(nativeSetBlockedWords)},
     {"nativeLoadUserBigrams",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J)V",
+     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
     {"nativeLoadUserPairTotals", "(J[Ljava/lang/String;[Ljava/lang/String;[J[J)V",
      reinterpret_cast<void*>(nativeLoadUserPairTotals)},
@@ -1707,7 +1725,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[F)Z",
      reinterpret_cast<void*>(nativeExplainScore)},
     {"nativeLoadUserTrigrams",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J)V",
+     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)V",
      reinterpret_cast<void*>(nativeLoadUserTrigrams)},
     {"nativeLoadUserTripleTotals",
      "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[J[J)V",
@@ -1718,12 +1736,12 @@ const JNINativeMethod kMethods[] = {
     {"nativeLoadUserClocks", "(J[Ljava/lang/String;[J[J)V",
      reinterpret_cast<void*>(nativeLoadUserClocks)},
     {"nativeContextLinks",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[I[J[J)I",
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[I[J[I[J)I",
      reinterpret_cast<void*>(nativeContextLinks)},
     {"nativeLinksHeld", "(JLjava/lang/String;Z)I", reinterpret_cast<void*>(nativeLinksHeld)},
     {"nativeLearnable", "(J[Ljava/lang/String;[Z)V", reinterpret_cast<void*>(nativeLearnable)},
     {"nativeLanguageLinks",
-     "(JLjava/lang/String;Z[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J)I",
+     "(JLjava/lang/String;Z[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)I",
      reinterpret_cast<void*>(nativeLanguageLinks)},
     {"nativeDecodeGesture",
      "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[Ljava/lang/String;)I",

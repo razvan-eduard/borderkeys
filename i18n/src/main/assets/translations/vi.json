@@ -509,6 +509,7 @@
   "dictionary_add_blocked_text": "Thêm vào sẽ bỏ chặn và bàn phím lại gợi ý từ này.",
   "dictionary_add_blocked_title": "Từ này đã bị chặn",
   "dictionary_add_to_dictionary": "Thêm vào từ điển",
+  "dictionary_added_by_hand": "thêm thủ công",
   "dictionary_added_by_hand_on": "thêm thủ công · %s",
   "dictionary_advanced_note": "Từ được học nhanh đến mức nào, phai đi nhanh ra sao và bao lâu được dọn dẹp một lần",
   "dictionary_block": "Chặn",

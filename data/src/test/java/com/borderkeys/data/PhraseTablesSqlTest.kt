@@ -106,9 +106,12 @@ class PhraseTablesSqlTest {
         holdPair("the", "cat", most)
         holdPair("the", "dog", most + 1)
         holdPair("a", "cow", 1)
+        // Chosen on purpose, each is left out whatever its count.
+        database.userBigramDao().upsert(UserBigram(LANGUAGE, "a", "ox", 1, AT, 1L, 1L, asserted = 1))
         val triples = database.userTrigramDao()
         triples.upsert(UserTrigram(LANGUAGE, "on", "the", "cat", most, AT, most.toLong(), most.toLong()))
         triples.upsert(UserTrigram(LANGUAGE, "on", "the", "dog", most + 1, AT, most + 1L, most + 1L))
+        triples.upsert(UserTrigram(LANGUAGE, "on", "the", "ox", 1, AT, 1L, 1L, asserted = 1))
         assertEquals(setOf("cat", "cow"), database.userBigramDao().usedAtMost(most).map { it.word }.toSet())
         assertEquals(setOf("cat"), triples.usedAtMost(most).map { it.word }.toSet())
     }
