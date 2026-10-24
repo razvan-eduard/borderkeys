@@ -633,9 +633,9 @@ int main(int argc, char** argv) {
             std::printf("    of which context  %+9.3f\n", parts.context);
         }
         std::printf("  edit + completion   %+9.3f\n", parts.rest);
-        std::printf("    edits %d, run-on %d, cost %.2f: penalty %+.3f, surcharge %+.3f, "
+        std::printf("    edits %d, past typed %d, cost %.2f: penalty %+.3f, surcharge %+.3f, "
                     "completion %+.3f\n",
-                    parts.edits, parts.runOn, parts.editCost, -parts.editPenalty,
+                    parts.edits, parts.pastTyped, parts.editCost, -parts.editPenalty,
                     -parts.surcharge, -parts.completion);
         std::printf("  ---\n");
         std::printf("  total               %+9.3f\n", parts.total);
@@ -650,15 +650,15 @@ int main(int argc, char** argv) {
             words.push_back(text.empty() ? std::string("?") : text);
         }
         std::printf("\n  autocorrect's list, best first (%d):\n", count);
-        std::printf("  %-16s %5s %6s %5s %9s %10s %9s\n", "word", "edits", "run-on", "cost",
+        std::printf("  %-16s %5s %10s %5s %9s %10s %9s\n", "word", "edits", "past typed", "cost",
                     "LM", "edit terms", "total");
         for (int i = 0; i < count; ++i) {
             Engine::ScoreParts entry;
             const bool onStrip = engine.explainScore(typed, std::strlen(typed), words[i].c_str(),
                                                      words[i].size(), &entry);
             const float languageModel = onStrip ? entry.languageModel + entry.packWeight : 0.0f;
-            std::printf("  %-16s %5d %6d %5.2f %+9.3f %+10.3f %+9.3f %s\n", words[i].c_str(),
-                        list[i].edits, list[i].runOn, list[i].editCost, languageModel,
+            std::printf("  %-16s %5d %10d %5.2f %+9.3f %+10.3f %+9.3f %s\n", words[i].c_str(),
+                        list[i].edits, list[i].pastTyped, list[i].editCost, languageModel,
                         onStrip ? list[i].score - languageModel : 0.0f, list[i].score,
                         engine.candidateIsProperNoun(list[i]) ? "name" : "");
         }

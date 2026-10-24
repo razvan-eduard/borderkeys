@@ -15,6 +15,10 @@ Cases whose mangled form is itself a dictionary word are skipped.
 import argparse
 import random
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS  # noqa: E402
 
 SEED = 20260921
 COUNT = 200
@@ -46,7 +50,7 @@ def main():
     with open(args.dictionary, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 continue
             try:
                 int(parts[1])

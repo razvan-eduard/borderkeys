@@ -1242,7 +1242,7 @@ jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring
         static_cast<jfloat>(parts.addedCharacters),
         parts.editCost,
         static_cast<jfloat>(parts.edits),
-        static_cast<jfloat>(parts.runOn),
+        static_cast<jfloat>(parts.pastTyped),
         parts.editPenalty,
         parts.surcharge,
         parts.completion,

@@ -22,6 +22,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
+
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 
 # The shortest word considered.
@@ -40,13 +43,13 @@ def read_list(path: Path) -> tuple[dict[str, int], set[str]]:
     names: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) < 2:
+        if len(parts) < WORD_COLUMNS:
             continue
         try:
             counts[parts[0]] = int(parts[1])
         except ValueError:
             continue
-        if len(parts) >= 3 and parts[2] == "name":
+        if len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name":
             names.add(parts[0])
     return counts, names
 

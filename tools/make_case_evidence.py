@@ -27,6 +27,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS  # noqa: E402
+
 # A word as the corpus writes it: letters, with apostrophes and hyphens inside.
 WORD = re.compile(r"[^\W\d_](?:[^\W\d_]|['’-](?=[^\W\d_]))*")
 
@@ -39,7 +42,7 @@ def name_keys(words: Path) -> set[str]:
     keys = set()
     for line in words.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) >= 3 and parts[2] == "name":
+        if len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name":
             keys.add(parts[0].casefold())
     return keys
 

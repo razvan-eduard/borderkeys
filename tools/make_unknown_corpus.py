@@ -12,10 +12,12 @@ pack is keyed by.
 """
 
 import argparse
-import importlib.util
-import pathlib
 import random
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS, fold_word  # noqa: E402
 
 SEED = 20260921
 COUNT = 200
@@ -25,11 +27,7 @@ MAX_LENGTH = 9
 
 def load_fold():
     """build_dict.py's own fold, so membership here means membership in the compiled pack."""
-    path = pathlib.Path(__file__).with_name("build_dict.py")
-    spec = importlib.util.spec_from_file_location("build_dict", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.fold_word
+    return fold_word
 
 
 def packed_keys(dictionary, fold):
@@ -38,7 +36,7 @@ def packed_keys(dictionary, fold):
     with open(dictionary, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 2:
+            if len(parts) >= WORD_COLUMNS:
                 keys.add(fold(parts[0]))
     return keys
 

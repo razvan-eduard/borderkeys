@@ -5,6 +5,7 @@ package com.borderkeys.ime
 
 import com.borderkeys.geometry.halfDown
 import com.borderkeys.predict.Candidate
+import com.borderkeys.typing.TypingHost
 
 /**
  * Where each word sits on the suggestion strip: what was typed first, the correction in the
@@ -12,12 +13,15 @@ import com.borderkeys.predict.Candidate
  */
 internal class SuggestionRow {
 
-    /** The slot holding exactly what was typed, or -1 when the row does not carry it. */
-    var typedIndex: Int = -1
+    /**
+     * The slot holding exactly what was typed, or [TypingHost.NO_SLOT] when the row does not carry
+     * it.
+     */
+    var typedIndex: Int = TypingHost.NO_SLOT
         private set
 
-    /** The slot holding the correction a delimiter would apply, or -1. */
-    var appliedIndex: Int = -1
+    /** The slot holding the correction a delimiter would apply, or [TypingHost.NO_SLOT]. */
+    var appliedIndex: Int = TypingHost.NO_SLOT
         private set
 
     /**
@@ -33,8 +37,8 @@ internal class SuggestionRow {
         correction: String?,
         revertable: String? = null,
     ): List<Candidate> {
-        typedIndex = -1
-        appliedIndex = -1
+        typedIndex = TypingHost.NO_SLOT
+        appliedIndex = TypingHost.NO_SLOT
         val cap = limit
         if (cap <= 0) {
             return emptyList()

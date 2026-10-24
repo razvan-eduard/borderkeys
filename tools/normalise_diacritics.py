@@ -17,6 +17,10 @@ Nothing else is touched.
 
 import argparse
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
 
 CEDILLA = {"ş": "ș", "ţ": "ț", "Ş": "Ș", "Ţ": "Ț"}
 TILDE = {"ã": "ă", "Ã": "Ă"}
@@ -77,7 +81,7 @@ def main():
     with open(args.dictionary, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 lines.append((None, line.rstrip("\n")))
                 continue
             try:
@@ -85,7 +89,7 @@ def main():
             except ValueError:
                 lines.append((None, line.rstrip("\n")))
                 continue
-            lines.append(((parts[0], count, parts[2] if len(parts) > 2 else None), None))
+            lines.append(((parts[0], count, parts[2] if len(parts) >= NAMED_WORD_COLUMNS else None), None))
 
     known = {entry[0] for entry, _ in lines if entry is not None}
 

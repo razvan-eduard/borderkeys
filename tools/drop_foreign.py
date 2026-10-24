@@ -25,6 +25,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
+
 # The six that ship. Each is both a target to clean and a witness against the others.
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 BUNDLED += tuple(
@@ -51,7 +54,7 @@ def read_list(path: Path) -> tuple[dict[str, int], int, set[str]]:
     total = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) < 2:
+        if len(parts) < WORD_COLUMNS:
             continue
         try:
             count = int(parts[1])
@@ -59,7 +62,7 @@ def read_list(path: Path) -> tuple[dict[str, int], int, set[str]]:
             continue
         counts[parts[0]] = count
         total += count
-        if len(parts) >= 3 and parts[2] == "name":
+        if len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name":
             names.add(parts[0])
     return counts, total, names
 

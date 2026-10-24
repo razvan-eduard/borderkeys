@@ -223,18 +223,21 @@ public:
      */
     bool vouchesForStem(const char* word, size_t length, const char* tag = nullptr) const;
 
-    /** The language being written: [answerAs]'s pack, else by the evidence, or -1 when none leads. */
+    /**
+     * The language being written: [answerAs]'s pack, else by the evidence, or [kNoPack] when none
+     * leads.
+     */
     int preferredPack() const;
 
     /**
      * The pack a request is restricted to: [answerAs]'s, else the detected language's, else the
-     * preferred language's; -1 when none is.
+     * preferred language's; [kNoPack] when none is.
      */
     int restrictedPack() const;
 
     /**
      * The pack whose language's pairs and triples are read and learned: [restrictedPack], else
-     * the heaviest active one; -1 with no active pack.
+     * the heaviest active one; [kNoPack] with no active pack.
      */
     int personalLanguagePack() const;
 
@@ -283,7 +286,7 @@ public:
         const bool held_;
     };
 
-    /** The pack the conversation is considered written in, or -1 when undecided. */
+    /** The pack the conversation is considered written in, or [kNoPack] when undecided. */
     int32_t dominantPack() const { return dominantPack_; }
 
     // Fills `out` with at most `maxOut` candidates, best first, and returns how many were
@@ -568,14 +571,14 @@ public:
         // The part of [personal] the context before the cursor adds.
         float context = 0.0f;
         float rest = 0.0f;
-        int32_t packIndex = -1;
+        int32_t packIndex = kNoPack;
         int32_t rank = -1;
         int32_t editDistance = 0;
         int32_t addedCharacters = 0;
         // How the walk reached the word, and what each part of that cost on the strip.
         float editCost = 0.0f;
         int32_t edits = 0;
-        int32_t runOn = 0;
+        int32_t pastTyped = 0;
         float editPenalty = 0.0f;
         float surcharge = 0.0f;
         float completion = 0.0f;
@@ -734,20 +737,20 @@ private:
     // boost cannot reach the heap's floor.
     void offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
                          uint32_t wordIndex, float score, float editCost, int edits,
-                         int runOn, int slips = 0) const;
+                         int pastTyped, int slips = 0) const;
     // Which language is being written, decided from the words already committed. dominantPack_
-    // is -1 until the evidence is one-sided enough to be worth acting on.
+    // is [kNoPack] until the evidence is one-sided enough to be worth acting on.
     void observeContextLanguage(const uint32_t* folded, int length);
 
     /** Sets dominantPack_ from languageEvidence_ and the lock's minimum. */
     void decideDominantPack();
 
     /**
-     * Runs the prefix search over every active pack, or over [onlyPack] when it is not -1,
-     * leaving out [skipPack] when it is not -1.
+     * Runs the prefix search over every active pack, or over [onlyPack] when it is not [kNoPack],
+     * leaving out [skipPack] when it is not [kNoPack].
      */
     void searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
-                     TopK<Candidate>& heap, int skipPack = -1);
+                     TopK<Candidate>& heap, int skipPack = kNoPack);
 
     /** Locates, in the pack at [index], a spelling that differs from `word` only by case. */
     bool exactSpellingIn(int index, const char* word, size_t length, const uint32_t* folded,
@@ -762,12 +765,13 @@ private:
 
     /**
      * How a word reads the typed letters, closest first, for an edit cost of zero: spelling them
-     * with every mark typed, spelling them without a mark typed, or running on past them.
+     * with every mark typed, spelling them without a mark typed, or with letters past the typed
+     * ones.
      */
     enum class Fit : uint8_t {
         Spells,
         DropsTypedMark,
-        RunsOn,
+        PastTyped,
     };
 
     /** How closely a word matches the typed letters: its edit cost, then its fit. */
@@ -788,8 +792,8 @@ private:
 
     /**
      * Records a word Primary reached as its closest reading so far: any ordinary word; a name
-     * reached by an edit or running on only when common enough to be a correction, and one
-     * reached freely only in the case it was typed in.
+     * reached by an edit or with letters past the typed ones only when common enough to be a
+     * correction, and one reached freely only in the case it was typed in.
      */
     void notePrimaryReach(const LanguagePack& pack, uint32_t wordIndex, float cost, Fit fit);
 
@@ -859,7 +863,7 @@ private:
     /** The previous word's tag in each pack, resolved with contextWord1_. */
     uint32_t contextTag1_[kMaxPacks] = {};
 
-    /** The active dictionary with the highest configured weight, or -1 when none is open. */
+    /** The active dictionary with the highest configured weight, or [kNoPack] when none is open. */
     int heaviestPack() const;
 
     float languageLockMinimum_ = 1.8f;

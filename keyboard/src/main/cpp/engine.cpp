@@ -33,10 +33,10 @@ constexpr float kInsertCost = 0.85f;
 
 // What a letter the word has past the last one typed costs autocorrect, in key widths. The
 // build may set it for a sweep.
-#ifdef BORDERKEYS_RUN_ON_COST
-constexpr float kRunOnCost = static_cast<float>(BORDERKEYS_RUN_ON_COST);
+#ifdef BORDERKEYS_PAST_TYPED_COST
+constexpr float kPastTypedCost = static_cast<float>(BORDERKEYS_PAST_TYPED_COST);
 #else
-constexpr float kRunOnCost = 0.5f;
+constexpr float kPastTypedCost = 0.5f;
 #endif
 
 // The factor on a neighbouring key's distance when the finger landed on it instead; the result
@@ -764,12 +764,12 @@ void Engine::resetLanguageEvidence() {
 }
 
 float Engine::languageEvidence(const char* tag) const {
-    const int index = (tag == nullptr) ? -1 : packIndexForTag(tag);
+    const int index = (tag == nullptr) ? kNoPack : packIndexForTag(tag);
     return (index < 0) ? 0.0f : languageEvidence_[index];
 }
 
 void Engine::setLanguageEvidence(const char* tag, float evidence) {
-    const int index = (tag == nullptr) ? -1 : packIndexForTag(tag);
+    const int index = (tag == nullptr) ? kNoPack : packIndexForTag(tag);
     if (index < 0) {
         return;
     }
@@ -779,7 +779,7 @@ void Engine::setLanguageEvidence(const char* tag, float evidence) {
 
 Engine::Fit Engine::fitOf(int depth, const char* text, uint32_t length) const {
     if (depth > 0) {
-        return Fit::RunsOn;
+        return Fit::PastTyped;
     }
     if (!typedCarriesMark_ || text == nullptr || length == 0) {
         return Fit::Spells;
@@ -830,7 +830,7 @@ bool Engine::readsAsTyped(const char* typedText, uint32_t typedLength, const cha
 
 void Engine::notePrimaryReach(const LanguagePack& pack, uint32_t wordIndex, float cost, Fit fit) {
     if (pack.trie().isProperNoun(wordIndex)) {
-        if (cost > 0.0f || fit == Fit::RunsOn) {
+        if (cost > 0.0f || fit == Fit::PastTyped) {
             if (!plausibleCorrectionTarget(pack, wordIndex)) {
                 return;
             }
@@ -863,7 +863,7 @@ bool Engine::closerThanPrimary(float cost, Fit fit) const {
 }
 
 int Engine::heaviestPack() const {
-    int best = -1;
+    int best = kNoPack;
     float weight = -1.0f;
     for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && packs_[i].active && packs_[i].configuredWeight > weight) {
@@ -890,7 +890,7 @@ void Engine::observeContextLanguage(const uint32_t* folded, int length) {
 
     // The evidence is how much better one pack knows the word than the next; a word only one pack
     // knows earns a full point, and every word ages the window.
-    int owner = -1;
+    int owner = kNoPack;
     int knowers = 0;
     float ownerLogProb = 0.0f;
     float rivalLogProb = 0.0f;
@@ -937,7 +937,7 @@ void Engine::observeContextLanguage(const uint32_t* folded, int length) {
 void Engine::decideDominantPack() {
     float total = 0.0f;
     float best = 0.0f;
-    int bestIndex = -1;
+    int bestIndex = kNoPack;
     for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && packs_[i].active) {
             total += languageEvidence_[i];
@@ -951,7 +951,7 @@ void Engine::decideDominantPack() {
     dominantPack_ = (languageLockMinimum_ > 0.0f && total >= languageLockMinimum_ &&
                      best >= total * kLanguageDominanceShare)
                         ? bestIndex
-                        : -1;
+                        : kNoPack;
 }
 
 float Engine::packWeightLog(int packIndex) const {
@@ -1291,7 +1291,7 @@ void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, c
 
 void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
                              uint32_t wordIndex, float score, float editCost, int edits,
-                             int runOn, int slips) const {
+                             int pastTyped, int slips) const {
     // Skipped when even the largest boost cannot reach the heap's floor.
     if (score + personal_.ceiling() <= heap.worstScore()) {
         return;
@@ -1303,7 +1303,7 @@ void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int 
         Candidate candidate{packIndex, static_cast<int32_t>(wordIndex), score};
         candidate.editCost = editCost;
         candidate.edits = static_cast<uint8_t>(edits);
-        candidate.runOn = static_cast<uint8_t>(runOn);
+        candidate.pastTyped = static_cast<uint8_t>(pastTyped);
         candidate.slips = static_cast<uint8_t>(slips);
         candidate.unigram = trie.unigramLogProb(wordIndex);
         offerCandidate(heap, candidate, text, textLength);
@@ -1493,7 +1493,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         if (!closerThanPrimary(endpoint.cost, Fit::Spells)) {
             return;
         }
-        if (!closerThanPrimary(endpoint.cost, Fit::RunsOn)) {
+        if (!closerThanPrimary(endpoint.cost, Fit::PastTyped)) {
             completionLimit = 0;
         }
     }
@@ -1536,7 +1536,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                     (currentPass_ == Pass::Primary && !blocked_.empty())) {
                     text = trie.wordText(wordIndex, &textLength);
                 }
-                const Fit fit = (frame.depth > 0)        ? Fit::RunsOn
+                const Fit fit = (frame.depth > 0)        ? Fit::PastTyped
                                 : (endpoint.cost > 0.0f) ? Fit::Spells
                                                          : fitOf(0, text, textLength);
                 if (currentPass_ == Pass::Primary) {
@@ -1573,15 +1573,15 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                 }
                 if (commits(currentPass_) && reachesCorrectionHeap(reading) &&
                     plausibleCorrectionTarget(pack, wordIndex)) {
-                    // The correction heap's key: run-on letters at kRunOnCost, the surcharge on
-                    // any departure from the typed letters.
-                    const float runOnPenalty =
-                        correctionStrictness_ * kEditPenalty * kRunOnCost *
+                    // The correction heap's key: letters past the typed ones at kPastTypedCost,
+                    // the surcharge on any departure from the typed letters.
+                    const float pastTypedPenalty =
+                        correctionStrictness_ * kEditPenalty * kPastTypedCost *
                         static_cast<float>(frame.depth);
                     const float surcharge = correctionStrictness_ * kCorrectionSurcharge;
                     const float heapScore = languageModel -
                                             correctionStrictness_ * kEditPenalty * endpoint.cost -
-                                            surcharge - runOnPenalty;
+                                            surcharge - pastTypedPenalty;
                     offerScoredWord(correctionHeap_, trie, packIndex, wordIndex, heapScore,
                                     endpoint.cost, endpoint.edits, frame.depth, endpoint.slips);
                 }
@@ -1769,7 +1769,7 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
         if (score + personal_.ceiling() > heap.worstScore()) {
             score += personal_.scoreFor(text, textLength);
             Candidate candidate{packIndex, frequent[i], score};
-            candidate.runOn = static_cast<uint8_t>(extra);
+            candidate.pastTyped = static_cast<uint8_t>(extra);
             offerCandidate(heap, candidate, text, textLength);
         }
     }
@@ -2100,16 +2100,16 @@ constexpr float kPreferredEvidenceMinimum = 3.0f;
 
 // The language being written: the pack answerAs names, else from languageEvidence_ whatever the
 // language lock says: the only active pack, or the one holding kLanguageDominanceShare of at
-// least kPreferredEvidenceMinimum; -1 otherwise.
+// least kPreferredEvidenceMinimum; [kNoPack] otherwise.
 int Engine::preferredPack() const {
     if (answeringPack_ >= 0) {
         return answeringPack_;
     }
-    int active = -1;
+    int active = kNoPack;
     int activeCount = 0;
     float total = 0.0f;
     float best = 0.0f;
-    int bestIndex = -1;
+    int bestIndex = kNoPack;
     for (int i = 0; i < kMaxPacks; ++i) {
         if (!packs_[i].isOpen() || !packs_[i].active) {
             continue;
@@ -2244,7 +2244,7 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
     }
     // The exact spelling when a pack holds it, else the first unblocked spelling of the folded
     // key, the preferred language's before the other packs'.
-    int exactPack = -1;
+    int exactPack = kNoPack;
     uint32_t exactWord = 0;
     if (exactSpelling(word, length, &exactPack, &exactWord)) {
         uint32_t exactLength = 0;
@@ -2316,7 +2316,7 @@ bool Engine::vouchesForStem(const char* word, size_t length, const char* tag) co
         return false;
     }
     const bool oneLanguage = tag != nullptr && tag[0] != '\0';
-    const int onlyPack = oneLanguage ? packIndexForTag(tag) : -1;
+    const int onlyPack = oneLanguage ? packIndexForTag(tag) : kNoPack;
     for (int i = 0; i < kMaxPacks; ++i) {
         const LanguagePack& pack = packs_[i];
         if (!pack.isOpen() || !pack.active || (oneLanguage && i != onlyPack)) {
@@ -2415,7 +2415,8 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     // The search is restricted to [restrictedPack], else, when strict, the heaviest; otherwise
     // every pack answers.
     const int restricted = restrictedPack();
-    const int restrictTo = (restricted >= 0) ? restricted : (strictLanguage_ ? heaviestPack() : -1);
+    const int restrictTo =
+        (restricted >= 0) ? restricted : (strictLanguage_ ? heaviestPack() : kNoPack);
     primaryReached_ = false;
     typedText_ = composing;
     typedTextLength_ = static_cast<uint32_t>(composingLength);
@@ -2472,10 +2473,10 @@ void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLen
             searchPacks(folded, foldedLength, restrictTo, heap);
             break;
         case PassSource::AllPacks:
-            searchPacks(folded, foldedLength, -1, heap);
+            searchPacks(folded, foldedLength, kNoPack, heap);
             break;
         case PassSource::OtherPacks:
-            searchPacks(folded, foldedLength, -1, heap, restrictTo);
+            searchPacks(folded, foldedLength, kNoPack, heap, restrictTo);
             break;
         case PassSource::PersonalWords:
             searchUserModel(folded, foldedLength, heap);
@@ -2513,7 +2514,7 @@ void Engine::settleCorrection(const char* composing, size_t composingLength) {
     }
 
     // Overridden in turn by a dictionary spelling that matches the typed letters exactly.
-    int typedPack = -1;
+    int typedPack = kNoPack;
     uint32_t typedWord = 0;
     const bool typed = composing != nullptr && composingLength > 0;
     const bool spelled = typed && exactSpelling(composing, composingLength, &typedPack, &typedWord);
@@ -2930,11 +2931,11 @@ bool Engine::explainScore(const char* typed, size_t typedLength, const char* can
         out->rest = out->total - out->packWeight - out->languageModel - out->personal;
         out->editCost = results[i].editCost;
         out->edits = results[i].edits;
-        out->runOn = results[i].runOn;
+        out->pastTyped = results[i].pastTyped;
         out->editPenalty = correctionStrictness_ * kEditPenalty * results[i].editCost;
         out->surcharge =
             results[i].editCost > 0.0f ? correctionStrictness_ * kCorrectionSurcharge : 0.0f;
-        out->completion = kCompletionPenalty * static_cast<float>(results[i].runOn);
+        out->completion = kCompletionPenalty * static_cast<float>(results[i].pastTyped);
 
         uint32_t typedFolded[kMaxComposing];
         uint32_t wordFolded[kMaxComposing];

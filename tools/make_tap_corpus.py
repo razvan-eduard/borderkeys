@@ -30,6 +30,10 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS  # noqa: E402
+import gesture_replay  # noqa: E402
+
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LAYOUT = REPOSITORY_ROOT / "native-tests" / "data" / "qwerty_1080.layout"
 DEFAULT_WORDS = REPOSITORY_ROOT / "dictionaries" / "en_US.tsv"
@@ -62,10 +66,10 @@ class Layout:
             if not line or line.startswith("#"):
                 continue
             parts = line.split()
-            if key_width == 0.0 and len(parts) == 2:
+            if key_width == 0.0 and len(parts) == gesture_replay.LAYOUT_HEADER_COLUMNS:
                 key_width, key_height = float(parts[0]), float(parts[1])
                 continue
-            if len(parts) != 3:
+            if len(parts) != gesture_replay.LAYOUT_KEY_COLUMNS:
                 raise SystemExit(f"{path}: expected 'code x y', got {line!r}")
             keys[parts[0]] = (float(parts[1]), float(parts[2]))
         if not keys or key_width <= 0:
@@ -136,7 +140,7 @@ def load_words(path: Path) -> tuple[list[str], list[float]]:
     counts: list[float] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         parts = raw.split("\t")
-        if len(parts) < 2 or not LETTERS.match(parts[0]) or len(parts[0]) < MIN_WORD_LENGTH:
+        if len(parts) < WORD_COLUMNS or not LETTERS.match(parts[0]) or len(parts[0]) < MIN_WORD_LENGTH:
             continue
         words.append(parts[0])
         counts.append(float(parts[1]))

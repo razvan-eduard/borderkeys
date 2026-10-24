@@ -30,9 +30,12 @@ class ScoreExplanation(
     val editCost: Float,
     /** How many edits the walk took. */
     val edits: Int,
-    /** How many characters the word runs on past the last one typed. */
-    val runOn: Int,
-    /** What the edits cost on the strip, what needing one cost on top, what the run-on cost. */
+    /** How many characters the word has past the last one typed. */
+    val pastTyped: Int,
+    /**
+     * What the edits cost on the strip, what needing one cost on top, what the letters past the
+     * typed ones cost.
+     */
     val editPenalty: Float,
     val surcharge: Float,
     val completion: Float,
@@ -65,7 +68,7 @@ class ScoreExplanation(
             addedCharacters = values[8].toInt(),
             editCost = values[9],
             edits = values[10].toInt(),
-            runOn = values[11].toInt(),
+            pastTyped = values[11].toInt(),
             editPenalty = values[12],
             surcharge = values[13],
             completion = values[14],

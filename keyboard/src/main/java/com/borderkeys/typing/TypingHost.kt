@@ -15,7 +15,7 @@ interface TypingHost {
     /** The word slots the suggestion strip has, or null when there is no strip. */
     fun stripWordSlots(): Int?
 
-    /** Shows [row] on the strip, [typedIndex] and [appliedIndex] marked, -1 for none. */
+    /** Shows [row] on the strip, [typedIndex] and [appliedIndex] marked, [NO_SLOT] for none. */
     fun showSuggestions(row: List<Candidate>, typedIndex: Int, appliedIndex: Int)
 
     fun clearStrip()
@@ -93,4 +93,9 @@ interface TypingHost {
     fun postDelayed(action: Runnable, delayMillis: Long)
 
     fun removeCallbacks(action: Runnable)
+
+    companion object {
+        /** The slot of a word the strip does not carry. */
+        const val NO_SLOT = -1
+    }
 }

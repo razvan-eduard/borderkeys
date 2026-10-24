@@ -262,19 +262,18 @@ second pass over any dictionary:
 |---|---|---|
 | Holds | 16 candidates | 4 (`kMaxCorrections`) |
 | Admits | everything reached | `reachesCorrectionHeap()` **and** `plausibleCorrectionTarget()` |
-| Keyed on | `ln w + context − strictness·(kEditPenalty·cost + 3) − 0.5·depth` | `ln w + context − strictness·(kEditPenalty·(cost + kRunOnCost·depth) + 3)` |
+| Keyed on | `ln w + context − strictness·(kEditPenalty·cost + kCorrectionSurcharge) − kCompletionPenalty·depth` | `ln w + context − strictness·(kEditPenalty·(cost + kPastTypedCost·depth) + kCorrectionSurcharge)` |
 | Read by | the strip | `corrections()` → `AutoCorrection` |
 
-The two heaps are keyed differently because they price the letters the user did not type
-differently. On the strip a letter the word runs on past the typed ones is a completion, 0.5 a
-letter, because the word may not be finished. At a delimiter it is finished, so in the correction
-heap the same letter is a letter the user left out, priced at `kRunOnCost` 0.5 key widths, and
-any departure from the typed letters pays the surcharge.
+The two heaps price the letters past the typed ones differently. The strip prices each as a
+completion, at `kCompletionPenalty`. The correction heap prices each as a letter the user left
+out, at `kPastTypedCost` key widths, and adds the surcharge to any departure from the typed
+letters.
 
 `settleCorrection()` leaves the whole list behind, best first: the respelling of the letters
-typed when there is one, then the heap drained, up to five entries, each carrying the walk's
-edit cost, edit count and run-on count (`Candidate.editCost`, `edits`, `runOn`). `bestCorrection()`
-is still the first of them, overridden by the exact spelling as before.
+typed when there is one, then the heap drained, each entry carrying the walk's edit cost, edit
+count and count of letters past the typed ones (`Candidate.editCost`, `edits`, `pastTyped`).
+`bestCorrection()` is the first of them, overridden by the exact spelling.
 
 ### What decides which heap — `Reading`
 
@@ -342,8 +341,8 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 |---|---|---|
 | `kEditPenalty` | **25.0** | The multiplier on every edit, in nats per key width. One edit outweighs a frequency ratio of e^25; a second edit outweighs any first. Floored at 15 by a `static_assert`; `BORDERKEYS_EDIT_PENALTY` and `BORDERKEYS_CORRECTION_SURCHARGE` set it and the surcharge for a sweep build of `native-tests`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
-| `kRunOnCost` | **0.5** | What a letter the word has past the last one typed costs in the correction heap; the strip keeps `kCompletionPenalty`. Below `kSlipScale`. |
-| `kSlipScale` | **0.8** | The factor on a neighbouring key's distance when the finger landed on it, floored at `kMinSubstitutionCost`; a straight neighbour then costs less than an insertion, a diagonal one more. The walk counts how many of a path's edits were such slips (`Candidate::slips`). `BORDERKEYS_SLIP_SCALE`, `_DELETE_COST`, `_TRANSPOSE_COST`, `_RUN_ON_COST`, `_CEILING_3/4/5/8` and `_DEPTH_CAP_4/7` set it, the other edit costs, the ceiling bands and two depth caps for a sweep build of `native-tests` (`docs/testing.md`, the slip sweep). |
+| `kPastTypedCost` | **0.5** | What a letter the word has past the last one typed costs in the correction heap; the strip keeps `kCompletionPenalty`. Below `kSlipScale`. |
+| `kSlipScale` | **0.8** | The factor on a neighbouring key's distance when the finger landed on it, floored at `kMinSubstitutionCost`; a straight neighbour then costs less than an insertion, a diagonal one more. The walk counts how many of a path's edits were such slips (`Candidate::slips`). `BORDERKEYS_SLIP_SCALE`, `_DELETE_COST`, `_TRANSPOSE_COST`, `_PAST_TYPED_COST`, `_CEILING_3/4/5/8` and `_DEPTH_CAP_4/7` set it, the other edit costs, the ceiling bands and two depth caps for a sweep build of `native-tests` (`docs/testing.md`, the slip sweep). |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
@@ -588,13 +587,11 @@ rather than a correction:
 - the suggestion is what was typed, or what was typed in a different case;
 - `typed != suggestionQuery` — a stale answer, see [the typing path](#the-typing-path);
 - `editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits` — a ceiling on
-  top of the engine's ranking, which only ever decides *which* candidate is first, never whether
-  it is close enough to be a correction at all. `snobul` was being replaced by `noul`. Under the
-  default distance setting the ceiling is one edit, two from eight letters; an entry the engine
-  reached by neighbouring keys in place of typed ones alone, with nothing added, dropped,
-  swapped or run on (`Candidate::slipsOnly`, `CorrectionOffer.slipsOnly`), may be two edits away
-  from four letters (`maxSlipEditsFor`), so `joyse` → `house`. A real word the packs lack is
-  rarely two neighbouring keys from another word, where a typed word with two slips always is;
+  top of the engine's ranking. Under the default distance setting the ceiling is one edit, two
+  from eight letters; an entry the engine reached by neighbouring keys in place of typed ones
+  alone, with nothing added, dropped or swapped and nothing past the typed ones
+  (`Candidate::slipsOnly`, `CorrectionOffer.slipsOnly`), may be two edits away from four letters
+  (`maxSlipEditsFor`);
 - **the proper-noun rule** — a name corrects only its own letters. `maria` may become `Maria` and
   `laurentiu` → `Laurențiu`, but `everyone` must never become `Everton` nor `thanks` `Hanks`.
 - **a regular inflection of a known stem** — `smooths`, `testings`, `spatting`: the stem is in
@@ -868,27 +865,18 @@ guess.
 
 A restricted request searches its pack first (`Primary`), recording the closest reading of the
 typed letters it reaches: the edit cost, then the fit — spelling the letters with every mark
-typed, spelling them without a mark typed (`carti` for `carți`), or running on past them. Which
-of its words count as readings:
+typed, spelling them without a mark typed, or with letters past the typed ones. Which of its
+words count as readings:
 
 - an ordinary word always, however rare;
-- a name reached by an edit, or running on, only when it clears the correction floor (`American`
-  counts, `Weathers` does not);
+- a name reached by an edit, or with letters past the typed ones, only when it clears the
+  correction floor;
 - a name reached without an edit only in the case the letters were typed in.
 
 `OtherPacks` then searches every other pack and keeps a word only when it reads the letters more
 closely: cheaper by `kLanguageMargin` (0.5), or as cheap and a closer fit. Where `Primary` read
 nothing at all, the decided language says nothing about the word and the others answer as if
-none were decided. Measured cases, the corpora typed right after a sentence in the other
-language:
-
-| Typed after | Decided language reads | Another reads | Result |
-|---|---|---|---|
-| English | `mibtea` as `Mineta`, 1.8 | `mintea`, 1.0 | `mintea`: cheaper by more than the margin |
-| English | `cand` as `candy`, running on | `când`, spelled | `când`: as cheap, closer fit |
-| Romanian | `speeaker` as `speakeri`, 0.75, running on | `speaker`, 0.75, spelled | `speaker` |
-| English | `car` as `car`, spelled | `ar`, `cu`, by edits | `car`, and nothing Romanian beside it |
-| English | `zpart` as `apart`, 1.41 (a diagonal key) | `spart`, 1.0 (a straight one) | `apart`: 0.41 is a near tie, and ties go to the decided language |
+none were decided.
 
 The margin is more than a diagonal neighbour costs over a straight one (0.41) and less than a
 deletion costs over a swap (0.8). `TwoLanguageCorpusTest` holds the autocorrect corpora to

@@ -20,6 +20,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
 
 FOLD_TABLE = str.maketrans("ăâîșşțţ", "aaisstt")
 
@@ -36,11 +40,11 @@ def read_rows(path: str) -> list[tuple[str, int, bool]]:
             if not line:
                 continue
             parts = line.split("\t")
-            if len(parts) not in (2, 3):
+            if len(parts) not in (WORD_COLUMNS, NAMED_WORD_COLUMNS):
                 raise SystemExit(f"{path}: expected 'word<TAB>frequency[<TAB>name]', got {line!r}")
-            if len(parts) == 3 and parts[2] != "name":
+            if len(parts) == NAMED_WORD_COLUMNS and parts[2] != "name":
                 raise SystemExit(f"{path}: third column must be 'name', got {parts[2]!r}")
-            rows.append((parts[0], int(parts[1]), len(parts) == 3))
+            rows.append((parts[0], int(parts[1]), len(parts) == NAMED_WORD_COLUMNS))
     return rows
 
 

@@ -41,9 +41,14 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
-from build_dict import plain_apostrophes, without_vowel_marks
+from build_dict import (NAMED_WORD_COLUMNS, PAIR_WORDS, TRIPLE_WORDS, WORD_COLUMNS,
+                        plain_apostrophes, without_vowel_marks)
 
 HERE = Path(__file__).resolve().parent
+
+# The columns of a make_names.py row with its people count:
+# 'name<TAB>frequency<TAB>name<TAB>people'.
+PEOPLE_COLUMNS = NAMED_WORD_COLUMNS + 1
 
 
 class Alphabet:
@@ -167,12 +172,12 @@ def read_frequencies(path: Path) -> Counter:
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             parts = line.split()
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 continue
             word = parts[0].lower()
             # A row ending in the literal "name" is this project's proper-noun tag (build_dict.py's
             # load_words); its frequency is second to last.
-            frequency_index = -2 if len(parts) >= 3 and parts[-1] == "name" else -1
+            frequency_index = -2 if len(parts) >= NAMED_WORD_COLUMNS and parts[-1] == "name" else -1
             try:
                 counts[word] += int(parts[frequency_index])
             except ValueError:
@@ -186,16 +191,16 @@ def read_ngram_counts(path: Path) -> tuple[Counter, Counter]:
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             parts = line.split()
-            if len(parts) < 3:
+            if len(parts) - 1 < PAIR_WORDS:
                 continue
             try:
                 count = int(parts[-1])
             except ValueError:
                 continue
             words = [w.lower() for w in parts[:-1]]
-            if len(words) == 2:
+            if len(words) == PAIR_WORDS:
                 bigrams[(words[0], words[1])] += count
-            elif len(words) == 3:
+            elif len(words) == TRIPLE_WORDS:
                 trigrams[(words[0], words[1], words[2])] += count
     return bigrams, trigrams
 
@@ -314,9 +319,9 @@ def read_names(path: Path) -> list[tuple[str, int, int]]:
         if not line or line.startswith("#"):
             continue
         parts = line.split("\t")
-        if len(parts) < 2:
+        if len(parts) < WORD_COLUMNS:
             continue
-        uses = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+        uses = int(parts[3]) if len(parts) >= PEOPLE_COLUMNS and parts[3].isdigit() else 1
         rows.append((parts[0], int(parts[1]), uses))
     return rows
 

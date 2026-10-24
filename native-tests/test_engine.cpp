@@ -142,7 +142,7 @@ struct LoadedEngine {
 
     /**
      * Autocorrect's candidates for `composing`, best first, each `word` followed by
-     * `/edits/runOn`, after the request has been made.
+     * `/edits/pastTyped`, after the request has been made.
      */
     std::string corrections(const char* composing) {
         Candidate out[Engine::kMaxCandidates];
@@ -155,7 +155,7 @@ struct LoadedEngine {
             uint32_t wordLength = 0;
             const char* const word = engine.candidateText(list[i], &wordLength);
             char parts[24];
-            std::snprintf(parts, sizeof(parts), "/%d/%d ", list[i].edits, list[i].runOn);
+            std::snprintf(parts, sizeof(parts), "/%d/%d ", list[i].edits, list[i].pastTyped);
             text.append(word != nullptr ? word : "?", word != nullptr ? wordLength : 1)
                 .append(parts);
         }
@@ -2122,22 +2122,23 @@ void runEngineTests() {
                   loaded.engine.bestCorrection()->wordIndex == list[0].wordIndex,
               "the best correction is the list's first entry");
         check(loaded.corrections("thexx").find("thex/1/0 ") != std::string::npos,
-              "a one-substitution candidate carries one edit and no run-on");
+              "a one-substitution candidate carries one edit and no letter past the typed ones");
         check(loaded.corrections("keyboar").find("keyboard/0/1 ") != std::string::npos,
-              "a one-letter completion carries no edit and one run-on letter");
+              "a one-letter completion carries no edit and one letter past the typed ones");
         check(loaded.corrections("keybosr").find("keyboard/1/1 ") != std::string::npos,
-              "an edit plus a run-on letter carries one of each");
+              "an edit plus a letter past the typed ones carries one of each");
         check(loaded.slipsOnly("keubosrd", "keyboard"),
               "two neighbouring keys in place of typed ones are slips only");
         check(!loaded.slipsOnly("keybosr", "keyboard"),
-              "a run-on letter is not a slip");
+              "a letter past the typed ones is not a slip");
         check(!loaded.slipsOnly("thexx", "thex"), "a discarded letter is not a slip");
 
-        // A run-on letter is priced below a deletion.
+        // A letter past the typed ones is priced below a deletion.
         const std::string ther = loaded.corrections("ther");
         const size_t there = ther.find("there/0/1 ");
         const size_t the = ther.find("the/1/0 ");
-        check(there != std::string::npos, "a run-on candidate reaches the list");
+        check(there != std::string::npos,
+              "a candidate with a letter past the typed ones reaches the list");
         check(the == std::string::npos || there < the,
               "and sits above the candidate reached by discarding a typed letter");
     }

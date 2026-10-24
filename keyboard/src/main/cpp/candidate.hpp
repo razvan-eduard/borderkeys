@@ -19,13 +19,16 @@ struct Candidate {
     // and how many of the edits were a neighbouring key in place of the typed one.
     float editCost = 0.0f;
     uint8_t edits = 0;
-    uint8_t runOn = 0;
+    uint8_t pastTyped = 0;
     uint8_t slips = 0;
     // The word's own log-probability in its pack, where it has one: what orders equal scores.
     float unigram = 0.0f;
 
-    /** Whether every edit was a neighbouring key in place of the typed one, with nothing run on. */
-    bool slipsOnly() const { return edits > 0 && slips == edits && runOn == 0; }
+    /**
+     * Whether every edit was a neighbouring key in place of the typed one, with no letter past the
+     * typed ones.
+     */
+    bool slipsOnly() const { return edits > 0 && slips == edits && pastTyped == 0; }
 
     /**
      * Whether this ranks below [other]: a lower score; at an equal score the rarer word; then the

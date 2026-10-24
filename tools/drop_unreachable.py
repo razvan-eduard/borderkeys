@@ -14,10 +14,12 @@ kept.
 """
 
 import argparse
-import importlib.util
 import json
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_dict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -45,10 +47,7 @@ OVERLAY = {
 
 def load_build_dict():
     """tools/build_dict.py, for the one fold table this project has."""
-    spec = importlib.util.spec_from_file_location("build_dict", ROOT / "tools/build_dict.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return build_dict
 
 
 def layout_letters(layout):
@@ -164,7 +163,7 @@ def main():
         for line in handle:
             row = line.rstrip("\n")
             parts = row.split("\t")
-            if len(parts) < 2:
+            if len(parts) < build_dict.WORD_COLUMNS:
                 kept.append(row)
                 continue
             try:

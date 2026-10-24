@@ -1047,7 +1047,7 @@ class TypingOrchestrator(
         host.onSwipeDecoded(candidates.size)
         host.traceSwipeDecode(candidates.size)
         // The strip shows the swipe's alternatives, with no typed chip and no correction.
-        host.showSuggestions(cased, -1, -1)
+        host.showSuggestions(cased, TypingHost.NO_SLOT, TypingHost.NO_SLOT)
         if (host.viewAttached && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
             swipeFlow.rememberTopWord(best)
             if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
@@ -1304,7 +1304,7 @@ class TypingOrchestrator(
         ownEditPending = true
         terminalWriter.writeSwiped(editor, best)
         suggestionFlow.answerSwiped(best, cased.first().isProperNoun)
-        host.showSuggestions(cased, -1, -1)
+        host.showSuggestions(cased, TypingHost.NO_SLOT, TypingHost.NO_SLOT)
         host.playEffect(EffectEvent.SwipeAccepted, best)
     }
 

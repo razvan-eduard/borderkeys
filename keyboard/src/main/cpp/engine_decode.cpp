@@ -243,7 +243,7 @@ float Engine::unknownWordLogProb(const DecoderTaps& taps) const {
     double chance = 0.0;
     for (int packIndex = 0; packIndex < kMaxPacks; ++packIndex) {
         const LanguagePack& pack = packs_[packIndex];
-        if (decodes(packIndex, -1) && pack.letters().isBuilt()) {
+        if (decodes(packIndex, kNoPack) && pack.letters().isBuilt()) {
             chance += normalisedWeight_[packIndex] *
                       std::exp(static_cast<double>(
                           pack.letters().spellingLogProb(pack.trie(), taps.folded, taps.count)));

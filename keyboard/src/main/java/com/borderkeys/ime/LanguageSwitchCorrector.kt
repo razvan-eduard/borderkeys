@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.predict.NativePredictor
+
 /**
  * Which already-corrected words to revisit once the conversation's dominant language changes.
  * Holds no InputConnection and makes no native calls: [BorderKeysService] reads the text and asks
@@ -12,8 +14,9 @@ class LanguageSwitchCorrector {
 
     /**
      * A correction that turned [typedText] into [appliedText], at [startOffset] until
-     * [endOffset] in the field, made while [madeUnder] was the detected pack: -1 undecided,
-     * [UNKNOWN] before any was observed, until the verdict the field opens under arrives.
+     * [endOffset] in the field, made while [madeUnder] was the detected pack:
+     * [NativePredictor.NO_PACK] undecided, [UNKNOWN] before any was observed, until the verdict
+     * the field opens under arrives.
      */
     data class Flag(
         val typedText: String,
@@ -33,7 +36,7 @@ class LanguageSwitchCorrector {
 
     private val flags = ArrayDeque<Flag>()
 
-    /** The detected pack last observed: -1 undecided, [UNKNOWN] before any. */
+    /** The detected pack last observed: [NativePredictor.NO_PACK] undecided, [UNKNOWN] before any. */
     var verdict = UNKNOWN
         private set
 
@@ -137,7 +140,7 @@ class LanguageSwitchCorrector {
         /** The most corrections tracked. */
         private const val MAX_TRACKED = 20
 
-        /** Nothing observed yet; distinct from -1, no pack dominant. */
+        /** Nothing observed yet; distinct from [NativePredictor.NO_PACK], no pack dominant. */
         const val UNKNOWN = -2
     }
 }

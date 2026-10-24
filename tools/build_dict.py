@@ -70,6 +70,15 @@ WORD_FLAG_PROPER_NOUN = 1 << 0
 # A spelling the pack knows and never offers. Mirrors kWordFlagKnownOnly in bkd_format.hpp.
 WORD_FLAG_KNOWN_ONLY = 1 << 1
 
+# The words in an n-gram key: a pair, and a triple.
+PAIR_WORDS = 2
+TRIPLE_WORDS = 3
+# The columns of a word list row, 'word<TAB>frequency', and of one marked a name, with 'name'.
+WORD_COLUMNS = 2
+NAMED_WORD_COLUMNS = 3
+# The columns of a known-words row, 'word<TAB>count'.
+KNOWN_COLUMNS = 2
+
 SECTION_COUNT = 16
 (
     S_ALPHABET,
@@ -576,12 +585,12 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     # other rather than raw counts on a different scale.
     sentence_total = float(sum(
         count for parts, count in ngrams.items()
-        if len(parts) == 2 and parts[0] == SENTENCE_START
+        if len(parts) == PAIR_WORDS and parts[0] == SENTENCE_START
     )) or 1.0
 
     listed = {word for word, known_only in zip(display, known_only_flags) if not known_only}
     for parts, count in ngrams.items():
-        starts = len(parts) == 2 and parts[0] == SENTENCE_START
+        starts = len(parts) == PAIR_WORDS and parts[0] == SENTENCE_START
         if any(part not in listed for part in parts if part != SENTENCE_START):
             continue
         if starts:
@@ -591,12 +600,12 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         if SENTENCE_START in parts:
             # A marker anywhere but first is a corrupt count file, not a sentence start.
             continue
-        context = frequency_of[parts[0]] if len(parts) == 2 else None
-        if len(parts) == 2:
+        context = frequency_of[parts[0]] if len(parts) == PAIR_WORDS else None
+        if len(parts) == PAIR_WORDS:
             denominator = float(context or 1)
             quantised = quantise_log_prob(count / max(denominator, float(count)))
             bigram_entries[(word_index_of[parts[0]], word_index_of[parts[1]])] = quantised
-        elif len(parts) == 3:
+        elif len(parts) == TRIPLE_WORDS:
             preceding = ngrams.get((parts[0], parts[1]))
             denominator = float(preceding or frequency_of[parts[1]] or 1)
             quantised = quantise_log_prob(count / max(denominator, float(count)))
@@ -929,7 +938,7 @@ def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: in
             raise SystemExit(f"folded lookup of {stripped!r} returned {reader.text(index)!r}")
 
     for parts, _count in ngrams.items():
-        if len(parts) != 2:
+        if len(parts) != PAIR_WORDS:
             continue
         indices = [SENTENCE_START_INDEX if part == SENTENCE_START else reader.lookup(part)
                    for part in parts]
@@ -945,7 +954,7 @@ def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: in
     # A triple is found through its pair, and a triple whose pair was never written is not in
     # the pack at all rather than hanging off a pair that is not there.
     for parts, _count in ngrams.items():
-        if len(parts) != 3 or SENTENCE_START in parts:
+        if len(parts) != TRIPLE_WORDS or SENTENCE_START in parts:
             continue
         indices = [reader.lookup(part) for part in parts]
         if any(index < 0 for index in indices):
@@ -1026,10 +1035,10 @@ def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
             if not line or line.startswith("#"):
                 continue
             parts = line.split("\t")
-            if len(parts) not in (2, 3):
+            if len(parts) not in (WORD_COLUMNS, NAMED_WORD_COLUMNS):
                 raise SystemExit(f"{path}:{number}: expected 'word<TAB>frequency' "
                                  f"or 'word<TAB>frequency<TAB>name'")
-            if len(parts) == 3 and parts[2] != "name":
+            if len(parts) == NAMED_WORD_COLUMNS and parts[2] != "name":
                 raise SystemExit(f"{path}:{number}: third column must be 'name', got {parts[2]!r}")
             try:
                 frequency = int(parts[1])
@@ -1038,7 +1047,7 @@ def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
             if frequency <= 0 or not parts[0]:
                 continue
             words.append((parts[0], frequency))
-            if len(parts) == 3:
+            if len(parts) == NAMED_WORD_COLUMNS:
                 proper_nouns.add(parts[0])
     return words, frozenset(proper_nouns)
 
@@ -1085,7 +1094,7 @@ def load_known(path: Path) -> list[tuple[str, float]]:
             if not line or line.startswith("#"):
                 continue
             parts = line.split("\t")
-            if len(parts) != 2 or not parts[1].isdigit():
+            if len(parts) != KNOWN_COLUMNS or not parts[1].isdigit():
                 raise SystemExit(f"{path}:{number}: expected 'word<TAB>count'")
             counts.append((parts[0], int(parts[1])))
     if tokens <= 0:
@@ -1101,8 +1110,9 @@ def load_ngrams(path: Path) -> dict:
             if not line or line.startswith("#"):
                 continue
             parts = line.split("\t")
-            if len(parts) not in (3, 4):
-                raise SystemExit(f"{path}:{number}: expected 2 or 3 words then a count")
+            if len(parts) - 1 not in (PAIR_WORDS, TRIPLE_WORDS):
+                raise SystemExit(f"{path}:{number}: expected {PAIR_WORDS} or {TRIPLE_WORDS} "
+                                 f"words then a count")
             try:
                 count = int(parts[-1])
             except ValueError:
@@ -1111,6 +1121,49 @@ def load_ngrams(path: Path) -> dict:
                 continue
             ngrams[tuple(parts[:-1])] = count
     return ngrams
+
+
+def refused(load, path: Path, rows: tuple[str, ...]) -> None:
+    """Exits unless `load` refuses each of `rows`, written alone to `path`."""
+    for row in rows:
+        path.write_text(row, encoding="utf-8")
+        try:
+            load(path)
+        except SystemExit:
+            continue
+        raise SystemExit(f"{load.__name__} read {row!r}")
+
+
+def check_load_words() -> None:
+    """`load_words` reads a word and its frequency and a name marked 'name', and refuses a row of
+    one column and one of four."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "words"
+        path.write_text("# counted\n\nborder\t12\nBerlin\t7\tname\n", encoding="utf-8")
+        if load_words(path) != ([("border", 12), ("Berlin", 7)], frozenset({"Berlin"})):
+            raise SystemExit("a word list was not read as written")
+        refused(load_words, path, ("border\n", "Berlin\t7\tname\tcapital\n"))
+
+
+def check_load_known() -> None:
+    """`load_known` reads a word and its count under the tokens line, and refuses a row of one
+    column and one of three."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "known"
+        path.write_text("# tokens\t1000\nkeys\t100\n", encoding="utf-8")
+        if load_known(path) != [("keys", 0.1)]:
+            raise SystemExit("a known-words file was not read as written")
+        refused(load_known, path, ("# tokens\t1000\nkeys\n", "# tokens\t1000\nkeys\t100\t9\n"))
+
+
+def check_load_ngrams() -> None:
+    """`load_ngrams` reads two or three words then a count, and refuses one word and four."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "ngrams"
+        path.write_text("in\tberlin\t5\nin\tberlin\tschool\t3\n", encoding="utf-8")
+        if load_ngrams(path) != {("in", "berlin"): 5, ("in", "berlin", "school"): 3}:
+            raise SystemExit("an n-gram file was not read as written")
+        refused(load_ngrams, path, ("berlin\t5\n", "in\tberlin\tschool\ttoday\t2\n"))
 
 
 def main(argv: list[str]) -> int:
@@ -1151,6 +1204,9 @@ def main(argv: list[str]) -> int:
         return 0
 
     if arguments.selftest:
+        check_load_words()
+        check_load_known()
+        check_load_ngrams()
         assert written_mostly_lower(526, 987)
         assert not written_mostly_lower(12_855, 9)
         assert not written_mostly_lower(1, 2)

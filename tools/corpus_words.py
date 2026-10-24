@@ -7,17 +7,16 @@
     words.is_word("dont")                                      # on the folded key the pack uses
 """
 
-import importlib.util
-import pathlib
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS, fold_word  # noqa: E402
 
 
 def _load_fold():
     """build_dict.py's own fold, so membership here means membership in the compiled pack."""
-    path = pathlib.Path(__file__).with_name("build_dict.py")
-    spec = importlib.util.spec_from_file_location("build_dict", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.fold_word
+    return fold_word
 
 
 class Words:
@@ -46,11 +45,11 @@ def load(path):
     with open(path, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 continue
             try:
                 int(parts[1])
             except ValueError:
                 continue
-            rows.append((parts[0], len(parts) >= 3 and parts[2] == "name"))
+            rows.append((parts[0], len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name"))
     return Words(rows, _load_fold())

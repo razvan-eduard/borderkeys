@@ -24,7 +24,7 @@ import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_dict import fold_word  # noqa: E402
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS, fold_word  # noqa: E402
 
 SEED = 20260929
 PER_FILE = 200
@@ -57,8 +57,8 @@ def main() -> int:
     listed = arguments.dictionaries / f"{arguments.tag}.tsv"
     for line in listed.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) >= 2:
-            rows.append((parts[0], len(parts) > 2))
+        if len(parts) >= WORD_COLUMNS:
+            rows.append((parts[0], len(parts) >= NAMED_WORD_COLUMNS))
     by_key: dict[tuple[int, ...], list[str]] = {}
     for word, _ in rows:
         by_key.setdefault(fold_word(word.lower()), []).append(word)

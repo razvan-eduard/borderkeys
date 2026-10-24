@@ -21,6 +21,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
+
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 
 # The shortest word judged.
@@ -35,10 +38,10 @@ def read_rows(path: Path) -> list[tuple[str, str, bool]]:
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) < 2:
+        if len(parts) < WORD_COLUMNS:
             rows.append(("", line, False))
             continue
-        rows.append((parts[0], line, len(parts) >= 3 and parts[2] == "name"))
+        rows.append((parts[0], line, len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name"))
     return rows
 
 
@@ -122,7 +125,7 @@ def main() -> int:
         counts: dict[str, int] = {}
         for word, line, _ in rows:
             fields = line.split("\t")
-            if word and len(fields) >= 2:
+            if word and len(fields) >= WORD_COLUMNS:
                 try:
                     counts[word] = int(fields[1])
                 except ValueError:

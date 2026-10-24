@@ -149,7 +149,7 @@ def summary(output: str) -> dict:
     ranks = []
     for line in output.splitlines():
         parts = line.split("\t")
-        if len(parts) >= 2 and parts[1].lstrip("-").isdigit():
+        if len(parts) >= gesture_replay.REPLAY_RANK_COLUMNS and parts[1].lstrip("-").isdigit():
             ranks.append(int(parts[1]))
     if not ranks:
         return {"gestures": 0, "top1": 0.0, "top3": 0.0, "error": output[-300:]}

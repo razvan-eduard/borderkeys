@@ -25,7 +25,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS  # noqa: E402
 from make_pack import WORD, read_names  # noqa: E402
+
+# hunspell -s's line for a word it analyses: the word and its stem.
+HUNSPELL_ANALYSIS_COLUMNS = 2
 
 
 def corpus_words(path: Path) -> set[str]:
@@ -34,7 +38,7 @@ def corpus_words(path: Path) -> set[str]:
     words = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) == 2:
+        if len(parts) == WORD_COLUMNS:
             words.add(parts[0].lower())
     return words
 
@@ -51,7 +55,7 @@ def spelled_lower_case(words: list[str], dictionary: Path) -> set[str]:
     stems: dict[str, set[str]] = {}
     for line in result.stdout.splitlines():
         parts = line.split()
-        if len(parts) == 2:
+        if len(parts) == HUNSPELL_ANALYSIS_COLUMNS:
             stems.setdefault(parts[0], set()).add(parts[1])
     return {word for word in words if word in stems.get(word, ())}
 

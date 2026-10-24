@@ -39,7 +39,7 @@ data class ListedCorrection(
     override val inflection: Boolean,
     /**
      * Whether the engine reached [text] by neighbouring keys in place of typed ones alone: no
-     * letter added, dropped, swapped or run on.
+     * letter added, dropped or swapped, and none past the typed ones.
      */
     val slipsOnly: Boolean = false,
     override val confident: Boolean = true,

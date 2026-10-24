@@ -64,6 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
 import fold_diacritic_noise  # noqa: E402
 import make_pack  # noqa: E402
 import normalise_diacritics  # noqa: E402
@@ -403,9 +404,9 @@ def list_rows(tag: str, dictionaries: Path = ROOT / "dictionaries") -> list:
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2 or not parts[1].isdigit():
+            if len(parts) < WORD_COLUMNS or not parts[1].isdigit():
                 continue
-            if len(parts) >= 3 and parts[2] == "name":
+            if len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name":
                 continue
             rows.append((parts[0], int(parts[1])))
     joined = {part for word, _ in rows if APOSTROPHE in word for part in word.split(APOSTROPHE)}

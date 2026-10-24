@@ -21,10 +21,12 @@ pack is keyed by.
 
 import argparse
 import csv
-import importlib.util
-import pathlib
 import random
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS, fold_word  # noqa: E402
 
 SEED = 20261004
 COUNT = 1000
@@ -33,11 +35,7 @@ MIN_LENGTH = 3
 
 def load_fold():
     """build_dict.py's own fold, so membership here means membership in the compiled pack."""
-    path = pathlib.Path(__file__).with_name("build_dict.py")
-    spec = importlib.util.spec_from_file_location("build_dict", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.fold_word
+    return fold_word
 
 
 def sentence_before(current_input):
@@ -64,7 +62,7 @@ def mobile_sections(directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("ite", type=pathlib.Path)
+    parser.add_argument("ite", type=Path)
     parser.add_argument("dictionary")
     parser.add_argument("--count", type=int, default=COUNT)
     args = parser.parse_args()
@@ -75,7 +73,7 @@ def main():
     with open(args.dictionary, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 2:
+            if len(parts) >= WORD_COLUMNS:
                 packed.add(fold(parts[0]))
 
     sections = mobile_sections(args.ite)

@@ -32,7 +32,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import make_pack
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
+import make_pack  # noqa: E402
 
 # How deep into the pack to look when working out which letters the language writes with.
 ALPHABET_SAMPLE = 5_000
@@ -46,10 +48,10 @@ def read_rows(path: Path) -> list[tuple[str, str, bool]]:
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) < 2:
+        if len(parts) < WORD_COLUMNS:
             rows.append(("", line, False))
             continue
-        rows.append((parts[0], line, len(parts) >= 3 and parts[2] == "name"))
+        rows.append((parts[0], line, len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name"))
     return rows
 
 
@@ -127,7 +129,7 @@ def main() -> int:
     frequencies = {}
     for word, line, _ in rows:
         parts = line.split("\t")
-        if word and len(parts) >= 2:
+        if word and len(parts) >= WORD_COLUMNS:
             try:
                 frequencies[word] = int(parts[1])
             except ValueError:

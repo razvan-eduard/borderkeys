@@ -82,7 +82,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_dict import fold_word  # noqa: E402
+from build_dict import NAMED_WORD_COLUMNS, PAIR_WORDS, WORD_COLUMNS, fold_word  # noqa: E402
 from make_names import FLAT_FREQUENCY  # noqa: E402
 import language_manifest  # noqa: E402
 
@@ -297,7 +297,7 @@ def spoken_counts(directory: Path, sources: Sources) -> dict[str, int]:
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             parts = line.split()
-            if len(parts) != 2:
+            if len(parts) != WORD_COLUMNS:
                 continue
             try:
                 counts.setdefault(parts[0].lower(), int(parts[1]))
@@ -372,13 +372,13 @@ def read_rows(path: Path) -> list[tuple[str, int, bool]]:
     rows: list[tuple[str, int, bool]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
-        if len(parts) < 2 or not parts[0]:
+        if len(parts) < WORD_COLUMNS or not parts[0]:
             continue
         try:
             frequency = int(parts[1])
         except ValueError:
             continue
-        rows.append((parts[0], frequency, len(parts) > 2 and parts[2] == "name"))
+        rows.append((parts[0], frequency, len(parts) >= NAMED_WORD_COLUMNS and parts[2] == "name"))
     return rows
 
 
@@ -411,7 +411,7 @@ def pair_vouched(path: Path) -> set[str]:
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) != 3:
+            if len(parts) - 1 != PAIR_WORDS:
                 continue
             try:
                 count = int(parts[2])

@@ -45,6 +45,9 @@ ROW_INSETS = (0.0, 0.5, 1.5)
 # or one row up or down and half a key across.
 NEIGHBOUR_DISTANCE = 1.2
 
+# A corpus row's typed and expected words, the columns the held-out file starts with.
+CORPUS_COLUMNS = 2
+
 
 def key_centres():
     """Each letter's key centre on the QWERTY layout, in key units, each row set in from the
@@ -129,7 +132,7 @@ def main():
     with open(args.held_out, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 2 and not line.startswith("#"):
+            if len(parts) >= CORPUS_COLUMNS and not line.startswith("#"):
                 held_out.add((parts[0], parts[1]))
 
     sentences = {}

@@ -23,6 +23,10 @@ tools/normalise_diacritics.py has already run over the file.
 
 import argparse
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import NAMED_WORD_COLUMNS, WORD_COLUMNS  # noqa: E402
 
 # Latin-1 glyph -> the Romanian letters whose byte it may have borrowed. Several are ambiguous,
 # so each maps to every candidate and the dictionary decides between them: a reversal counts
@@ -76,7 +80,7 @@ def main():
     with open(args.dictionary, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 rows.append((None, line.rstrip("\n")))
                 continue
             try:
@@ -84,7 +88,7 @@ def main():
             except ValueError:
                 rows.append((None, line.rstrip("\n")))
                 continue
-            rows.append(((parts[0], count, parts[2] if len(parts) > 2 else None), None))
+            rows.append(((parts[0], count, parts[2] if len(parts) >= NAMED_WORD_COLUMNS else None), None))
 
     position = {}
     for index, (entry, _) in enumerate(rows):

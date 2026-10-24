@@ -14,6 +14,9 @@ import sys
 import unicodedata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_dict import WORD_COLUMNS  # noqa: E402
+
 # Bands by rank, not by count.
 BANDS = 6
 PER_BAND = 50
@@ -33,7 +36,7 @@ def read_words(path):
     with open(path, encoding="utf-8") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 2:
+            if len(parts) < WORD_COLUMNS:
                 continue
             try:
                 words.append((parts[0], int(parts[1])))

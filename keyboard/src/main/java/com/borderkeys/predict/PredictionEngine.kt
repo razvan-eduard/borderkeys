@@ -388,7 +388,9 @@ class PredictionEngine(
     /** The pack the conversation is currently considered written in, delivered on the UI thread. */
     override fun dominantPack(onResult: (Int) -> Unit) {
         worker.post {
-            val pack = withHandle(-1) { current -> NativePredictor.nativeDominantPack(current) }
+            val pack = withHandle(NativePredictor.NO_PACK) { current ->
+                NativePredictor.nativeDominantPack(current)
+            }
             mainHandler.post { onResult(pack) }
         }
     }

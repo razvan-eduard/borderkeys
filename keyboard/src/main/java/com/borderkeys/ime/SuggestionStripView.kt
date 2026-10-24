@@ -21,6 +21,7 @@ import com.borderkeys.ime.fx.ParticleSurface
 import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.predict.Candidate
 import com.borderkeys.theme.ThemePaints
+import com.borderkeys.typing.TypingHost
 
 /**
  * The band above the keys: the candidates and the clipboard chip, or a note that nothing is being
@@ -252,8 +253,8 @@ class SuggestionStripView(
         invalidate()
     }
 
-    /** The slot holding exactly what was typed, drawn in italic, or -1. */
-    var typedIndex: Int = -1
+    /** The slot holding exactly what was typed, drawn in italic, or [TypingHost.NO_SLOT]. */
+    var typedIndex: Int = TypingHost.NO_SLOT
         set(value) {
             if (field != value) {
                 field = value
@@ -261,8 +262,8 @@ class SuggestionStripView(
             }
         }
 
-    /** The slot holding the correction a delimiter would apply, outlined, or -1. */
-    var appliedIndex: Int = -1
+    /** The slot holding the correction a delimiter would apply, outlined, or [TypingHost.NO_SLOT]. */
+    var appliedIndex: Int = TypingHost.NO_SLOT
         set(value) {
             if (field != value) {
                 field = value
@@ -278,7 +279,7 @@ class SuggestionStripView(
     private val slotTextSize = FloatArray(MAX_SUGGESTIONS)
     private var count = 0
 
-    private var pressedIndex = -1
+    private var pressedIndex = TypingHost.NO_SLOT
 
     /** The applied chip's outline rectangle, reused. */
     private val appliedRect = android.graphics.RectF()
@@ -319,7 +320,7 @@ class SuggestionStripView(
     /** A hold acted: the lift accepts nothing. */
     private fun holdFired() {
         longPressFired = true
-        pressedIndex = -1
+        pressedIndex = TypingHost.NO_SLOT
         invalidate()
         tapHaptic()
     }
@@ -343,8 +344,8 @@ class SuggestionStripView(
         // A new row leaves action mode and clears the typed and applied marks.
         val wasActionMode = actionMode
         actionMode = false
-        typedIndex = -1
-        appliedIndex = -1
+        typedIndex = TypingHost.NO_SLOT
+        appliedIndex = TypingHost.NO_SLOT
         val newCount = source.size.coerceIn(0, MAX_SUGGESTIONS)
         var changed = wasActionMode || newCount != count
         for (index in 0 until newCount) {
@@ -526,8 +527,8 @@ class SuggestionStripView(
 
     fun clear() {
         actionMode = false
-        typedIndex = -1
-        appliedIndex = -1
+        typedIndex = TypingHost.NO_SLOT
+        appliedIndex = TypingHost.NO_SLOT
         if (count != 0) {
             count = 0
             for (index in 0 until MAX_SUGGESTIONS) {
@@ -799,7 +800,7 @@ class SuggestionStripView(
                     return true
                 }
                 val slot = slotAt(event.x)
-                pressedIndex = -1
+                pressedIndex = TypingHost.NO_SLOT
                 invalidate()
                 if (slot >= 0) {
                     // Every tapped chip gets a burst.
@@ -830,7 +831,7 @@ class SuggestionStripView(
             MotionEvent.ACTION_CANCEL -> {
                 removeCallbacks(longPressRunnable)
                 longPressFired = false
-                pressedIndex = -1
+                pressedIndex = TypingHost.NO_SLOT
                 invalidate()
             }
         }
@@ -849,11 +850,11 @@ class SuggestionStripView(
     private fun slotAt(x: Float): Int {
         val shown = shownCount()
         if (shown == 0) {
-            return -1
+            return TypingHost.NO_SLOT
         }
         val fromStart = if (rightToLeft) width - x else x
         val slot = (fromStart / (width.toFloat() / shown)).toInt()
-        return if (slot in 0 until shown) slot else -1
+        return if (slot in 0 until shown) slot else TypingHost.NO_SLOT
     }
 
     /**

@@ -42,6 +42,14 @@ DEFAULT_CORPUS = REPOSITORY_ROOT / "native-tests" / "data" / "gestures.csv"
 DEFAULT_BINARY = REPOSITORY_ROOT / "native-tests" / "build" / "gesture_replay"
 BASELINE = REPOSITORY_ROOT / "docs" / "gesture-accuracy.json"
 
+# A layout file's rows: the header, the key width and height; then each key's code and centre.
+LAYOUT_HEADER_COLUMNS = 2
+LAYOUT_KEY_COLUMNS = 3
+# A gesture corpus row: 'id,word,x,y,t'.
+GESTURE_COLUMNS = 5
+# A replay binary's line up to the rank, 'word<TAB>rank', before the top word a miss adds.
+REPLAY_RANK_COLUMNS = 2
+
 
 # --------------------------------------------------------------------------------------
 # Layout and corpus
@@ -63,10 +71,10 @@ class Layout:
             if not line or line.startswith("#"):
                 continue
             parts = line.split()
-            if key_width == 0.0 and len(parts) == 2:
+            if key_width == 0.0 and len(parts) == LAYOUT_HEADER_COLUMNS:
                 key_width, key_height = float(parts[0]), float(parts[1])
                 continue
-            if len(parts) != 3:
+            if len(parts) != LAYOUT_KEY_COLUMNS:
                 raise SystemExit(f"{path}: expected 'code x y', got {line!r}")
             keys[parts[0]] = (float(parts[1]), float(parts[2]))
         if not keys or key_width <= 0:
@@ -89,7 +97,7 @@ def load_corpus(path: Path) -> list[Gesture]:
         if not line or line.startswith("#") or line.startswith("id,"):
             continue
         parts = line.split(",")
-        if len(parts) != 5:
+        if len(parts) != GESTURE_COLUMNS:
             raise SystemExit(f"{path}:{number}: expected 'id,word,x,y,t'")
         identifier, word = parts[0], parts[1]
         if current is None or current.identifier != identifier:
@@ -177,7 +185,7 @@ def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
         if "\t" not in line:
             continue
         fields = line.split("\t")
-        if len(fields) < 2:
+        if len(fields) < REPLAY_RANK_COLUMNS:
             continue
         word = fields[0]
         try:
@@ -190,7 +198,7 @@ def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
         if 0 <= rank < 3:
             top3 += 1
         else:
-            misses.append(f"{word}->{fields[2]}" if len(fields) > 2 else word)
+            misses.append(f"{word}->{fields[2]}" if len(fields) > REPLAY_RANK_COLUMNS else word)
     if total == 0:
         raise SystemExit(f"{binary} reported no gestures")
     return {
