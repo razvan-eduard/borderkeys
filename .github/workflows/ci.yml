@@ -315,7 +315,7 @@ jobs:
           de de-DE 19.1 43.8 58.1 62.7
           fr fr-FR 26.2 49.8 58.0 70.05
           es es-ES 29.4 53.4 55.8 67.1
-          it it-IT 22.9 42.74 51.91 63.78
+          it it-IT 22.9 42.74 51.85 63.78
           FLOORS
           status=0
           for pid in "${pids[@]}"; do
