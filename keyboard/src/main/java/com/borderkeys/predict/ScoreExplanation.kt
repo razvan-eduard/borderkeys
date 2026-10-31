@@ -46,10 +46,14 @@ class ScoreExplanation(
         /** The slot holding the pack's slot in the engine. */
         private const val PACK_SLOT = 5
 
-        /** The engine's account of [candidate]'s score for [typed], or null when it is not offered. */
-        fun read(handle: Long, typed: String, candidate: String): ScoreExplanation? {
+        /**
+         * The engine's account of [candidate]'s score for [typed], with no word before it, the
+         * learned pairs and triples read from the slice of [personalContext], that context's key
+         * ([EngineWorkingCopy.contextFor]), or null when it is not offered.
+         */
+        fun read(handle: Long, typed: String, candidate: String, personalContext: IntArray): ScoreExplanation? {
             val slots = FloatArray(SLOTS)
-            if (!NativePredictor.nativeExplainScore(handle, typed, candidate, slots)) {
+            if (!NativePredictor.nativeExplainScore(handle, typed, candidate, personalContext, slots)) {
                 return null
             }
             return fromSlots(slots, NativePredictor.nativePackTag(handle, slots[PACK_SLOT].toInt()))

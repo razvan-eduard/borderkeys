@@ -2,14 +2,30 @@
   "tag": "id-ID",
   "name": "Indonesian",
   "wikidata": "id",
-  "corpora": ["ind_wikipedia_2021_1M", "ind_news_2024_1M", "ind_newscrawl_2016_1M"],
-  "hunspell": ["id/id_ID"],
+  "corpora": [
+    "ind_wikipedia_2021_1M",
+    "ind_news_2024_1M",
+    "ind_newscrawl_2016_1M"
+  ],
+  "hunspell": [
+    "id/id_ID"
+  ],
   "treebank": {
     "repository": "UD_Indonesian-GSD",
-    "files": ["id_gsd-ud-train.conllu", "id_gsd-ud-dev.conllu", "id_gsd-ud-test.conllu"]
+    "release": "r2.18",
+    "files": [
+      "id_gsd-ud-train.conllu",
+      "id_gsd-ud-dev.conllu",
+      "id_gsd-ud-test.conllu"
+    ]
   },
   "overlay": {},
   "single_letter_words": "",
   "expected_beyond_ascii": [],
-  "reachability_budget": 162
+  "reachability_budget": 162,
+  "sha256": {
+    "ind_news_2024_1M.tar.gz": "9c836eaa9847b90896bce3467f2ef23ce10eaa327b562bdefcaf32aa759feedd",
+    "ind_newscrawl_2016_1M.tar.gz": "1a1d71189546145343f307c42dcd9f51e8476c2b2f895955ae7eb3b39efb3cbf",
+    "ind_wikipedia_2021_1M.tar.gz": "58bb3b5484f690cf545ca585abf2e6816fad6f2296841da85367de0d970b268d"
+  }
 }

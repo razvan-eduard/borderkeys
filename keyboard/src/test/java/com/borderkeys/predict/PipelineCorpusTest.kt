@@ -83,7 +83,7 @@ class PipelineCorpusTest {
             }
             val tally = Tally()
             val pipeline = Pipeline.open(corpus.tag)
-            val readings = Pipeline.readings(corpus.label)
+            val readings = Pipeline.readings(corpus.label, measures = listOf(Pipeline.RIGHT))
             try {
                 for (line in file.readLines()) {
                     if (line.isBlank() || line.startsWith("#")) {
@@ -92,15 +92,10 @@ class PipelineCorpusTest {
                     val typed = line.substringBefore('\t')
                     val expected = line.substringAfter('\t').substringBefore('\t')
                     val outcome = pipeline.commit(typed, corpus.before(line))
-                    readings?.println(pipeline.readingLine(outcome))
                     val committed = outcome.committed
                     tally.cases++
-                    // Compared ignoring case.
-                    val right = when {
-                        corpus.caseSensitive -> (committed ?: typed) == expected
-                        expected == typed -> committed == null
-                        else -> committed.equals(expected, ignoreCase = true)
-                    }
+                    val right = outcome.rightFor(expected, corpus.caseSensitive)
+                    readings?.println(Pipeline.row(listOf(right), typed, pipeline.readingLine(outcome)))
                     when {
                         right -> tally.right++
                         committed == null -> tally.leftAlone++
@@ -158,7 +153,7 @@ class PipelineCorpusTest {
         const val REAL_IN_CONTEXT_FLOOR = 493
         const val ACCENTS_FLOOR = 237
 
-        /** Out of 200, 190 for the Spanish twins and 57 for the Italian ones. */
+        /** Out of 200, 190 for the Spanish twins, 57 for the Italian ones and 300 for the case corpora. */
         const val TWINS_RO_FLOOR = 186
         const val PLAIN_RO_FLOOR = 200
         const val TWINS_FR_FLOOR = 196
@@ -167,11 +162,11 @@ class PipelineCorpusTest {
         const val PLAIN_ES_FLOOR = 200
         const val TWINS_IT_FLOOR = 57
         const val PLAIN_IT_FLOOR = 200
-        const val CASE_EN_FLOOR = 297
-        const val CASE_DE_FLOOR = 291
-        const val CASE_FR_FLOOR = 292
-        const val CASE_ES_FLOOR = 284
-        const val CASE_IT_FLOOR = 294
-        const val CASE_RO_FLOOR = 289
+        const val CASE_EN_FLOOR = 298
+        const val CASE_DE_FLOOR = 289
+        const val CASE_FR_FLOOR = 286
+        const val CASE_ES_FLOOR = 291
+        const val CASE_IT_FLOOR = 293
+        const val CASE_RO_FLOOR = 294
     }
 }

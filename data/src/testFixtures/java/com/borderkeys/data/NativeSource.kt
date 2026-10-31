@@ -7,8 +7,8 @@ package com.borderkeys.data
 object NativeSource {
 
     const val ENGINE_HEADER = "keyboard/src/main/cpp/engine.hpp"
-    const val USER_MODEL_HEADER = "keyboard/src/main/cpp/user_model.hpp"
     const val BRIDGE_SLOTS_HEADER = "keyboard/src/main/cpp/jni_slots.hpp"
+    const val CONTEXT_SLICE_HEADER = "keyboard/src/main/cpp/context_slice.hpp"
     const val PACK_FORMAT_HEADER = "keyboard/src/main/cpp/bkd_format.hpp"
 
     /** The text of [path], relative to the repository root. */

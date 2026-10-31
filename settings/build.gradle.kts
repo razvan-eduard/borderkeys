@@ -38,6 +38,8 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // The Compose UI tests run under Robolectric, with the merged resources and catalogues.
+            isIncludeAndroidResources = true
             all {
                 // The catalogues the index test reads from disk: a change to one reruns them.
                 it.inputs.dir(
@@ -297,4 +299,22 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
+    // The Compose UI tests: a screen's content set in a test activity under Robolectric.
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.test.runner)
+    testImplementation(libs.robolectric)
+}
+
+// The unit tests' Compose UI test artifacts stay at composeUiTest, which the rich editor's newer
+// Compose would otherwise lift them past.
+val composeUiGroup = "androidx.compose.ui"
+val uiTestArtifacts = "ui-test"
+configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") || it.name.endsWith("UnitTestCompileClasspath") }.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == composeUiGroup && requested.name.startsWith(uiTestArtifacts)) {
+            useVersion(libs.versions.composeUiTest.get())
+        }
+    }
 }

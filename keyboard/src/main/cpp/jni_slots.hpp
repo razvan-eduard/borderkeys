@@ -5,6 +5,7 @@
 #define BORDERKEYS_JNI_SLOTS_HPP
 
 #include <cstdint>
+#include <limits>
 
 // The bridge's limits, the classes it registers, and the array slots it fills, which
 // NativePredictor's constants of the same names mirror.
@@ -19,7 +20,7 @@ inline constexpr int32_t kModifiedUtf8BytesPerUnit = 3;
 /** The longest word in modified UTF-8, with its terminator. */
 inline constexpr int32_t kStringBufferBytes = kMaxStringUnits * kModifiedUtf8BytesPerUnit + 1;
 
-/** The most personal words one load hands over: KeyboardPreferences.MAX_LEARNED_WORD_LIMIT. */
+/** The most words one nativeSetBlockedWords call takes: KeyboardPreferences.MAX_LEARNED_WORD_LIMIT. */
 inline constexpr int32_t kMaxUserWordsPerCall = 50000;
 
 /** The most gesture points taken; the same as GestureCapture's capacity. */
@@ -31,12 +32,12 @@ inline constexpr const char* kTextClass = "com/borderkeys/data/NativeText";
 
 /**
  * The slots of nativeAnswer's and nativeDecodeGesture's `outTexts`, NativePredictor's TEXT_
- * constants; nativeDecodeGesture fills kTextLanguage alone.
+ * constants; nativeDecodeGesture fills kTextAnswerPack alone.
  */
 inline constexpr int32_t kTextKnownSpelling = 0;
 inline constexpr int32_t kTextPossessive = 1;
 inline constexpr int32_t kTextDecoded = 2;
-inline constexpr int32_t kTextLanguage = 3;
+inline constexpr int32_t kTextAnswerPack = 3;
 inline constexpr int32_t kTextSlots = 4;
 
 /**
@@ -50,22 +51,46 @@ inline constexpr int32_t kSpellingExact = 0;
 inline constexpr int32_t kSpellingName = 1;
 inline constexpr int32_t kSpellingFlagSlots = 2;
 
-inline constexpr int32_t kLearnedPair = 1;
-inline constexpr int32_t kLearnedTriple = 2;
+/**
+ * The ints each row of nativeLoadWordTable's and nativePutWords' `fields` holds, in this order,
+ * and the id a put names a word the engine does not hold yet by. WordRows' constants.
+ */
+inline constexpr int32_t kWordCount = 0;
+inline constexpr int32_t kWordDeliberateCapitals = 1;
+inline constexpr int32_t kWordAsserted = 2;
+inline constexpr int32_t kWordAdded = 3;
+inline constexpr int32_t kWordFields = 4;
+inline constexpr int32_t kNewWordId = -1;
 
 /**
- * The slots of nativeContextLinks' `outContext`: the context's total and how many times it has been
- * seen. NativePredictor's CONTEXT_ constants.
+ * The most rows one nativeLoadWordTable or nativePutWords call takes: as many as one int array
+ * holds the kWordFields ints of, the most a WordRows' `fields` carries.
  */
-inline constexpr int32_t kContextTotal = 0;
-inline constexpr int32_t kContextSeen = 1;
-inline constexpr int32_t kContextSlots = 2;
+inline constexpr int32_t kMaxWordRowsPerCall = 536870911;
+static_assert(kMaxWordRowsPerCall == std::numeric_limits<int32_t>::max() / kWordFields,
+              "one int array holds the fields of kMaxWordRowsPerCall rows and of no more");
 
 /**
- * How many of one context's links nativeContextLinks reads on the stack, more than any context the
- * budget keeps; a context holding more is read through a buffer sized to it.
+ * Whether `fields` ints are kWordFields per row of `rows` rows, at most kMaxWordRowsPerCall of
+ * them: the row count is checked before the fields are counted, so no count passes an int.
  */
-inline constexpr int32_t kContextLinksOnStack = 32;
+constexpr bool wordFieldsAgree(int32_t rows, int32_t fields) {
+    return rows >= 0 && rows <= kMaxWordRowsPerCall && fields == rows * kWordFields;
+}
+
+/**
+ * The slots of nativePushSlice's arrays, SliceRows' constants: the ints of the header,
+ * of each link and of each hop, the longs before each link's stamp, the most hops a slice holds,
+ * and the id naming no language or word. A request's `personalContext` holds the header's first
+ * kPersonalContextSlots ints: the language and the two words before.
+ */
+inline constexpr int32_t kSliceHeaderFields = 8;
+inline constexpr int32_t kSliceLinkFields = 3;
+inline constexpr int32_t kSliceHopFields = 4;
+inline constexpr int32_t kSliceContextSeenFields = 2;
+inline constexpr int32_t kSliceMaxHops = 3;
+inline constexpr int32_t kSliceNone = -1;
+inline constexpr int32_t kPersonalContextSlots = 3;
 
 }  // namespace borderkeys::bridge
 

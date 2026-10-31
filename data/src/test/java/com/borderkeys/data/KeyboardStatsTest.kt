@@ -4,7 +4,9 @@
 package com.borderkeys.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 class KeyboardStatsTest {
 
@@ -22,6 +24,74 @@ class KeyboardStatsTest {
     }
 
     @Test
+    fun `a series reads its median and its 95th percentile to within a twentieth above them`() {
+        val series = KeyboardStats.Series()
+        // 1 to 100, shuffled: by nearest rank the median is 50 and the 95th percentile 95.
+        for (value in (1..100).shuffled(Random(1))) {
+            series.add(value.toDouble())
+        }
+        val snapshot = series.snapshot()
+        assertTrue("p50 ${snapshot.p50}", snapshot.p50 >= 50.0 && snapshot.p50 <= 52.5)
+        assertTrue("p95 ${snapshot.p95}", snapshot.p95 >= 95.0 && snapshot.p95 <= 99.75)
+    }
+
+    @Test
+    fun `the 95th percentile is the 95th value of a hundred, not the slow tail after it`() {
+        val series = KeyboardStats.Series()
+        repeat(95) { series.add(2.0) }
+        repeat(5) { series.add(400.0) }
+        val snapshot = series.snapshot()
+        assertEquals(2.0, snapshot.p50, 1e-9)
+        assertEquals(2.0, snapshot.p95, 1e-9)
+        series.add(400.0)
+        assertEquals(400.0, series.snapshot().p95, 1e-9)
+    }
+
+    @Test
+    fun `values a twentieth apart are told apart`() {
+        val series = KeyboardStats.Series()
+        repeat(50) { series.add(100.0) }
+        repeat(50) { series.add(105.0) }
+        assertEquals(100.0, series.snapshot().p50, 1e-9)
+        assertEquals(105.0, series.snapshot().p95, 1e-9)
+    }
+
+    @Test
+    fun `equal values read as themselves, a value under the first bucket included`() {
+        val series = KeyboardStats.Series()
+        repeat(10) { series.add(3.0) }
+        assertEquals(3.0, series.snapshot().p50, 1e-9)
+        assertEquals(3.0, series.snapshot().p95, 1e-9)
+        val small = KeyboardStats.Series()
+        repeat(4) { small.add(0.001) }
+        assertEquals(0.001, small.snapshot().p95, 1e-12)
+    }
+
+    @Test
+    fun `a value past the last bucket, infinity included, goes in the last`() {
+        val series = KeyboardStats.Series()
+        repeat(2) { series.add(1.0) }
+        series.add(1e307)
+        series.add(Double.POSITIVE_INFINITY)
+        val snapshot = series.snapshot()
+        assertEquals(4, snapshot.count)
+        assertEquals(1.0, snapshot.p50, 1e-9)
+        assertEquals(Double.POSITIVE_INFINITY, snapshot.p95, 0.0)
+    }
+
+    @Test
+    fun `a value that is not a number is not counted`() {
+        val series = KeyboardStats.Series()
+        series.add(4.0)
+        series.add(Double.NaN)
+        val snapshot = series.snapshot()
+        assertEquals(1, snapshot.count)
+        assertEquals(4.0, snapshot.last, 1e-9)
+        assertEquals(4.0, snapshot.mean, 1e-9)
+        assertEquals(4.0, snapshot.p95, 1e-9)
+    }
+
+    @Test
     fun `reset empties a series`() {
         val series = KeyboardStats.Series()
         series.add(7.0)
@@ -30,6 +100,10 @@ class KeyboardStatsTest {
         assertEquals(0, snapshot.count)
         assertEquals(0.0, snapshot.mean, 1e-9)
         assertEquals(0.0, snapshot.max, 1e-9)
+        assertEquals(0.0, snapshot.p50, 1e-9)
+        assertEquals(0.0, snapshot.p95, 1e-9)
+        series.add(5.0)
+        assertEquals(5.0, series.snapshot().p95, 1e-9)
     }
 
     @Test

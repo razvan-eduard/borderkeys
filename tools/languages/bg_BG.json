@@ -15,5 +15,10 @@
   "overlay": {},
   "single_letter_words": "авиосу",
   "expected_beyond_ascii": [],
-  "reachability_budget": 198
+  "reachability_budget": 198,
+  "sha256": {
+    "bul_news_2022_1M.tar.gz": "16502f5135f69a5b03529ea8822c6f4ab9adfd71fef16cec291fc6f38b61388f",
+    "bul_newscrawl_2017_1M.tar.gz": "b5a32ce2da2941e0337089857a96cdb54caf581866bc00cd2ba45ffb79b690be",
+    "bul_wikipedia_2021_1M.tar.gz": "4d619a15a208e9d8cde132ffe96f5b2941bd1781c47d9a844782b6b9f8db66e3"
+  }
 }

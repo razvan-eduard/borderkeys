@@ -252,27 +252,40 @@ private:
     int symbols_ = 0;
 };
 
-// Puts `offered` into `out` second, or first when `out` holds nothing, unless `sameSpelling`
-// finds its spelling among the `written`; returns how many `out` holds, at most `maxOut`. The
-// word placed takes the score of the one before it, or 0 in first place.
+// The place placeOffered puts its word in: second, after the engine's best.
+constexpr int kOfferedPlace = 1;
+
+// Puts `entry` at `out[at]`, moving the entries from `at` to `end` one place down over
+// `out[end]`; `entry` takes the score of the one before it, or 0 in first place.
+inline void insertAt(Candidate* out, int at, int end, Candidate entry) {
+    for (int i = end; i > at; --i) {
+        out[i] = out[i - 1];
+    }
+    out[at] = entry;
+    out[at].score = (at > 0) ? out[at - 1].score : 0.0f;
+}
+
+// Puts `offered` into `out` at kOfferedPlace, or first when `out` holds nothing; when
+// `sameSpelling` finds its spelling among the `written` below that place, that entry moves up to
+// it instead. Returns how many `out` holds, at most `maxOut`. The word placed takes the score of
+// the one before it, or 0 in first place.
 template <typename SameSpelling>
 int placeOffered(Candidate* out, int written, int maxOut, const Candidate& offered,
                  SameSpelling sameSpelling) {
     if (maxOut <= 0) {
         return written;
     }
+    const int at = std::min(written, kOfferedPlace);
     for (int i = 0; i < written; ++i) {
         if (sameSpelling(out[i], offered)) {
+            if (i > at) {
+                insertAt(out, at, i, out[i]);
+            }
             return written;
         }
     }
-    const int at = std::min(written, 1);
     const int kept = std::min(written, maxOut - 1);
-    for (int i = kept; i > at; --i) {
-        out[i] = out[i - 1];
-    }
-    out[at] = offered;
-    out[at].score = (at > 0) ? out[at - 1].score : 0.0f;
+    insertAt(out, at, kept, offered);
     return kept + 1;
 }
 

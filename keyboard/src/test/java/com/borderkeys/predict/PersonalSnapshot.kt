@@ -4,6 +4,10 @@
 package com.borderkeys.predict
 
 import com.borderkeys.data.PhraseKey
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserWord
+import com.borderkeys.data.theme.KeyboardPreferences
 
 /** The personal models a row is typed with, and what one taught after a context. */
 internal object PersonalSnapshot {
@@ -13,6 +17,20 @@ internal object PersonalSnapshot {
 
     /** [model]'s words, without its pairs and triples. */
     fun withoutPhrases(model: PersonalModelLoad) = EMPTY.copy(words = model.words)
+
+    /**
+     * Each of [learned]'s words, used the learn-after count of times and last at [at], learned
+     * after [context] in the store of the language it is keyed by.
+     */
+    fun learnedAfter(context: String, learned: Map<String, String>, at: Long): PersonalModelLoad {
+        val uses = KeyboardPreferences.DEFAULT_LEARN_AFTER_USES
+        val seen = uses.toLong()
+        return EMPTY.copy(
+            words = learned.map { (language, word) -> UserWord(word, language, uses, at) },
+            pairs = learned.map { (language, word) -> UserBigram(language, context, word, uses, at, seen, seen) },
+            pairContexts = learned.keys.map { language -> UserPairContext(language, context, seen, at, seen) },
+        )
+    }
 
     /** What a history taught about the words after a context. */
     enum class Context {

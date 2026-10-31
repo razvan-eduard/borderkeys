@@ -7,14 +7,17 @@ import android.content.Context
 import androidx.room.Room
 import java.io.Closeable
 
-/** A [DictionaryRepository] on a database of its own in memory, for the tests run under Robolectric. */
+/**
+ * A [DictionaryRepository] on a database of its own in memory, its reads and writes run at once,
+ * for the tests run under Robolectric.
+ */
 class InMemoryDictionary(context: Context) : Closeable {
 
     internal val database = Room.inMemoryDatabaseBuilder(context, BorderKeysDatabase::class.java)
         .allowMainThreadQueries()
         .build()
 
-    val repository = DictionaryRepository(database)
+    val repository = DictionaryRepository(database, testWorker())
 
     override fun close() = database.close()
 }

@@ -15,11 +15,16 @@ docs/gesture-accuracy-tcn-<layout>.json; --check-regression is the CI gate, whic
 polyline hold-out and needs no training data.
 """
 
+from __future__ import annotations
+
 import argparse
+import contextlib
+import io
 import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unicodedata
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -241,7 +246,32 @@ def check_regression(name: str, count: int) -> bool:
     return passed
 
 
-def main() -> int:
+def selftest() -> None:
+    """--check-regression fails with no layout to check, and on a shipped model with no baseline."""
+    module = sys.modules[__name__]
+    with tempfile.TemporaryDirectory() as directory:
+        root = pathlib.Path(directory)
+        module.ROOT = root
+        module.SHIPPED = root / "swipe"
+        module.DOCS = root / "docs"
+        module.SHIPPED.mkdir()
+        module.DOCS.mkdir()
+        cases = [
+            ("no shipped layout fails the check", ["--shipped", "--check-regression"], 1),
+            ("no shipped layout is a notice without the check", ["--shipped"], 0),
+        ]
+        for name, arguments, status in cases:
+            with contextlib.redirect_stdout(io.StringIO()):
+                got = main(arguments)
+            assert got == status, f"{name}: exit {got}, expected {status}"
+        (module.SHIPPED / "russian.bkw").write_bytes(b"")
+        with contextlib.redirect_stdout(io.StringIO()):
+            got = main(["--shipped", "--check-regression"])
+        assert got == 1, f"a shipped model with no baseline: exit {got}, expected 1"
+    print("selftest ok: the regression check fails with no layout to check and with no baseline")
+
+
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("names", nargs="*")
     parser.add_argument("--all", action="store_true")
@@ -255,13 +285,21 @@ def main() -> int:
     parser.add_argument("--build-packs", action="store_true", help="compile a missing pack from its word list")
     parser.add_argument("--record-baseline", action="store_true", help="write docs/gesture-accuracy-tcn-<layout>.json")
     parser.add_argument("--check-regression", action="store_true", help="fail if the polyline figures fell")
-    args = parser.parse_args()
+    parser.add_argument("--selftest", action="store_true",
+                        help="prove the regression check fails whenever it has nothing to compare")
+    args = parser.parse_args(argv)
+    if args.selftest:
+        selftest()
+        return 0
     if args.shipped:
         names = sorted(path.stem for path in SHIPPED.glob("*.bkw") if path.stem in SCRIPTS)
     else:
         names = list(SCRIPTS) if args.all else args.names
     if not names and not args.shipped:
         parser.error("name a layout, --all or --shipped")
+    if not names:
+        return gesture_replay.nothing_measured(f"no layout has a shipped model in {SHIPPED}",
+                                               args.check_regression)
     if args.build_packs:
         for name in names:
             build_pack(name)
@@ -287,4 +325,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

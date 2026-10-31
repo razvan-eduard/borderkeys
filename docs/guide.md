@@ -56,7 +56,8 @@ ships.
   words too, so they stay as typed; each step keeps more of them and leaves more typos that
   happen to spell one, and the setting names the dictionaries it changes. Space and
   punctuation apply it, and Enter too with its own switch on, before its new line or before it
-  sends; the backspace straight after a correction puts back exactly what you typed.
+  sends; the backspace straight after a correction puts back exactly what you typed, and that
+  word is left as you typed it for the rest of the field.
 - **Offensive words, blocked on request.** One switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched, and the lists are plain text in the repository, one per bundled language.
@@ -160,9 +161,11 @@ ships.
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/15_modifier_row_keys.jpg" alt="Layout &amp; keys: the modifier row's position and the keys on it, reorderable" width="30%">
 </p>
 - **A personal dictionary you can see and edit.** The Learned card of the Personal dictionary
-  and heatmap screen opens two pages. **Words** lists every learned word with how often you used
-  it, and a `Block` (never suggest it again) and a `Delete` (remove it) right beside it — not a
-  black box. **Phrases** lists the word pairs and triples it learned, each with a Delete of its
+  and heatmap screen opens two pages. **Words** lists every learned word under the language you
+  wrote it in, with how often you used it there, and a `Block` (never suggest it again) and a
+  `Delete` (remove it) right beside it — not a black box. A language whose dictionary is off says
+  its words are suggested while it is on, and words learned before the keyboard kept their
+  language sit under a heading of their own. **Phrases** lists the word pairs and triples it learned, each with a Delete of its
   own; they go with a word when it is deleted, and deleting a pair takes the triples it is part
   of. Both pages search. The Words page adds too: type a word in its search box and tap Add to
   dictionary, choosing its language when more than one is enabled, and it is suggested and left
@@ -179,13 +182,13 @@ ships.
   offers the same from the keyboard, and a "Why?": the engine's own account of the word's score,
   term by term, in plain words. Forget removes the word in every case it was learned in, This
   and this alike, with what is still waiting to be saved. How soon a word or phrase is learned
-  is a number of uses, 1, 2, 3, 5, 8 or 13, three by default, or one pick from the strip: until then
-  it is only counted and moves nothing, a dictionary word included, and from then on it climbs
-  the more you use it. How fast unused words fade sits beside it: a word or phrase unused for that
-  many days, a week to a year, counts half as much, and is no longer learned once it falls below
-  the number of uses. A word used only once is deleted after 10, 30 or 90 days unused, 30 by
-  default, or kept with Off. The clean-up that fades and deletes runs daily, weekly or monthly,
-  weekly by default. The two pages list only what is learned.
+  is a number of uses, 1, 2, 3, 5, 8 or 13, three by default, or one choice of it on the strip:
+  until then it is only counted and moves nothing, a dictionary word included, and from then on
+  it climbs the more you use it. How fast unused words fade sits beside it: a word or phrase
+  unused for that many days, a week to a year, counts half as much, and is no longer learned once
+  it falls below the number of uses. A word used only once is deleted after 10, 30 or 90 days
+  unused, 30 by default, or kept with Off. The clean-up that fades and deletes runs daily, weekly
+  or monthly, weekly by default. The two pages list only what is learned.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/22_learned_words.jpg" alt="Learned words: a search box, Forget everything, and each word with how often it was used, a Block and a Delete" width="30%">
@@ -390,5 +393,9 @@ reads from a
 single file, under your control, on your schedule, with a checklist of exactly what a file
 contains shown before any of it is applied. The two builds can hand their settings and
 dictionaries to each other directly, without a file. This is the only way the dictionary moves:
-the Personal dictionary screen has no import or export of its own. The heatmap stays on the
-phone that learned it. Nothing syncs anywhere on its own.
+the Personal dictionary screen has no import or export of its own. Reading a dictionary in keeps,
+for every word and phrase, the larger count and the later use of the phone's and the file's, so
+reading the same file twice changes nothing; a word the phone blocks is left out, a word the file
+blocks is blocked and forgotten here too, and what was left out, blocked or unreadable, is said
+once it is read in. The heatmap stays on the phone that learned it. Nothing syncs anywhere on its
+own.

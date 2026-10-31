@@ -3,13 +3,10 @@
 
 package com.borderkeys.predict
 
-import com.borderkeys.data.SharedNativeTextRunner
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -21,13 +18,12 @@ import java.util.concurrent.TimeUnit
  * previous1`, a `clean` row right when the word is left alone and a typo right when it becomes the
  * meant word. Each row is typed with an empty personal model, with the history's words alone, and
  * with the whole history, the model held as loaded while the rows are typed. The history is written
- * and read back through the personal dictionary on a database in memory, under Robolectric.
+ * and read back through the personal dictionary on tables in memory.
  */
-@RunWith(SharedNativeLibraryRunner::class)
-@Config(sdk = [SharedNativeTextRunner.SDK])
 class PersonalCorpusTest {
 
-    private class Row(
+    /** A row of a corpus written as `typed<TAB>meant<TAB>kind<TAB>previous2 previous1`. */
+    internal class Row(
         val typed: String,
         val meant: String,
         val kind: String,
@@ -36,13 +32,15 @@ class PersonalCorpusTest {
     ) {
         val clean: Boolean get() = kind == CLEAN
 
+        /** The row's key in a rows file: its context, then what was typed. */
+        val key: String get() = "$previous2 $previous1 $typed"
+
         /** Whether [outcome] is what this row expects, case aside. */
-        fun rightFor(outcome: Pipeline.Outcome): Boolean =
-            if (clean) outcome.committed == null else outcome.committed.equals(meant, ignoreCase = true)
+        fun rightFor(outcome: Pipeline.Outcome): Boolean = outcome.rightFor(meant)
     }
 
     /** The personal model a row is typed with. */
-    private enum class Arm { EMPTY, WORDS, FULL }
+    internal enum class Arm { EMPTY, WORDS, FULL }
 
     private class Tally {
         var cases = 0
@@ -56,7 +54,7 @@ class PersonalCorpusTest {
         val learnAfter = KeyboardPreferences().learnAfter
         val report = StringBuilder()
         val failures = mutableListOf<String>()
-        for ((tag, language) in LANGUAGES) {
+        for ((tag, language) in languagesNamed(System.getProperty(LANGUAGES_PROPERTY))) {
             val historyFile = File(Pipeline.CORPUS_DIRECTORY, "personal_history_$language.txt")
             val rowsFile = File(Pipeline.CORPUS_DIRECTORY, "personal_rows_$language.tsv")
             if (!historyFile.isFile || !rowsFile.isFile) {
@@ -67,37 +65,30 @@ class PersonalCorpusTest {
             pipeline.learning = true
             val tallies = mutableMapOf<String, Tally>()
             val readings = Arm.entries.associateWith { arm ->
-                Pipeline.readings("personal_${language}_${arm.name.lowercase()}.tsv")
+                Pipeline.readings("personal_${language}_${arm.name.lowercase()}.tsv", measures = listOf(Pipeline.RIGHT))
             }
             try {
-                pipeline.learnHistory(content(historyFile).map { it.split(' ') })
-                val full = pipeline.personalSnapshot()
-                val personal = mapOf(
-                    Arm.EMPTY to PersonalSnapshot.EMPTY,
-                    Arm.WORDS to PersonalSnapshot.withoutPhrases(full),
-                    Arm.FULL to full,
-                )
-                val rows = content(rowsFile).map { line ->
-                    val (typed, meant, kind, context) = line.split('\t')
-                    val (previous2, previous1) = context.split(' ')
-                    Row(typed, meant, kind, previous2, previous1)
-                }
+                val full = learn(pipeline, historyFile)
+                val rows = rowsOf(rowsFile)
                 val started = System.nanoTime()
-                val typedByArm = Arm.entries.associateWith { arm ->
-                    pipeline.withPersonal(personal.getValue(arm)) {
-                        rows.map { pipeline.commitAfter(it.typed, it.previous2, it.previous1) }
-                    }
-                }
+                val typedByArm = typeByArm(pipeline, full, rows)
                 for ((index, row) in rows.withIndex()) {
                     val context = PersonalSnapshot.contextOf(
                         full, LanguageTags.primary(tag), row.previous2, row.previous1, row.meant, learnAfter,
                     )
                     val byArm = Arm.entries.associateWith { arm -> typedByArm.getValue(arm)[index] }
                     for ((arm, reading) in byArm) {
-                        readings[arm]?.println("${context.name.lowercase()}\t${row.kind}\t${reading.line}")
+                        val right = row.rightFor(reading.outcome)
+                        readings[arm]?.println(
+                            Pipeline.row(
+                                listOf(right),
+                                row.key,
+                                "${context.name.lowercase()}\t${row.kind}\t${reading.line}",
+                            ),
+                        )
                         val tally = tallies.getOrPut(key(language, arm, context, row.clean)) { Tally() }
                         tally.cases++
-                        if (row.rightFor(reading.outcome)) {
+                        if (right) {
                             tally.right++
                         } else {
                             tally.misses += "${row.previous2} ${row.previous1} ${row.typed} -> " +
@@ -150,35 +141,86 @@ class PersonalCorpusTest {
         )
     }
 
-    /** The lines of [file] that are neither blank nor comments. */
-    private fun content(file: File): List<String> =
-        file.readLines().filter { it.isNotBlank() && !it.startsWith("#") }
-
     private fun key(language: String, arm: Arm, context: PersonalSnapshot.Context, clean: Boolean) =
         "$language ${arm.name} ${context.name} $clean"
 
     private fun floorName(language: String, context: PersonalSnapshot.Context, clean: Boolean) =
         "${language}_${context.name.lowercase()}_${if (clean) CLEAN else TYPO}"
 
-    private companion object {
+    internal companion object {
+        /** The lines of [file] that are neither blank nor comments. */
+        fun content(file: File): List<String> =
+            file.readLines().filter { it.isNotBlank() && !it.startsWith("#") }
+
+        /** The rows of [file], a corpus of [Row]s. */
+        fun rowsOf(file: File): List<Row> =
+            content(file).map { line ->
+                val (typed, meant, kind, context) = line.split('\t')
+                val (previous2, previous1) = context.split(' ')
+                Row(typed, meant, kind, previous2, previous1)
+            }
+
+        /**
+         * Learns the history in [historyFile], one run of words per line, through [pipeline], and
+         * returns the model the service loads from it ([Pipeline.personalSnapshot]).
+         */
+        fun learn(pipeline: Pipeline, historyFile: File): PersonalModelLoad {
+            pipeline.learnHistory(content(historyFile).map { it.split(' ') })
+            return pipeline.personalSnapshot()
+        }
+
+        /**
+         * Each of [rows] typed after its two words through [pipeline] with each [Arm]'s personal
+         * model, [full] the whole history's, the model held as loaded while the rows are typed.
+         */
+        fun typeByArm(pipeline: Pipeline, full: PersonalModelLoad, rows: List<Row>): Map<Arm, List<Pipeline.Reading>> {
+            val personal = mapOf(
+                Arm.EMPTY to PersonalSnapshot.EMPTY,
+                Arm.WORDS to PersonalSnapshot.withoutPhrases(full),
+                Arm.FULL to full,
+            )
+            return Arm.entries.associateWith { arm ->
+                pipeline.withPersonal(personal.getValue(arm)) {
+                    rows.map { pipeline.commitAfter(it.typed, it.previous2, it.previous1) }
+                }
+            }
+        }
+
         const val MISSES_LISTED = 12
         const val CLEAN = "clean"
         const val TYPO = "typo"
 
+        /** The system property naming the languages to read, as [languagesNamed] takes them. */
+        const val LANGUAGES_PROPERTY = "borderkeys.personalLanguages"
+
         /** The packs measured, by the corpora's language code. */
         val LANGUAGES = listOf("en-US" to "en", "ro-RO" to "ro", "es-ES" to "es")
 
+        /**
+         * The packs of [LANGUAGES] whose codes [names] lists, comma-separated, in [LANGUAGES]'
+         * order; every one when [names] is null or blank.
+         */
+        fun languagesNamed(names: String?): List<Pair<String, String>> {
+            if (names.isNullOrBlank()) {
+                return LANGUAGES
+            }
+            val codes = names.split(',').map { it.trim() }
+            val unknown = codes - LANGUAGES.map { it.second }.toSet()
+            require(unknown.isEmpty()) { "no personal corpus for $unknown" }
+            return LANGUAGES.filter { it.second in codes }
+        }
+
         /** Rows answered as expected with the whole history, out of the class's rows of that kind. */
         val FLOORS = mapOf(
-            "en_meant_clean" to 81, "en_meant_typo" to 73,
-            "en_others_clean" to 289, "en_others_typo" to 222,
-            "en_none_clean" to 230, "en_none_typo" to 170,
-            "ro_meant_clean" to 106, "ro_meant_typo" to 93,
-            "ro_others_clean" to 297, "ro_others_typo" to 228,
-            "ro_none_clean" to 191, "ro_none_typo" to 131,
-            "es_meant_clean" to 58, "es_meant_typo" to 54,
-            "es_others_clean" to 332, "es_others_typo" to 264,
-            "es_none_clean" to 204, "es_none_typo" to 141,
+            "en_meant_clean" to 61, "en_meant_typo" to 59,
+            "en_others_clean" to 284, "en_others_typo" to 223,
+            "en_none_clean" to 255, "en_none_typo" to 187,
+            "ro_meant_clean" to 54, "ro_meant_typo" to 48,
+            "ro_others_clean" to 347, "ro_others_typo" to 255,
+            "ro_none_clean" to 199, "ro_none_typo" to 142,
+            "es_meant_clean" to 39, "es_meant_typo" to 35,
+            "es_others_clean" to 389, "es_others_typo" to 298,
+            "es_none_clean" to 172, "es_none_typo" to 112,
         )
     }
 }

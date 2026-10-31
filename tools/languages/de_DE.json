@@ -18,6 +18,19 @@
   ],
   "capitals": "deu_news_2020_1M",
   "heldout": "deu_news_2024_1M",
+  "heldout_split": {
+    "dev": 5,
+    "personal": 0,
+    "case": 995
+  },
+  "treebank": {
+    "repository": "UD_German-GSD",
+    "release": "r2.18",
+    "files": [
+      "de_gsd-ud-dev.conllu",
+      "de_gsd-ud-train.conllu"
+    ]
+  },
   "sha256": {
     "deu_news_2020_1M.tar.gz": "ba5f9f8fe0c1fb58817094c3b7475be83c4d2730395c119be58a2f04c34665e3",
     "deu_news_2021_1M.tar.gz": "dbc5c7248eaf915d9b525ce49c7bea684e4b244a7e3ae489e90a9185f665485f",

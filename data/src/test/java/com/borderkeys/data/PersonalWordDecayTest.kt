@@ -63,17 +63,17 @@ class PersonalWordDecayTest {
 
     @Test
     fun `the UserWord extension decays only the count`() {
-        val word = UserWord(word = "salut", locale = "ro-RO", count = 100, lastUsedAt = 0)
+        val word = UserWord(word = "salut", language = "ro", count = 100, lastUsedAt = 0)
         val decayed = word.decayed(now = halfLife, halfLifeMillis = halfLife)
         assertEquals(50, decayed.count)
         assertEquals(word.word, decayed.word)
-        assertEquals(word.locale, decayed.locale)
+        assertEquals(word.language, decayed.language)
         assertEquals(word.lastUsedAt, decayed.lastUsedAt)
     }
 
     @Test
     fun `a word chosen on purpose never decays below one use, one never chosen decays to none`() {
-        val chosen = UserWord(word = "nadia", locale = "en-US", count = 1, lastUsedAt = 0, asserted = 1)
+        val chosen = UserWord(word = "nadia", language = "en", count = 1, lastUsedAt = 0, asserted = 1)
         val never = chosen.copy(asserted = 0)
         val later = 3 * halfLife
         assertEquals(1, chosen.decayed(now = later, halfLifeMillis = halfLife).count)

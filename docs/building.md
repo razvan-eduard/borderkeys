@@ -76,7 +76,11 @@ Gradle properties that change a build:
 | `-Pborderkeys.extraAbis=x86_64` | Adds ABIs to the default `arm64-v8a` and `armeabi-v7a`, for an x86 emulator. |
 | `-Pborderkeys.keystore.path=…`, `-Pborderkeys.keystore.alias=…` | The release keystore, when not in `~/.borderkeys/` or the environment. |
 | `-Pborderkeys.taps=<dir>` | The tap corpora `TapCorpusTest` types; without it that test skips itself. |
+| `-Pborderkeys.swipes=<dir>` | The swipe traces `SwipePersonalCorpusTest` replays; without it that test skips its corpus. |
 | `-Pborderkeys.readings=<dir>` | Makes the pipeline tests write one line per corpus case into `<dir>`. |
+| `-Pborderkeys.personalLanguages=<codes>` | The languages `PersonalCorpusTest` reads, comma-separated (`en,ro`); without it, all three. |
+| `-Pborderkeys.dev=<dir>` | The DEV corpora `CorrectionDevReadingsTest` types (`make_dev_corpus.py`); without it that test skips its reading. |
+| `-Pborderkeys.packsDir=<dir>`, `-Pborderkeys.libraryDir=<dir>` | Another directory of packs and another host library's directory for the JVM tests that drive the engine, in place of the tree's own. These two and `-Pborderkeys.dev` are read relative to the repository's root; an empty value or one that names no directory stops the build. |
 
 ## What a build generates
 
@@ -115,14 +119,19 @@ cmake --build native-tests/build --parallel        # everything
 ctest --test-dir native-tests/build
 ```
 
+The engine is timed on an optimised build beside it, `native-tests/build-timing`, configured
+RelWithDebInfo, a type `native-tests/CMakeLists.txt` gives the shipped library's flags,
+`-O2 -g -DNDEBUG`; `scripts/timing.sh` configures and builds it.
+
 | Target | What it is |
 |---|---|
 | `borderkeys` | The host library, `native-tests/build/libborderkeys.{so,dylib}`, which the Kotlin pipeline tests load through JNI. Build it before `./gradlew test`, or those tests skip themselves. |
 | `borderkeys_tests` | The engine's own tests (ctest `engine`). |
 | `pack_corpus_test` | Malformed and mutated packs through the loader (ctest `pack_corpus`). |
-| `suggest_eval` | The strip, autocorrect, reachability and context readings: `--autocorrect`, `--reachable`, `--context`, `--explain`. |
-| `touch_eval` | The touch model on the tap corpora. |
-| `gesture_replay`, `tcn_replay` | The two swipe decoders on recorded swipes. |
+| `suggest_eval` | The strip, reachability and context readings: where the strip ranks a corpus's words (the bare form and `--autocorrect`), `--reachable`, `--context`, `--explain`; `--rows <file>` writes a rows file beside the report, and `--start-rows <file>`, with `--context`, the rows of each run's first word asked with nothing before it. |
+| `touch_eval` | The touch model on the tap corpora; `--rows <file>` writes the strip's rows, per slipped word and setting. |
+| `gesture_replay`, `tcn_replay` | The two swipe decoders on recorded swipes, each decoded through the engine as the keyboard decodes a swipe. |
+| `timing_eval` | Each engine call a keystroke or a swipe makes, timed one at a time, with no personal model and after a history: the calls file `scripts/timing.sh` reads (ctest `timing_eval_calls`). |
 
 The engine's tuning constants can be overridden per build for a sweep, as CMake cache variables
 (`-DBORDERKEYS_SLIP_SCALE=…`, `-DBORDERKEYS_EDIT_PENALTY=…` and the others listed in
@@ -155,7 +164,7 @@ And in the compilers:
 | JVM, every module | `./gradlew test` | the host library and the packs, for the pipeline tests |
 | JVM, one class | `./gradlew :keyboard:testCoreDebugUnitTest --tests 'com.borderkeys.predict.PipelineCorpusTest'` | as above |
 | Native | `ctest --test-dir native-tests/build` | the host build |
-| Every corpus reading, for a diff | `scripts/corpus_readings.sh <out dir>` | both of the above |
+| Every corpus reading, for a comparison | `scripts/corpus_readings.sh <out dir>` | both of the above |
 | Instrumented smoke suite | build `assemblePlusDebug` and `assemblePlusDebugAndroidTest`, `adb install` both, then `adb shell am instrument -w -e class com.borderkeys.ImeSmokeTest com.borderkeys.plus.test/androidx.test.runner.AndroidJUnitRunner` | an emulator |
 
 The tap corpora for `TapCorpusTest` come from `tools/make_tap_corpus.py`, one file per
@@ -240,6 +249,9 @@ Every tool prints its usage with `--help`, and its header says what it does.
 | `gen_keys.py` | `Keys.kt` from the English catalogue. |
 | `check_layouts.py` | That the layout assets, their subtypes and their labels agree. |
 | `check_imports.py` | That every tracked Kotlin file's imports are in ktlint's order and all used; `--selftest` proves its rules on synthetic snippets. |
+| `check_python_floor.py` | That every tool and script runs on the oldest Python the build meets (macOS's 3.9, which a Gradle daemon started from Android Studio runs); `--selftest` proves its rules on synthetic snippets. |
+| `check_doc_constants.py` | That every engine constant a document under `docs/` names exists in the code; `--selftest` proves its rules on synthetic files. |
+| `check_pack_definitions.py` | That each language's lists can store what the next-word score defines: every counted n-gram's words listed under their own spelling, no context's stored successors above its count, and the sentences counted recorded in the manifest (`sentence_starts`); `--selftest` proves its rules on synthetic lists. |
 
 ### Keeping the word lists clean
 
@@ -275,11 +287,12 @@ Every tool prints its usage with `--help`, and its header says what it does.
 | `make_known_corpus.py`, `make_unknown_corpus.py`, `make_unlisted_corpus.py` | Correct words to be left alone: in the pack, missing from it, and missing from every dictionary. |
 | `make_real_corpus.py` | Real phone typos from the ITE Typing dataset. |
 | `make_accent_corpus.py`, `make_twin_corpus.py` | Accent restoration, and spellings that differ only by diacritics. |
-| `make_case_corpus.py` | Capitalisation inside sentences, from held-out text. |
-| `heldout_overlap.py` | Whether a language's held-out corpus may be measured on, and what it shares with the counted ones. |
-| `make_personal_corpus.py` | A persona's history and candidate rows for `PersonalCorpusTest`. |
+| `make_case_corpus.py` | Capitalisation inside sentences, from the held-out split's case part. |
+| `heldout_overlap.py` | Whether a language's held-out corpus may be measured on, what it shares with the counted ones, and its split into the dev, personal and case parts. |
+| `make_personal_corpus.py` | A persona's history, its candidate rows and the rows drawn from them, from the held-out split's personal part, for `PersonalCorpusTest`. |
 | `language_manifest.py` | Each language's corpora from its manifest, fetched and checked against their SHA-256; a word list's corpora found by counting. |
 | `make_context_corpus.py` | Held-out text for `suggest_eval --context`. |
+| `make_dev_corpus.py` | The dev text a language model constant is chosen on, from the held-out split's dev part and the treebank's dev half, the correction rows of the same sentences, and the personal DEV rows, for `scripts/dev_readings.sh`. |
 | `make_tap_corpus.py` | Synthetic taps for the touch model. |
 | `make_corrupt_packs.py` | The malformed packs under `native-tests/data/corpus`. |
 | `estimate_typing_channel.py` | How often phone typing adds, drops or swaps a letter, for the tap decoder. |
@@ -288,7 +301,7 @@ Every tool prints its usage with `--help`, and its header says what it does.
 
 | Tool | What it does |
 |---|---|
-| `gesture_replay.py`, `tcn_replay.py` | The geometric and neural decoders' accuracy on recorded swipes, against `docs/gesture-accuracy*.json`. |
+| `gesture_replay.py`, `tcn_replay.py` | The geometric and neural decoders' accuracy on recorded swipes, against `docs/gesture-accuracy*.json`; `--rows <file>` writes a rows file per gesture. `gesture_replay.py --synthesise` writes swipes through a word's keys, and `--fold` swipes letters the layout lacks over their plain keys. |
 | `layout_to_replay.py` | A layout asset as a replay layout. |
 | `script_swipe_eval.py` | Synthesised swipes on an own-script layout, both decoders measured. |
 | `swipe_model/` | Training the neural decoder: `prepare_corpus.py`, `train.py`, `export_weights.py`, the synthesiser in `synthesise.py` and `flow.py`, and the per-script queues. Its `README.md` explains the whole process, and `train_combined.log` is the training log of the weights the `plus` build ships. |
@@ -304,5 +317,11 @@ Every tool prints its usage with `--help`, and its header says what it does.
 
 | Script | What it does |
 |---|---|
-| `scripts/corpus_readings.sh <out dir>` | Every corpus reading, native and through the whole Kotlin path, one line per case, for `diff -r` between two runs. |
+| `scripts/corpus_readings.sh <out dir>` | Every corpus reading, native (the strip's ranks), held-out, both swipe decoders, the touch model and through the whole Kotlin path (the commit), one rows file per corpus; `--fast` writes the context and reachability readings alone. |
+| `scripts/compare_readings.py <before> <after>` | Two readings row by row: each corpus's fixed and lost rows, and whether the change falls; `--selftest` proves the rule. |
+| `scripts/dev_readings.sh <out dir>` | The dev readings, where a constant is chosen: `suggest_eval --context` on each language's dev text, its start rows included, then the correction and personal DEV rows through the whole Kotlin path (`CorrectionDevReadingsTest`). |
+| `scripts/judge_arms.py judge <sheet.json>` | A design sheet's arms, each run judged by `compare_readings.py`, each arm's best named, only while the judging tools match the SHA-256 `freeze` recorded in the sheet; `ledger` records a sheet's one TEST read, `genres` sets DEV's genres beside TEST's. |
+| `scripts/full_gate.py <out dir>` | Every step of CI's verify job on this machine, as CI runs it, then every step and JVM test that failed. |
+| `scripts/timing.sh <out dir> <before> <after>` | The engine call by call on the optimised build, two builds in five alternated runs, each group of calls' p50 and p95 and its verdict; `--one <build>` times one build alone. |
+| `scripts/timing_summary.py <runs dir>` | The p50 and p95 of each group of timed calls, per run and over every run, and the verdict between two builds; `order` prints the runs' alternation, `--selftest` proves the rule. |
 | `scripts/sync_fdroid_metadata.sh` | The F-Droid metadata tree for both flavours, from `fastlane/` and `metadata/`. |

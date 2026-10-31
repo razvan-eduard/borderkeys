@@ -34,12 +34,14 @@ class PersonalModelReloadTest {
             steps += "load"
             loaded = rows.toList()
         },
+        stale = { steps += "stale" },
+        fresh = { steps += "fresh" },
     )
 
     @Test
-    fun `the engine settles, the buffer is written, then the rows are loaded`() = runTest {
+    fun `the engine settles, the links go stale, the buffer is written, the rows are loaded, and once the engine settles again the links are fresh`() = runTest {
         reload.reload()
-        assertEquals(listOf("settle", "flush", "load"), steps)
+        assertEquals(listOf("settle", "stale", "flush", "load", "settle", "fresh"), steps)
     }
 
     @Test
@@ -56,7 +58,7 @@ class PersonalModelReloadTest {
                 buffer.remove("the")
             },
         )
-        assertEquals(listOf("settle", "between", "flush", "load"), steps)
+        assertEquals(listOf("settle", "stale", "between", "flush", "load", "settle", "fresh"), steps)
         assertEquals(listOf("teh"), loaded)
     }
 }

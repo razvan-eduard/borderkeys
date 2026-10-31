@@ -2,16 +2,38 @@
   "tag": "nl-NL",
   "name": "Dutch",
   "wikidata": "nl",
-  "corpora": ["nld_wikipedia_2021_1M", "nld_news_2024_1M", "nld_newscrawl_2019_1M"],
-  "hunspell": ["nl_NL/nl_NL"],
+  "corpora": [
+    "nld_wikipedia_2021_1M",
+    "nld_news_2024_1M",
+    "nld_newscrawl_2019_1M"
+  ],
+  "hunspell": [
+    "nl_NL/nl_NL"
+  ],
   "treebank": {
     "repository": "UD_Dutch-Alpino",
-    "files": ["nl_alpino-ud-train.conllu", "nl_alpino-ud-dev.conllu", "nl_alpino-ud-test.conllu"]
+    "release": "r2.18",
+    "files": [
+      "nl_alpino-ud-train.conllu",
+      "nl_alpino-ud-dev.conllu",
+      "nl_alpino-ud-test.conllu"
+    ]
   },
   "overlay": {
-    "a": "áàâä", "e": "éèêë", "i": "íìîï", "o": "óòôö", "u": "úùûü", "c": "ç", "n": "ñ"
+    "a": "áàâä",
+    "e": "éèêë",
+    "i": "íìîï",
+    "o": "óòôö",
+    "u": "úùûü",
+    "c": "ç",
+    "n": "ñ"
   },
   "single_letter_words": "u",
   "expected_beyond_ascii": [],
-  "reachability_budget": 146
+  "reachability_budget": 146,
+  "sha256": {
+    "nld_news_2024_1M.tar.gz": "1badc58eb5227580c03a75f5253ded10b78f1a0f67ba8f87d679891e88fbe394",
+    "nld_newscrawl_2019_1M.tar.gz": "569e3984bcab679021cda3e22c28eb94b969ecaa9674682a2f81ca0f79e50942",
+    "nld_wikipedia_2021_1M.tar.gz": "4205c6638ee85ab29644402d9237cd5d3df1ece4e152d1b453134fec80588aee"
+  }
 }

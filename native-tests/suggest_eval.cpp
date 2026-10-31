@@ -13,16 +13,10 @@
  * `expected` is what the strip ought to put first; a case where the word should be left alone
  * names the typed word itself.
  *
- * The bare form measures where the strip ranks the expected word; `--autocorrect` measures what
- * the space bar commits, which is a different heap, walking autocorrect's list: a word the
- * dictionaries spell is left alone; a candidate past the edit ceiling (one edit, two from eight
- * letters, two from four when every edit was a neighbouring key in place of a typed one) or a
- * name whose letters are not the typed ones is passed over; a typed word under three letters
- * stops the walk unless the candidate only restores its accents; an entry the tap decoder's
- * weighing leaves uncertain is passed over. When every entry is passed over, the tap decoder's
- * word is taken if the engine accepted it. The inflection guard, the
- * distance setting and the contraction and possessive rewrites are not modelled. The explain
- * form also prints the tap decoder's word, its margin, and what autocorrect would commit.
+ * The corpus form measures where the strip ranks the expected word. `--autocorrect` names an
+ * autocorrect corpus and measures it the same way; what the space bar commits for it is read
+ * through the app's own commit, by the Kotlin pipeline tests. The explain form also prints the
+ * tap decoder's word and its margin.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -44,12 +38,27 @@
  * typed and with its first one, two and three letters typed, once without the words before it
  * and once with them. A word the pack does not hold is left out. The optional floors are the
  * top-three shares with context, in percent, for the four rows; the exit status is non-zero
- * when a row falls below its floor.
+ * when a row falls below its floor. A line `# sentence <genre> <sentence>` names the sentence the
+ * runs after it come from.
  *
  *     suggest_eval <dict dir> --context <corpus.txt> <tag> [next one two three]
  *
  * `--centre-taps`, anywhere after the dict dir, taps each letter of a corpus case at its key's
  * centre, where the default touch patterns price every substitution as the key geometry does.
+ *
+ * `--rows <file>`, anywhere after the dict dir, writes one row per corpus row into `file`, for
+ * scripts/compare_readings.py: a line `# measures: <name> ...`, then each row's verdicts (1 or 0,
+ * one per measure), its key and its reading, tab-separated, in corpus order. The measures are
+ * `first` and `top-three` for the corpus form and `--autocorrect`, `reachable` for `--reachable`,
+ * and for
+ * `--context` the first place and the top three with the words before and without them, one row
+ * per word and letters typed, a word the pack does not hold reading 0 on all four. When the
+ * corpus has sentence lines, a line `# fields: sentence genre` follows the measures and each row
+ * carries its sentence and genre after its key.
+ *
+ * `--start-rows <file>`, with `--context`, also asks each run's first word with nothing before
+ * it, as a sentence opens, at each depth, and writes its rows into `file`: the measures `first`
+ * and `top-three`, the key `^ <letters typed>|<word>`.
  */
 
 #include <algorithm>
@@ -57,116 +66,26 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <limits>
+#include <memory>
 #include <string>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <vector>
 
+#include "context_runs.hpp"
 #include "engine.hpp"
 #include "proximity.hpp"
+#include "rows_file.hpp"
 #include "test_support.hpp"
 
 using namespace borderkeys;
 
 namespace {
 
-/** Optimal string alignment distance: Levenshtein with a swap of two adjacent code points as
- *  one edit. */
-int osaDistance(const uint32_t* a, int aLength, const uint32_t* b, int bLength) {
-    constexpr int kCap = 64;
-    if (aLength > kCap || bLength > kCap) {
-        return kCap;
-    }
-    int rows[3][kCap + 1];
-    int* twoBack = rows[0];
-    int* previous = rows[1];
-    int* current = rows[2];
-    for (int j = 0; j <= bLength; ++j) {
-        previous[j] = j;
-    }
-    for (int i = 1; i <= aLength; ++i) {
-        current[0] = i;
-        for (int j = 1; j <= bLength; ++j) {
-            const int cost = a[i - 1] == b[j - 1] ? 0 : 1;
-            int best = previous[j] + 1;
-            best = std::min(best, current[j - 1] + 1);
-            best = std::min(best, previous[j - 1] + cost);
-            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
-                best = std::min(best, twoBack[j - 2] + 1);
-            }
-            current[j] = best;
-        }
-        int* const rotate = twoBack;
-        twoBack = previous;
-        previous = current;
-        current = rotate;
-    }
-    return previous[bLength];
-}
-
 /** `candidate`'s text, or empty when it has none. */
 std::string textOf(const Engine& engine, const Candidate& candidate) {
     uint32_t length = 0;
     const char* const text = engine.candidateText(candidate, &length);
     return text != nullptr ? std::string(text, length) : std::string();
-}
-
-/** What the keyboard commits for `typed` from autocorrect's list, or empty for nothing. */
-std::string committedFor(Engine& engine, const std::string& typed) {
-    // A word the dictionaries already spell is never replaced.
-    char spelling[128];
-    const int spelled =
-        engine.knownSpelling(typed.c_str(), typed.size(), spelling, sizeof(spelling) - 1);
-    if (spelled > 0 && typed.size() == static_cast<size_t>(spelled) &&
-        std::memcmp(spelling, typed.c_str(), typed.size()) == 0) {
-        return std::string();
-    }
-    uint32_t typedFolded[64];
-    const int typedCount = foldUtf8(typed.c_str(), typed.size(), typedFolded, 64);
-    if (typedCount <= 0) {
-        return std::string();
-    }
-    const int maxEdits = typedCount >= 8 ? 2 : 1;
-    const int maxSlipEdits = typedCount >= 4 ? 2 : maxEdits;
-    const Candidate* list = nullptr;
-    const int count = engine.corrections(&list);
-    for (int i = 0; i < count; ++i) {
-        uint32_t length = 0;
-        const char* const text = engine.candidateText(list[i], &length);
-        if (text == nullptr || length == 0) {
-            continue;
-        }
-        uint32_t wordFolded[64];
-        const int wordCount = foldUtf8(text, length, wordFolded, 64);
-        if (wordCount <= 0) {
-            continue;
-        }
-        const bool sameLetters =
-            wordCount == typedCount &&
-            std::memcmp(wordFolded, typedFolded, sizeof(uint32_t) * typedCount) == 0;
-        const int ceiling = list[i].slipsOnly() ? std::max(maxEdits, maxSlipEdits) : maxEdits;
-        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > ceiling) {
-            continue;
-        }
-        if (engine.candidateIsProperNoun(list[i]) && !sameLetters) {
-            continue;
-        }
-        if (length == typed.size() && std::memcmp(text, typed.c_str(), length) == 0) {
-            continue;
-        }
-        if (typedCount < 3 && !(typedCount >= 2 && sameLetters)) {
-            break;
-        }
-        if (!engine.correctionConfident(i)) {
-            continue;
-        }
-        return std::string(text, length);
-    }
-    // When no entry is admissible, the tap decoder's word if the engine accepted it.
-    const Candidate* const decoded = engine.decodedCorrection();
-    return decoded != nullptr && typedCount >= 3 ? textOf(engine, *decoded) : std::string();
 }
 
 }  // namespace
@@ -178,36 +97,14 @@ struct Case {
     std::string expected;
 };
 
-/** `<dir>/<tag with '-' as '_'>.bkd`, which is how the packs are named on disk. */
-std::string packPath(const char* directory, const std::string& tag) {
-    std::string file = tag;
-    for (char& c : file) {
-        if (c == '-') {
-            c = '_';
-        }
-    }
-    return std::string(directory) + "/" + file + ".bkd";
-}
-
-bool loadPack(Engine& engine, const std::string& tag, const std::string& path) {
-    struct stat info {};
-    if (stat(path.c_str(), &info) != 0) {
-        std::printf("cannot stat %s\n", path.c_str());
-        return false;
-    }
-    const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        std::printf("cannot open %s\n", path.c_str());
-        return false;
-    }
-    const int32_t status = engine.loadLanguage(tag.c_str(), fd, 0, info.st_size, 1.0f);
-    ::close(fd);
-    if (status != kBkdOk) {
-        std::printf("loadLanguage(%s) refused the pack: %d\n", tag.c_str(), status);
-        return false;
-    }
-    return true;
-}
+using borderkeys_eval::Asked;
+using borderkeys_eval::RowsFile;
+using borderkeys_eval::Run;
+using borderkeys_eval::forEachAsked;
+using borderkeys_eval::kContextDepths;
+using borderkeys_eval::kTopThree;
+using borderkeys_eval::rankInTopThree;
+using borderkeys_eval::readRuns;
 
 std::vector<Case> readCorpus(const char* path) {
     std::vector<Case> cases;
@@ -236,67 +133,6 @@ std::vector<Case> readCorpus(const char* path) {
     return cases;
 }
 
-/** The lines of a --context corpus, each split at its spaces into words. */
-std::vector<std::vector<std::string>> readRuns(const char* path) {
-    std::vector<std::vector<std::string>> runs;
-    FILE* const file = std::fopen(path, "r");
-    if (file == nullptr) {
-        return runs;
-    }
-    char* line = nullptr;
-    size_t capacity = 0;
-    while (getline(&line, &capacity, file) > 0) {
-        std::string text(line);
-        while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
-            text.pop_back();
-        }
-        if (text.empty() || text[0] == '#') {
-            continue;
-        }
-        std::vector<std::string> words;
-        size_t start = 0;
-        while (start < text.size()) {
-            size_t end = text.find(' ', start);
-            if (end == std::string::npos) {
-                end = text.size();
-            }
-            if (end > start) {
-                words.push_back(text.substr(start, end - start));
-            }
-            start = end + 1;
-        }
-        runs.push_back(std::move(words));
-    }
-    std::free(line);
-    std::fclose(file);
-    return runs;
-}
-
-/** How many code points `text` holds. */
-int codePointCount(const std::string& text) {
-    int count = 0;
-    for (const char byte : text) {
-        if ((static_cast<unsigned char>(byte) & 0xC0u) != 0x80u) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-/** The bytes of `text`'s first `count` code points. */
-size_t codePointBytes(const std::string& text, int count) {
-    size_t at = 0;
-    for (int seen = 0; at < text.size(); ++at) {
-        if ((static_cast<unsigned char>(text[at]) & 0xC0u) != 0x80u) {
-            if (seen == count) {
-                break;
-            }
-            ++seen;
-        }
-    }
-    return at;
-}
-
 /** A --context row's counts: the words asked for, and how many came first and in the top three. */
 struct Tally {
     int asked = 0;
@@ -304,74 +140,98 @@ struct Tally {
     int topThree = 0;
 };
 
-/** Letters typed before the context model is asked, one row each; zero asks for the next word. */
-constexpr int kContextDepths = 4;
+/**
+ * `target`'s place in the top three when its first `typedBytes` bytes are typed after
+ * `previous1` and `previous2`, each null for none; -1 when it is not there.
+ */
+int placeOf(Engine& engine, const std::string& target, size_t typedBytes,
+            const std::string* previous1, const std::string* previous2, Candidate* out) {
+    const int count = engine.suggest(
+        target.c_str(), typedBytes, previous1 != nullptr ? previous1->c_str() : nullptr,
+        previous1 != nullptr ? previous1->size() : 0,
+        previous2 != nullptr ? previous2->c_str() : nullptr,
+        previous2 != nullptr ? previous2->size() : 0, out, Engine::kMaxCandidates);
+    for (int i = 0; i < count && i < kTopThree; ++i) {
+        uint32_t length = 0;
+        const char* const text = engine.candidateText(out[i], &length);
+        if (text != nullptr &&
+            sameSpellingIgnoringCase(text, length, target.c_str(), target.size())) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 /**
  * The --context measurement: prints a row per depth and returns the exit status, non-zero when a
  * row with a floor in `floors` falls below it.
  */
 int measureContext(Engine& engine, const char* corpusPath, const std::string& tag,
-                   char** floors, int floorCount) {
-    const std::vector<std::vector<std::string>> runs = readRuns(corpusPath);
+                   char** floors, int floorCount, const RowsFile& rows,
+                   const RowsFile& startRows) {
+    const std::vector<Run> runs = readRuns(corpusPath);
     if (runs.empty()) {
         std::printf("no runs read from %s\n", corpusPath);
         return 1;
     }
+    rows.measures({"first", "top-three", "first-without-context", "top-three-without-context"});
+    startRows.measures({"first", "top-three"});
+    if (!runs.front().fields.empty()) {
+        rows.fields({"sentence", "genre"});
+        startRows.fields({"sentence", "genre"});
+    }
     // [0] without the words before, [1] with them.
     Tally tallies[2][kContextDepths];
+    Tally startTallies[kContextDepths];
     int withContext = 0;
     int notHeld = 0;
     Candidate out[Engine::kMaxCandidates];
-    for (const std::vector<std::string>& run : runs) {
-        for (size_t at = 1; at < run.size(); ++at) {
-            // The keyboard's word starts at its first letter.
-            std::string target = run[at];
-            const size_t letter = target.find_first_not_of("'-");
-            if (letter == std::string::npos) {
-                continue;
-            }
-            target.erase(0, letter);
-            ++withContext;
-            if (!engine.exactSpelling(target.c_str(), target.size(), nullptr, nullptr)) {
-                ++notHeld;
-                continue;
-            }
-            const std::string& previous1 = run[at - 1];
-            const std::string* const previous2 = (at >= 2) ? &run[at - 2] : nullptr;
-            const int letters = codePointCount(target);
-            for (int depth = 0; depth < kContextDepths; ++depth) {
-                // Prefixes shorter than the word only.
-                if (depth > 0 && depth >= letters) {
-                    continue;
-                }
-                const size_t typedBytes = codePointBytes(target, depth);
-                for (int arm = 0; arm < 2; ++arm) {
-                    const bool context = arm == 1;
-                    const int count = engine.suggest(
-                        target.c_str(), typedBytes,
-                        context ? previous1.c_str() : nullptr, context ? previous1.size() : 0,
-                        (context && previous2 != nullptr) ? previous2->c_str() : nullptr,
-                        (context && previous2 != nullptr) ? previous2->size() : 0, out,
-                        Engine::kMaxCandidates);
-                    int rank = -1;
-                    for (int i = 0; i < count && i < 3; ++i) {
-                        uint32_t length = 0;
-                        const char* const text = engine.candidateText(out[i], &length);
-                        if (text != nullptr &&
-                            sameSpellingIgnoringCase(text, length, target.c_str(), target.size())) {
-                            rank = i;
-                            break;
-                        }
-                    }
-                    Tally& tally = tallies[arm][depth];
-                    ++tally.asked;
-                    tally.first += (rank == 0) ? 1 : 0;
-                    tally.topThree += (rank >= 0) ? 1 : 0;
-                }
-            }
+    // Whether the pack holds the target, read once per target, at its first depth.
+    bool held = false;
+    forEachAsked(runs, startRows.writes(), [&](const Asked& asked) {
+        const bool start = asked.previous1 == nullptr;
+        if (asked.depth == 0) {
+            held = engine.exactSpelling(asked.target.c_str(), asked.target.size(), nullptr,
+                                        nullptr);
+            withContext += start ? 0 : 1;
+            notHeld += (start || held) ? 0 : 1;
         }
-    }
+        const std::string& fields = asked.run->fields;
+        if (start) {
+            if (!held) {
+                startRows.row({false, false}, asked.key, "not in the pack", fields);
+                return;
+            }
+            const int rank = placeOf(engine, asked.target, asked.typedBytes, nullptr, nullptr, out);
+            Tally& tally = startTallies[asked.depth];
+            ++tally.asked;
+            tally.first += (rank == 0) ? 1 : 0;
+            tally.topThree += (rank >= 0) ? 1 : 0;
+            startRows.row({rank == 0, rank >= 0}, asked.key,
+                          rank < 0 ? "-" : std::to_string(rank + 1), fields);
+            return;
+        }
+        if (!held) {
+            rows.row({false, false, false, false}, asked.key, "not in the pack", fields);
+            return;
+        }
+        // [arm]'s place in the top three, or -1.
+        int ranks[2] = {-1, -1};
+        for (int arm = 0; arm < 2; ++arm) {
+            const bool context = arm == 1;
+            const int rank = placeOf(engine, asked.target, asked.typedBytes,
+                                     context ? asked.previous1 : nullptr,
+                                     context ? asked.previous2 : nullptr, out);
+            Tally& tally = tallies[arm][asked.depth];
+            ++tally.asked;
+            tally.first += (rank == 0) ? 1 : 0;
+            tally.topThree += (rank >= 0) ? 1 : 0;
+            ranks[arm] = rank;
+        }
+        auto place = [](int rank) { return rank < 0 ? std::string("-") : std::to_string(rank + 1); };
+        rows.row({ranks[1] == 0, ranks[1] >= 0, ranks[0] == 0, ranks[0] >= 0}, asked.key,
+                 place(ranks[1]) + "\t" + place(ranks[0]), fields);
+    });
 
     auto share = [](int part, int whole) {
         return whole > 0 ? 100.0 * static_cast<double>(part) / static_cast<double>(whole) : 0.0;
@@ -399,6 +259,15 @@ int measureContext(Engine& engine, const char* corpusPath, const std::string& ta
                             kRowNames[depth], withTop, floor);
                 status = 1;
             }
+        }
+    }
+    if (startRows.writes()) {
+        std::printf("\nsentence starts, nothing before the word:\n");
+        std::printf("                     words   first  top three\n");
+        for (int depth = 0; depth < kContextDepths; ++depth) {
+            const Tally& start = startTallies[depth];
+            std::printf("  %-16s %7d   %5.1f%%   %5.1f%%\n", kRowNames[depth], start.asked,
+                        share(start.first, start.asked), share(start.topThree, start.asked));
         }
     }
     return status;
@@ -451,6 +320,40 @@ int main(int argc, char** argv) {
         firstFloor = std::strtod(*(floorFlag + 1), nullptr);
         arguments.erase(floorFlag, floorFlag + 2);
     }
+    std::unique_ptr<FILE, int (*)(FILE*)> rowsOut(nullptr, &std::fclose);
+    const auto rowsFlag = std::find_if(arguments.begin(), arguments.end(), [](const char* each) {
+        return std::strcmp(each, "--rows") == 0;
+    });
+    if (rowsFlag != arguments.end()) {
+        if (rowsFlag + 1 == arguments.end()) {
+            std::printf("--rows needs a file\n");
+            return 2;
+        }
+        rowsOut.reset(std::fopen(*(rowsFlag + 1), "w"));
+        if (rowsOut == nullptr) {
+            std::printf("cannot write %s\n", *(rowsFlag + 1));
+            return 2;
+        }
+        arguments.erase(rowsFlag, rowsFlag + 2);
+    }
+    const RowsFile rowsFile(rowsOut.get());
+    std::unique_ptr<FILE, int (*)(FILE*)> startRowsOut(nullptr, &std::fclose);
+    const auto startFlag = std::find_if(arguments.begin(), arguments.end(), [](const char* each) {
+        return std::strcmp(each, "--start-rows") == 0;
+    });
+    if (startFlag != arguments.end()) {
+        if (startFlag + 1 == arguments.end()) {
+            std::printf("--start-rows needs a file\n");
+            return 2;
+        }
+        startRowsOut.reset(std::fopen(*(startFlag + 1), "w"));
+        if (startRowsOut == nullptr) {
+            std::printf("cannot write %s\n", *(startFlag + 1));
+            return 2;
+        }
+        arguments.erase(startFlag, startFlag + 2);
+    }
+    const RowsFile startRowsFile(startRowsOut.get());
     argc = static_cast<int>(arguments.size());
     argv = arguments.data();
 
@@ -459,8 +362,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     const char* const directory = argv[1];
-    // `--autocorrect <corpus>` measures what the space bar commits; the bare corpus form
-    // measures where the strip ranks the right word.
+    // `--autocorrect <corpus>` names an autocorrect corpus, measured as the bare corpus form
+    // measures one: where the strip ranks the right word.
     const bool autocorrectMode = std::strcmp(argv[2], "--autocorrect") == 0;
     if (autocorrectMode && argc < 4) {
         std::printf("usage: suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]\n");
@@ -502,7 +405,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     for (const std::string& tag : tags) {
-        if (!loadPack(engine, tag, packPath(directory, tag))) {
+        if (!borderkeys_test::loadPack(engine, directory, tag)) {
             return 1;
         }
     }
@@ -530,7 +433,8 @@ int main(int argc, char** argv) {
     std::vector<float> tapYs;
 
     if (contextMode) {
-        return measureContext(engine, corpusPath, tags.front(), argv + 5, argc - 5);
+        return measureContext(engine, corpusPath, tags.front(), argv + 5, argc - 5, rowsFile,
+                              startRowsFile);
     }
 
     if (reachability) {
@@ -539,12 +443,14 @@ int main(int argc, char** argv) {
             std::printf("no rows read from %s\n", corpusPath);
             return 1;
         }
+        rowsFile.measures({"reachable"});
         // A row that comes back in another casing is reachable; a different spelling is not.
         std::vector<std::string> unreachable;
         for (const Case& row : rows) {
             Engine::ScoreParts parts;
             if (engine.explainScore(row.typed.c_str(), row.typed.size(), row.typed.c_str(),
                                     row.typed.size(), &parts)) {
+                rowsFile.row({true}, row.typed, "");
                 continue;
             }
             // Tried lower-cased and capitalised; only ASCII letters change case.
@@ -569,6 +475,7 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+            rowsFile.row({reachable}, row.typed, "");
             if (!reachable) {
                 unreachable.push_back(row.typed);
             }
@@ -596,9 +503,8 @@ int main(int argc, char** argv) {
     if (explaining) {
         const char* const typed = argv[3];
         const char* const wanted = argv[4];
-        // The tap decoder's word and what autocorrect would commit, for the request just made.
-        const auto reportDecision = [&engine, typed]() {
-            const std::string committed = committedFor(engine, typed);
+        // The tap decoder's word, for the request just made.
+        const auto reportDecoder = [&engine]() {
             Candidate decoded{};
             float margin = 0.0f;
             if (engine.decoderBest(&decoded, &margin)) {
@@ -608,16 +514,11 @@ int main(int argc, char** argv) {
             } else {
                 std::printf("  tap decoder: no word\n");
             }
-            if (!committed.empty()) {
-                std::printf("  autocorrect would take '%s'\n", committed.c_str());
-            } else {
-                std::printf("  autocorrect would leave it\n");
-            }
         };
         Engine::ScoreParts parts;
         if (!engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts)) {
             std::printf("\n'%s' is not offered for '%s' at all.\n", wanted, typed);
-            reportDecision();
+            reportDecoder();
             return 0;
         }
         std::printf("\n'%s' -> '%s'\n", typed, wanted);
@@ -662,9 +563,9 @@ int main(int argc, char** argv) {
                         onStrip ? list[i].score - languageModel : 0.0f, list[i].score,
                         engine.candidateIsProperNoun(list[i]) ? "name" : "");
         }
-        // The request made once more for the walk below.
+        // The request made once more for the decoder's word below.
         engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts);
-        reportDecision();
+        reportDecoder();
         return 0;
     }
 
@@ -674,46 +575,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // What the space bar would commit, rather than where the strip ranks a word.
-    if (autocorrectMode) {
-        int right = 0;
-        int wrong = 0;
-        int none = 0;
-        std::printf("%-18s %-18s %s\n", "typed", "expected", "autocorrect commits");
-        for (const Case& item : cases) {
-            Candidate scratch[Engine::kMaxCandidates];
-            if (centreTapped) {
-                centreTaps(layout, item.typed, tapXs, tapYs);
-            }
-            engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
-                           centreTapped ? tapXs.data() : nullptr,
-                           centreTapped ? tapYs.data() : nullptr, static_cast<int>(tapXs.size()),
-                           scratch, Engine::kMaxCandidates);
-            const std::string applied = committedFor(engine, item.typed);
-            if (applied.empty()) {
-                ++none;
-            } else if (applied == item.expected) {
-                ++right;
-            } else {
-                ++wrong;
-            }
-            std::printf("%-18s %-18s %s\n", item.typed.c_str(), item.expected.c_str(),
-                        applied.empty() ? "(nothing)" : applied.c_str());
-        }
-        const double all = static_cast<double>(cases.size());
-        std::printf("\ncases            %zu\n", cases.size());
-        std::printf("commits expected %d  (%.1f%%)\n", right, 100.0 * right / all);
-        std::printf("commits other    %d  (%.1f%%)\n", wrong, 100.0 * wrong / all);
-        std::printf("commits nothing  %d  (%.1f%%)\n", none, 100.0 * none / all);
-        return 0;
-    }
-
     int firstPlace = 0;
     int topThree = 0;
     int found = 0;
     long rankTotal = 0;
 
     std::printf("%-18s %-18s %s\n", "typed", "expected", "rank");
+    rowsFile.measures({"first", "top-three"});
     Candidate out[Engine::kMaxCandidates];
     for (const Case& item : cases) {
         if (centreTapped) {
@@ -733,12 +601,10 @@ int main(int argc, char** argv) {
                 break;
             }
         }
-        if (rank == 0) {
-            ++firstPlace;
-        }
-        if (rank >= 0 && rank < 3) {
-            ++topThree;
-        }
+        const bool first = rank == 0;
+        const bool inTopThree = rankInTopThree(rank);
+        firstPlace += first ? 1 : 0;
+        topThree += inTopThree ? 1 : 0;
         if (rank >= 0) {
             ++found;
             rankTotal += rank + 1;
@@ -748,6 +614,8 @@ int main(int argc, char** argv) {
         } else {
             std::printf("%-18s %-18s %d\n", item.typed.c_str(), item.expected.c_str(), rank + 1);
         }
+        rowsFile.row({first, inTopThree}, item.typed,
+                     item.expected + "\t" + (rank < 0 ? std::string("absent") : std::to_string(rank + 1)));
     }
 
     const double total = static_cast<double>(cases.size());

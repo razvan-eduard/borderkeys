@@ -4,13 +4,14 @@
 
 """Measures the trained TCN swipe decoder's accuracy over the recorded corpus gesture_replay.py
 measures Shark2 against. A TCN decode needs a weights file as well as a language pack, and is
-compared against its own baseline, docs/gesture-accuracy-tcn.json. Layout and corpus parsing
-are imported from gesture_replay.py.
+compared against its own baseline, docs/gesture-accuracy-tcn.json. The corpus, the binary's
+lines, the figures and the rows file are gesture_replay.py's.
 
 Usage
 -----
     ./tcn_replay.py --binary native-tests/build/tcn_replay \\
-        --pack native-tests/build/test_pack.bkd --weights keyboard/src/plus/assets/model.bkw
+        --pack native-tests/build/test_pack.bkd --weights keyboard/src/plus/assets/model.bkw \\
+        [--rows rows.tsv]
     ./tcn_replay.py --check-regression --weights keyboard/src/plus/assets/model.bkw \\
         --pack native-tests/build/test_pack.bkd
 """
@@ -19,53 +20,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
-from gesture_replay import DEFAULT_CORPUS, DEFAULT_LAYOUT, REPOSITORY_ROOT, load_corpus
+from gesture_replay import (DEFAULT_CORPUS, DEFAULT_LAYOUT, REPOSITORY_ROOT, Replayed, figures,
+                            load_corpus, nothing_measured, run_gate_selftest, run_replay, write_rows)
 
 DEFAULT_BINARY = REPOSITORY_ROOT / "native-tests" / "build" / "tcn_replay"
 BASELINE = REPOSITORY_ROOT / "docs" / "gesture-accuracy-tcn.json"
 
 
-def replay(binary: Path, pack: Path, weights: Path, layout: Path, corpus: Path) -> dict:
-    """The `word<TAB>rank` output gesture_replay.replay() parses, from a binary that also takes
-    a weights file."""
-    result = subprocess.run(
-        [str(binary), str(pack), str(weights), str(layout), str(corpus)],
-        capture_output=True, text=True, check=False,
-    )
-    if result.returncode != 0:
-        sys.stderr.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        raise SystemExit(f"{binary} exited {result.returncode}")
-
-    total = top1 = top3 = 0
-    misses: list[str] = []
-    for line in result.stdout.splitlines():
-        if "\t" not in line:
-            continue
-        word, _, rank_text = line.partition("\t")
-        try:
-            rank = int(rank_text.strip())
-        except ValueError:
-            continue
-        total += 1
-        if rank == 0:
-            top1 += 1
-        if 0 <= rank < 3:
-            top3 += 1
-        else:
-            misses.append(word)
-    if total == 0:
-        raise SystemExit(f"{binary} reported no gestures")
-    return {
-        "gestures": total,
-        "top1": round(100.0 * top1 / total, 2),
-        "top3": round(100.0 * top3 / total, 2),
-        "misses": misses[:20],
-    }
+def replay(binary: Path, pack: Path, weights: Path, layout: Path, corpus: Path) -> list[Replayed]:
+    """gesture_replay.replay()'s line per gesture, from a binary that also takes a weights file."""
+    return run_replay([str(binary), str(pack), str(weights), str(layout), str(corpus)])
 
 
 def main(argv: list[str]) -> int:
@@ -80,29 +47,35 @@ def main(argv: list[str]) -> int:
                         help="write the measured accuracy to docs/gesture-accuracy-tcn.json")
     parser.add_argument("--check-regression", action="store_true",
                         help="fail if accuracy fell below the recorded baseline")
+    parser.add_argument("--rows", type=Path, help="also write each gesture's verdicts as a rows file here")
+    parser.add_argument("--selftest", action="store_true",
+                        help="prove the regression check fails whenever it has nothing to compare")
     arguments = parser.parse_args(argv)
 
-    if not arguments.corpus.is_file():
-        print(f"::notice::{arguments.corpus} does not exist yet — nothing to replay")
+    if arguments.selftest:
+        selftest()
         return 0
+    if not arguments.corpus.is_file():
+        return nothing_measured(f"{arguments.corpus} does not exist yet — nothing to replay",
+                                arguments.check_regression)
     gestures = load_corpus(arguments.corpus)
     print(f"corpus: {len(gestures)} gestures, "
           f"{sum(len(g.samples) for g in gestures)} samples, from {arguments.corpus}")
 
     if not arguments.binary.is_file():
-        # Reported, as in gesture_replay.py.
-        print(f"::notice::{arguments.binary} not built — accuracy not measured, nothing compared")
-        return 0
+        return nothing_measured(f"{arguments.binary} not built — accuracy not measured, nothing compared",
+                                arguments.check_regression)
     if arguments.weights is None or not arguments.weights.is_file():
-        # No trained weights yet: reported, not failed.
-        print(f"::notice::no trained weights at {arguments.weights} — accuracy not measured, "
-              f"nothing compared")
-        return 0
+        return nothing_measured(f"no trained weights at {arguments.weights} — accuracy not measured, "
+                                f"nothing compared", arguments.check_regression)
     if arguments.pack is None:
         raise SystemExit("--pack is required to replay")
 
-    measured = replay(arguments.binary, arguments.pack, arguments.weights, arguments.layout,
+    replayed = replay(arguments.binary, arguments.pack, arguments.weights, arguments.layout,
                       arguments.corpus)
+    if arguments.rows is not None:
+        write_rows(arguments.rows, gestures, replayed)
+    measured = figures(replayed)
     print(f"top-1 {measured['top1']}%  top-3 {measured['top3']}%  "
           f"over {measured['gestures']} gestures")
     if measured["misses"]:
@@ -123,8 +96,7 @@ def main(argv: list[str]) -> int:
 
     if arguments.check_regression:
         if not BASELINE.is_file():
-            print(f"::notice::{BASELINE} does not exist — nothing to compare against")
-            return 0
+            return nothing_measured(f"{BASELINE} does not exist — nothing to compare against", True)
         baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
         # The same tolerance as gesture_replay.py's regression gate.
         tolerance = 0.5
@@ -136,6 +108,29 @@ def main(argv: list[str]) -> int:
             return 1
         print(f"no regression against {baseline['top1']}% / {baseline['top3']}%")
     return 0
+
+
+def selftest() -> None:
+    replayable = ["--check-regression", "--corpus", "{corpus}", "--binary", "{present}", "--pack", "{present}",
+                  "--weights", "{present}"]
+    run_gate_selftest(sys.modules[__name__], [
+        ("a missing corpus fails the check", ["--check-regression", "--corpus", "{absent}"], None, 1),
+        ("a missing corpus is a notice without the check", ["--corpus", "{absent}"], None, 0),
+        ("a missing binary fails the check",
+         ["--check-regression", "--corpus", "{corpus}", "--binary", "{absent}"], None, 1),
+        ("missing weights fail the check",
+         ["--check-regression", "--corpus", "{corpus}", "--binary", "{present}", "--weights", "{absent}"], None, 1),
+        ("missing weights are a notice without the check",
+         ["--corpus", "{corpus}", "--binary", "{present}", "--weights", "{absent}"], None, 0),
+        ("a missing baseline fails the check", replayable, None, 1),
+        ("the baseline's own figures pass", replayable, {"top1": 40.0, "top3": 60.0}, 0),
+        ("a top-3 below the baseline fails", replayable, {"top1": 40.0, "top3": 61.0}, 1),
+        ("each gesture is a row, its verdicts from its rank",
+         ["--corpus", "{corpus}", "--binary", "{present}", "--pack", "{present}", "--weights", "{present}",
+          "--rows", "{rows}"], None, 0),
+    ])
+    print("selftest ok: the regression check fails on a fall and whenever it has nothing to compare, "
+          "and each gesture is a row")
 
 
 if __name__ == "__main__":

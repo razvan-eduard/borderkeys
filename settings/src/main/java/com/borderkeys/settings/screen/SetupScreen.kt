@@ -92,14 +92,17 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     context.contentResolver.openInputStream(uri)?.use {
                         it.readBytes().toString(Charsets.UTF_8)
                     }
-                }.getOrNull() ?: return@withContext false
+                }.getOrNull() ?: return@withContext null
                 val payload = BackupFile.read(text, passphrase = "").payload
-                    ?: return@withContext false
+                    ?: return@withContext null
                 DataGraph.backups.apply(payload, DataGraph.backups.contentsOf(payload))
-                true
             }
-            transferred = applied
-            notice = if (applied) strings[Keys.SETUP_TAKEN] else strings[Keys.BACKUP_ERROR_DAMAGED]
+            transferred = applied != null
+            notice = if (applied != null) {
+                importedNotice(strings[Keys.SETUP_TAKEN], applied, strings)
+            } else {
+                strings[Keys.BACKUP_ERROR_DAMAGED]
+            }
         }
     }
 

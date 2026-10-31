@@ -247,7 +247,8 @@ private fun statsRows(
             return none
         }
         return strings.getString(
-            Keys.DEBUG_STATS_ROW, decimal(s.last), decimal(s.mean), decimal(s.max), s.count,
+            Keys.DEBUG_STATS_ROW, decimal(s.last), decimal(s.mean), decimal(s.p50), decimal(s.p95),
+            decimal(s.max), s.count,
         )
     }
     fun plain(series: KeyboardStats.Series): String {
@@ -256,7 +257,8 @@ private fun statsRows(
             return none
         }
         return strings.getString(
-            Keys.DEBUG_STATS_COUNT_ROW, decimal(s.last), decimal(s.mean), decimal(s.max), s.count,
+            Keys.DEBUG_STATS_COUNT_ROW, decimal(s.last), decimal(s.mean), decimal(s.p50),
+            decimal(s.p95), decimal(s.max), s.count,
         )
     }
     val first = KeyboardStats.firstInputAt

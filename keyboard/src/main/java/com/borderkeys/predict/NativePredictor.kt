@@ -63,12 +63,14 @@ internal object NativePredictor {
     /**
      * Answers one request. Fills [outWords], [outScores] and [outProperNoun] with the best
      * candidates, best first, and returns how many were written; an empty [composing] asks for
-     * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING],
-     * [TEXT_POSSESSIVE] and [TEXT_DECODED], a slot with none left as it is; [outCorrections]
-     * receives autocorrect's list, best first, up to [CORRECTION_SLOTS] entries, the rest null,
-     * [outCorrectionNames] whether each entry is a name, [outCorrectionSlips] whether each was
-     * reached by neighbouring keys in place of the typed ones alone, [outCorrectionConfident]
-     * whether each stands against the other readings of the taps, and
+     * the next word. The learned pairs and triples are the slice's when [personalContext], the
+     * [com.borderkeys.data.personal.SliceRows.key] of the request's context, names the one pushed
+     * last ([nativePushSlice]); else none are read. [outTexts] receives [TEXT_ANSWER_PACK]; for a typed word, also
+     * [TEXT_KNOWN_SPELLING], [TEXT_POSSESSIVE] and [TEXT_DECODED], a slot with none left as it is;
+     * [outCorrections] receives autocorrect's list, best first, up to [CORRECTION_SLOTS] entries,
+     * the rest null, [outCorrectionNames] whether each entry is a name, [outCorrectionSlips]
+     * whether each was reached by neighbouring keys in place of the typed ones alone,
+     * [outCorrectionConfident] whether each stands against the other readings of the taps, and
      * [outSpellingFlags] [SPELLING_EXACT] and [SPELLING_NAME].
      */
     external fun nativeAnswer(
@@ -76,6 +78,7 @@ internal object NativePredictor {
         composing: String,
         prev1: String?,
         prev2: String?,
+        personalContext: IntArray,
         tapXs: FloatArray?,
         tapYs: FloatArray?,
         outWords: Array<String?>,
@@ -98,6 +101,7 @@ internal object NativePredictor {
         handle: Long,
         packIndex: Int,
         composing: String,
+        personalContext: IntArray,
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
@@ -119,10 +123,10 @@ internal object NativePredictor {
     const val TEXT_DECODED = 2
 
     /**
-     * [nativeAnswer]'s and [nativeDecodeGesture]'s text slot, filled for every request: the primary
-     * language subtag whose learned pairs and triples it read.
+     * [nativeAnswer]'s and [nativeDecodeGesture]'s text slot, filled for every request while a pack
+     * is active: the tag of the pack the answer leaned on.
      */
-    const val TEXT_LANGUAGE = 3
+    const val TEXT_ANSWER_PACK = 3
 
     /** How many text slots [nativeAnswer] fills. */
     const val TEXT_SLOTS = 4
@@ -143,30 +147,9 @@ internal object NativePredictor {
     const val NO_PACK = -1
 
     /**
-     * Records that the user committed [word] after [prev1] and [prev2], the pair and triple in
-     * the store of [language], a primary language subtag, or with none of the language the
-     * engine reads. [asserted] is whether it was picked on the strip or put back after a
-     * correction; [deliberateCapital] is whether its capital was the user's, with shift or under a
-     * caps lock they set. Not [tally], the word is not counted.
-     */
-    external fun nativeLearn(
-        handle: Long,
-        word: String,
-        prev1: String?,
-        prev2: String?,
-        deliberateCapital: Boolean,
-        asserted: Boolean,
-        language: String?,
-        tally: Boolean,
-    ): Int
-
-    const val LEARNED_PAIR = 1
-
-    const val LEARNED_TRIPLE = 2
-
-    /**
      * Decodes a swipe from its raw touch samples, in view pixels, into the output buffers, best
-     * first, and returns how many were written. [outTexts] receives [TEXT_LANGUAGE] alone.
+     * first, and returns how many were written, the learned pairs and triples read as [nativeAnswer]
+     * reads them. [outTexts] receives [TEXT_ANSWER_PACK] alone.
      */
     external fun nativeDecodeGesture(
         handle: Long,
@@ -176,6 +159,7 @@ internal object NativePredictor {
         count: Int,
         prev1: String?,
         prev2: String?,
+        personalContext: IntArray,
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
@@ -183,21 +167,75 @@ internal object NativePredictor {
     ): Int
 
     /**
-     * Replaces the personal dictionary's words, each with its count, its deliberate capitals, how
-     * many times it was chosen on purpose and how many times it was added by hand.
+     * Replaces the personal words with [spellings], row by row, each with the
+     * [com.borderkeys.data.personal.WordRows.FIELDS] counts at its place in [fields], and empties
+     * the slice, whose ids named the words before. Writes each row's id to [outIds], and to [outKnown] whether an active pack knows the
+     * word; a row refused keeps [com.borderkeys.data.personal.WordRows.NEW_WORD]. Returns how many
+     * rows are held; nothing is loaded when the arrays' lengths disagree.
      */
-    external fun nativeLoadUserWords(
+    external fun nativeLoadWordTable(
         handle: Long,
-        words: Array<String>,
-        counts: IntArray,
-        deliberateCapitals: IntArray,
-        asserted: IntArray,
-        added: IntArray,
-    )
+        spellings: Array<String?>,
+        fields: IntArray,
+        outIds: IntArray,
+        outKnown: BooleanArray,
+    ): Int
+
+    /**
+     * Sets the personal words the rows name to the counts they hand: row by row, the word [ids]
+     * names, or [com.borderkeys.data.personal.WordRows.NEW_WORD] for a word to add, with
+     * [spellings]' spelling, null to keep the one held. Writes ids and known bits as
+     * [nativeLoadWordTable] does, and returns how many rows are held.
+     */
+    external fun nativePutWords(
+        handle: Long,
+        ids: IntArray,
+        spellings: Array<String?>,
+        fields: IntArray,
+        outIds: IntArray,
+        outKnown: BooleanArray,
+    ): Int
+
+    /**
+     * The personal word table's entry for [word], in any case: its
+     * [com.borderkeys.data.personal.WordRows.FIELDS] counts into [outFields], its spelling into
+     * [outSpelling]'s first slot, and whether an active pack knows it into [outKnown]'s. Returns
+     * its id, [com.borderkeys.data.personal.WordRows.NEW_WORD] for a word the table does not hold.
+     */
+    external fun nativeWordEntry(
+        handle: Long,
+        word: String,
+        outFields: IntArray,
+        outSpelling: Array<String?>,
+        outKnown: BooleanArray,
+    ): Int
+
+    /**
+     * Replaces the slice the requests read their learned pairs and triples from with [header] and
+     * the links, hops and stamps it counts from the start of [links], [hops] and [seen], in
+     * [com.borderkeys.data.personal.SliceRows]' slots, each array holding at least as many. False,
+     * the slice emptied, when one holds fewer.
+     */
+    external fun nativePushSlice(handle: Long, header: IntArray, links: IntArray, hops: IntArray, seen: LongArray): Boolean
+
+    /**
+     * The slice the engine holds, as [nativePushSlice] takes it: its header into [outHeader], and
+     * its links, hops and stamps into [outLinks], [outHops] and [outSeen] up to their sizes. False,
+     * writing nothing, when [outHeader] is too short.
+     */
+    external fun nativeReadSlice(
+        handle: Long,
+        outHeader: IntArray,
+        outLinks: IntArray,
+        outHops: IntArray,
+        outSeen: LongArray,
+    ): Boolean
 
     /**
      * Replaces the blocked words: spellings no search offers, corrects to or counts as known,
-     * each matched exactly, case aside. An empty array clears them.
+     * each matched exactly, case aside. An empty array clears them; more words than
+     * [com.borderkeys.data.theme.KeyboardPreferences.MAX_LEARNED_WORD_LIMIT] leave the words
+     * blocked before as they were.
      */
     external fun nativeSetBlockedWords(handle: Long, words: Array<String>)
 
@@ -275,106 +313,17 @@ internal object NativePredictor {
     const val MAX_STEMS_QUERY = 64
 
     /**
-     * The score of [candidate] for [typed], term by term, into [out] (see [ScoreExplanation]).
-     * False when the word is not offered.
+     * The score of [candidate] for [typed], term by term, into [out] (see [ScoreExplanation]), the
+     * learned pairs and triples read as [nativeAnswer] reads them. False when the word is not
+     * offered.
      */
     external fun nativeExplainScore(
         handle: Long,
         typed: String,
         candidate: String,
+        personalContext: IntArray,
         out: FloatArray,
     ): Boolean
-
-    /**
-     * Replaces the personal three-word sequences, each in the store of its language, with how
-     * many times its context had been seen, and its language's triple clock, when each was last
-     * recorded.
-     */
-    external fun nativeLoadUserTrigrams(
-        handle: Long,
-        languages: Array<String>,
-        previous2: Array<String>,
-        previous1: Array<String>,
-        next: Array<String>,
-        counts: IntArray,
-        contextSeen: LongArray,
-        languageSeen: LongArray,
-        asserted: IntArray,
-    )
-
-    /**
-     * Replaces the personal word pairs, each in the store of its language, stamped as the
-     * triples, [asserted] how many times each was chosen on purpose.
-     */
-    external fun nativeLoadUserBigrams(
-        handle: Long,
-        languages: Array<String>,
-        previous: Array<String>,
-        next: Array<String>,
-        counts: IntArray,
-        contextSeen: LongArray,
-        languageSeen: LongArray,
-        asserted: IntArray,
-    )
-
-    /**
-     * How often each previous word of a pair has been followed, and how many times it has been
-     * seen, per language; after the pairs.
-     */
-    external fun nativeLoadUserPairTotals(
-        handle: Long,
-        languages: Array<String>,
-        previous: Array<String>,
-        totals: LongArray,
-        seen: LongArray,
-    )
-
-    /** [nativeLoadUserPairTotals], for each start of a triple; after the triples. */
-    external fun nativeLoadUserTripleTotals(
-        handle: Long,
-        languages: Array<String>,
-        previous2: Array<String>,
-        previous1: Array<String>,
-        totals: LongArray,
-        seen: LongArray,
-    )
-
-    /** Each language's pair clock and triple clock; after the links. */
-    external fun nativeLoadUserClocks(
-        handle: Long,
-        languages: Array<String>,
-        pairClocks: LongArray,
-        tripleClocks: LongArray,
-    )
-
-    /**
-     * The links after [previous2] and [previous1] in [language]'s store, pairs when [previous2] is
-     * null, in the order recorded: each next word's key into [outWords], its count into
-     * [outCounts], how many times its context had been seen when it last was into
-     * [outContextSeen] and how many times it was chosen on purpose into [outAsserted], up to
-     * their size; [outContext] gets [CONTEXT_TOTAL] and [CONTEXT_SEEN], zeros for a context not
-     * held. Returns how many links follow it.
-     */
-    external fun nativeContextLinks(
-        handle: Long,
-        language: String,
-        previous2: String?,
-        previous1: String,
-        outWords: Array<String?>,
-        outCounts: IntArray,
-        outContextSeen: LongArray,
-        outAsserted: IntArray,
-        outContext: LongArray,
-    ): Int
-
-    /** [nativeContextLinks]' context slot: how often the context has been followed. */
-    const val CONTEXT_TOTAL = 0
-
-    /** [nativeContextLinks]' context slot: how many times the context has been seen. */
-    const val CONTEXT_SEEN = 1
-
-    /** How many context slots [nativeContextLinks] fills. */
-    const val CONTEXT_SLOTS = 2
 
     /**
      * Whether each of [words] may be part of a learned pair or triple, into [out] up to its size;
@@ -382,44 +331,12 @@ internal object NativePredictor {
      */
     external fun nativeLearnable(handle: Long, words: Array<String>, out: BooleanArray)
 
-    /** How many triples, or pairs, [language]'s store holds. */
-    external fun nativeLinksHeld(handle: Long, language: String, triples: Boolean): Int
-
     /**
-     * Every triple, or pair, of [language]'s store, up to the arrays' size: the keys of the words
-     * before its last into [outPrevious2] (left as is for a pair) and [outPrevious1], its last
-     * into [outWords], its count, when its language last saw it, its context's total, and how
-     * many times it was chosen on purpose into [outAsserted]. Returns how many were written.
+     * The active packs that spell each of [words] in any case, a name only in its own, one bit per
+     * slot ([nativePackTag]'s), into [outSlots] up to its size; a word the bridge cannot take is left as
+     * [outSlots] holds it.
      */
-    external fun nativeLanguageLinks(
-        handle: Long,
-        language: String,
-        triples: Boolean,
-        outPrevious2: Array<String?>,
-        outPrevious1: Array<String?>,
-        outWords: Array<String?>,
-        outCounts: IntArray,
-        outLanguageSeen: LongArray,
-        outContextTotals: LongArray,
-        outAsserted: IntArray,
-    ): Int
-
-    /** Drops the pairs the budget gave up, each from its language's store. */
-    external fun nativeDropUserPairs(
-        handle: Long,
-        languages: Array<String>,
-        previous: Array<String>,
-        next: Array<String>,
-    )
-
-    /** Drops the triples the budget gave up, each from its language's store. */
-    external fun nativeDropUserTriples(
-        handle: Long,
-        languages: Array<String>,
-        previous2: Array<String>,
-        previous1: Array<String>,
-        next: Array<String>,
-    )
+    external fun nativePacksSpelling(handle: Long, words: Array<String>, outSlots: IntArray)
 
     /** Whether the personal dictionary is consulted; it stays loaded either way. */
     external fun nativeSetPersonalModelEnabled(handle: Long, enabled: Boolean)

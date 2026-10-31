@@ -11,19 +11,22 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <vector>
 
 #include "engine.hpp"
 #include "jni_slots.hpp"
 
 // The JNI bridge, the only file in this library that uses JNI. Methods are registered in
 // JNI_OnLoad; errors cross as return values. On the typing path nothing allocates per call but
-// the result strings, the personal model's growth, and a context read past kContextLinksOnStack
-// links; the bulk loaders, run at start, copy their rows. Runs on the prediction thread.
+// the result strings; a slice pushed, a word put and the loads copy their arrays. Runs on the
+// prediction thread.
 
 namespace {
 
 using borderkeys::Candidate;
+using borderkeys::ContextSlice;
 using borderkeys::Engine;
+using borderkeys::WordTable;
 using namespace borderkeys::bridge;
 
 Engine* engineFrom(jlong handle) {
@@ -274,11 +277,38 @@ void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
     }
 }
 
-/** Writes the language whose pairs and triples the request just served read into `outTexts`. */
-void writeLanguage(JNIEnv* env, const Engine& engine, jobjectArray outTexts) {
-    if (outTexts != nullptr && env->GetArrayLength(outTexts) >= kTextSlots) {
-        setText(env, outTexts, kTextLanguage, engine.personalLanguage());
+/**
+ * Writes the tag of the pack the request just served leaned on (Engine::answerPack) into
+ * `outTexts`; nothing with no pack active.
+ */
+void writeAnswerPack(JNIEnv* env, const Engine& engine, jobjectArray outTexts) {
+    const char* const tag = engine.packTag(engine.answerPack());
+    if (tag != nullptr && outTexts != nullptr && env->GetArrayLength(outTexts) >= kTextSlots) {
+        setText(env, outTexts, kTextAnswerPack, tag);
     }
+}
+
+/**
+ * The context the request's `personalContext` names: its kPersonalContextSlots ints, the
+ * language and the two words before as the slice's header holds them; none when it is null,
+ * short or unreadable.
+ */
+ContextSlice::Key personalContextOf(JNIEnv* env, jintArray personalContext) {
+    ContextSlice::Key key;
+    if (personalContext == nullptr ||
+        env->GetArrayLength(personalContext) < kPersonalContextSlots) {
+        return key;
+    }
+    jint slots[kPersonalContextSlots] = {};
+    env->GetIntArrayRegion(personalContext, 0, kPersonalContextSlots, slots);
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        return key;
+    }
+    key.language = slots[ContextSlice::kLanguageField];
+    key.context1 = slots[ContextSlice::kContext1Field];
+    key.context2 = slots[ContextSlice::kContext2Field];
+    return key;
 }
 
 /**
@@ -458,7 +488,8 @@ int copyTaps(JNIEnv* env, jfloatArray tapXs, jfloatArray tapYs, float* xs, float
 
 // nativeAnswer's work, for an engine already resolved.
 jint answer(JNIEnv* env, Engine* engine, jstring composing, jstring prev1, jstring prev2,
-            jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords, jfloatArray outScores,
+            jintArray personalContext, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
+            jfloatArray outScores,
             jbooleanArray outProperNoun, jobjectArray outTexts, jobjectArray outCorrections,
             jbooleanArray outCorrectionNames, jbooleanArray outCorrectionSlips,
             jbooleanArray outCorrectionConfident, jbooleanArray outSpellingFlags) {
@@ -487,6 +518,7 @@ jint answer(JNIEnv* env, Engine* engine, jstring composing, jstring prev1, jstri
         prev2Buffer[0] = '\0';
         prev2Length = 0;
     }
+    const ContextSlice::Key personal = personalContextOf(env, personalContext);
 
     const jsize wordSlots = env->GetArrayLength(outWords);
     const jsize scoreSlots = env->GetArrayLength(outScores);
@@ -511,9 +543,9 @@ jint answer(JNIEnv* env, Engine* engine, jstring composing, jstring prev1, jstri
                                       prev1Buffer, static_cast<size_t>(prev1Length),
                                       prev2Buffer, static_cast<size_t>(prev2Length),
                                       tapCount > 0 ? tapX : nullptr, tapCount > 0 ? tapY : nullptr,
-                                      tapCount, candidates, static_cast<int>(slots));
-    // The language whose pairs and triples the answer read, for every request.
-    writeLanguage(env, *engine, outTexts);
+                                      tapCount, candidates, static_cast<int>(slots), personal);
+    // The pack the answer leaned on, for every request.
+    writeAnswerPack(env, *engine, outTexts);
     // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's list.
     if (composingLength > 0) {
         writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
@@ -524,20 +556,22 @@ jint answer(JNIEnv* env, Engine* engine, jstring composing, jstring prev1, jstri
 }
 
 jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
-                  jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
-                  jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
-                  jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                  jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
-                  jbooleanArray outSpellingFlags) {
-    return answer(env, engineFrom(handle), composing, prev1, prev2, tapXs, tapYs, outWords,
-                  outScores, outProperNoun, outTexts, outCorrections, outCorrectionNames,
-                  outCorrectionSlips, outCorrectionConfident, outSpellingFlags);
+                  jstring prev2, jintArray personalContext, jfloatArray tapXs, jfloatArray tapYs,
+                  jobjectArray outWords, jfloatArray outScores, jbooleanArray outProperNoun,
+                  jobjectArray outTexts, jobjectArray outCorrections,
+                  jbooleanArray outCorrectionNames, jbooleanArray outCorrectionSlips,
+                  jbooleanArray outCorrectionConfident, jbooleanArray outSpellingFlags) {
+    return answer(env, engineFrom(handle), composing, prev1, prev2, personalContext, tapXs, tapYs,
+                  outWords, outScores, outProperNoun, outTexts, outCorrections,
+                  outCorrectionNames, outCorrectionSlips, outCorrectionConfident,
+                  outSpellingFlags);
 }
 
 // nativeAnswer for `composing` alone, with no words before it and no taps, as if `packIndex`
 // were the language being written; -1 when that pack is not open and active.
 jint nativeAnswerAs(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
-                    jstring composing, jobjectArray outWords, jfloatArray outScores,
+                    jstring composing, jintArray personalContext, jobjectArray outWords,
+                    jfloatArray outScores,
                     jbooleanArray outProperNoun, jobjectArray outTexts,
                     jobjectArray outCorrections, jbooleanArray outCorrectionNames,
                     jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
@@ -550,9 +584,10 @@ jint nativeAnswerAs(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
     if (!answering.held()) {
         return -1;
     }
-    return answer(env, engine, composing, nullptr, nullptr, nullptr, nullptr, outWords, outScores,
-                  outProperNoun, outTexts, outCorrections, outCorrectionNames, outCorrectionSlips,
-                  outCorrectionConfident, outSpellingFlags);
+    return answer(env, engine, composing, nullptr, nullptr, personalContext, nullptr, nullptr,
+                  outWords, outScores, outProperNoun, outTexts, outCorrections,
+                  outCorrectionNames, outCorrectionSlips, outCorrectionConfident,
+                  outSpellingFlags);
 }
 
 /**
@@ -603,46 +638,6 @@ jstring nativeLowerCase(JNIEnv* env, jobject /*thiz*/, jstring text) {
         return text;
     }
     return result;
-}
-
-jint nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstring prev1,
-                 jstring prev2, jboolean deliberateCapital, jboolean asserted, jstring language,
-                 jboolean tally) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr) {
-        return 0;
-    }
-    char wordBuffer[kStringBufferBytes];
-    char prev1Buffer[kStringBufferBytes];
-    char prev2Buffer[kStringBufferBytes];
-
-    const jsize wordLength = copyString(env, word, wordBuffer, sizeof(wordBuffer));
-    if (wordLength <= 0) {
-        return 0;
-    }
-    jsize prev1Length = copyString(env, prev1, prev1Buffer, sizeof(prev1Buffer));
-    if (prev1Length < 0) {
-        prev1Buffer[0] = '\0';
-        prev1Length = 0;
-    }
-    jsize prev2Length = copyString(env, prev2, prev2Buffer, sizeof(prev2Buffer));
-    if (prev2Length < 0) {
-        prev2Buffer[0] = '\0';
-        prev2Length = 0;
-    }
-    char languageBuffer[kStringBufferBytes];
-    jsize languageLength = copyString(env, language, languageBuffer, sizeof(languageBuffer));
-    if (languageLength < 0) {
-        languageBuffer[0] = '\0';
-        languageLength = 0;
-    }
-
-    const Engine::Learned learned = engine->learn(
-        wordBuffer, static_cast<size_t>(wordLength), prev1Buffer, static_cast<size_t>(prev1Length),
-        prev2Buffer, static_cast<size_t>(prev2Length), deliberateCapital == JNI_TRUE,
-        asserted == JNI_TRUE, languageBuffer, static_cast<size_t>(languageLength),
-        tally == JNI_TRUE);
-    return (learned.pair ? kLearnedPair : 0) | (learned.triple ? kLearnedTriple : 0);
 }
 
 /**
@@ -764,253 +759,6 @@ bool readInts(JNIEnv* env, jintArray array, const NumberColumn<int32_t>& column)
     return true;
 }
 
-/**
- * Reads `array`'s first `column.count()` values into `column`, each held between zero and the
- * largest `T`; false when it is short or the read fails.
- */
-template <typename T>
-bool readLongs(JNIEnv* env, jlongArray array, const NumberColumn<T>& column) {
-    if (array == nullptr || env->GetArrayLength(array) < column.count()) {
-        return false;
-    }
-    jlong* const values = env->GetLongArrayElements(array, nullptr);
-    if (values == nullptr) {
-        return false;
-    }
-    constexpr T kLargest = std::numeric_limits<T>::max();
-    T* const data = column.data();
-    for (jsize i = 0; i < column.count(); ++i) {
-        data[i] = values[i] <= 0 ? T{0}
-                  : static_cast<uint64_t>(values[i]) >= static_cast<uint64_t>(kLargest)
-                      ? kLargest
-                      : static_cast<T>(values[i]);
-    }
-    env->ReleaseLongArrayElements(array, values, JNI_ABORT);
-    return true;
-}
-
-/** Whether `languages` and every array of `words` are given. */
-template <size_t kWords>
-bool given(jobjectArray languages, const std::array<jobjectArray, kWords>& words) {
-    return languages != nullptr && std::all_of(words.begin(), words.end(), [](jobjectArray array) {
-               return array != nullptr;
-           });
-}
-
-/** Whether `languages` and every array of `words` hold at least `rows`. */
-template <size_t kWords>
-bool hold(JNIEnv* env, jobjectArray languages, const std::array<jobjectArray, kWords>& words,
-          jsize rows) {
-    return env->GetArrayLength(languages) >= rows &&
-           std::all_of(words.begin(), words.end(), [env, rows](jobjectArray array) {
-               return env->GetArrayLength(array) >= rows;
-           });
-}
-
-/** Makes room for `rows` in `language` and in every column of `words`; false when one has none. */
-template <size_t kWords>
-bool allocate(jsize rows, StringColumn& language, std::array<StringColumn, kWords>& words) {
-    language.allocate(rows);
-    bool valid = language.valid();
-    for (StringColumn& column : words) {
-        column.allocate(rows);
-        valid = valid && column.valid();
-    }
-    return valid;
-}
-
-/** Copies `languages` into `language` and each array of `words` into its column. */
-template <size_t kWords>
-void copyRows(JNIEnv* env, jobjectArray languages, const std::array<jobjectArray, kWords>& words,
-              StringColumn& language, std::array<StringColumn, kWords>& columns) {
-    language.copyFrom(env, languages);
-    for (size_t i = 0; i < kWords; ++i) {
-        columns[i].copyFrom(env, words[i]);
-    }
-}
-
-/**
- * Loads one kind of link's rows through `load`: `languages`, then `words`, the word arrays in
- * order, `counts`, each row's uses, and `contextSeen` and `languageSeen`, its stamps. An empty
- * list clears the kind, `load` given no rows.
- */
-template <size_t kWords, typename Load>
-void loadLinkRows(JNIEnv* env, jlong handle, jobjectArray languages,
-                  const std::array<jobjectArray, kWords>& words, jintArray counts,
-                  jlongArray contextSeen, jlongArray languageSeen, jintArray asserted, Load load) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || !given(languages, words) || counts == nullptr ||
-        asserted == nullptr) {
-        return;
-    }
-    const jsize rows = env->GetArrayLength(words.front());
-    StringColumn languageColumn;
-    std::array<StringColumn, kWords> wordColumns;
-    // An empty list clears the links the engine holds.
-    if (rows == 0) {
-        load(*engine, languageColumn, wordColumns, nullptr, nullptr, nullptr, nullptr, 0);
-        return;
-    }
-    if (rows < 0 || !hold(env, languages, words, rows) || env->GetArrayLength(counts) < rows ||
-        env->GetArrayLength(asserted) < rows) {
-        return;
-    }
-    NumberColumn<int32_t> countValues(rows);
-    NumberColumn<int32_t> assertedValues(rows);
-    NumberColumn<uint64_t> contextSeenValues(rows);
-    NumberColumn<uint64_t> languageSeenValues(rows);
-    if (!allocate(rows, languageColumn, wordColumns) || !countValues.valid() ||
-        !assertedValues.valid() || !contextSeenValues.valid() || !languageSeenValues.valid() ||
-        !readInts(env, counts, countValues) || !readInts(env, asserted, assertedValues) ||
-        !readLongs(env, contextSeen, contextSeenValues) ||
-        !readLongs(env, languageSeen, languageSeenValues)) {
-        return;
-    }
-    copyRows(env, languages, words, languageColumn, wordColumns);
-    load(*engine, languageColumn, wordColumns, countValues.data(), contextSeenValues.data(),
-         languageSeenValues.data(), assertedValues.data(), static_cast<int>(rows));
-}
-
-/**
- * Loads how often each context of one kind of link has been followed, and how many times it has
- * been seen, per language, through `load`: `languages`, then `words`, the context's word arrays in
- * order, `totals` and `seen`.
- */
-template <size_t kWords, typename Load>
-void loadContextTotals(JNIEnv* env, jlong handle, jobjectArray languages,
-                       const std::array<jobjectArray, kWords>& words, jlongArray totals,
-                       jlongArray seen, Load load) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || !given(languages, words) || totals == nullptr) {
-        return;
-    }
-    const jsize rows = env->GetArrayLength(words.front());
-    if (rows <= 0 || !hold(env, languages, words, rows)) {
-        return;
-    }
-    StringColumn languageColumn;
-    std::array<StringColumn, kWords> wordColumns;
-    NumberColumn<uint32_t> totalValues(rows);
-    NumberColumn<uint64_t> seenValues(rows);
-    if (!allocate(rows, languageColumn, wordColumns) || !totalValues.valid() ||
-        !seenValues.valid() || !readLongs(env, totals, totalValues) ||
-        !readLongs(env, seen, seenValues)) {
-        return;
-    }
-    copyRows(env, languages, words, languageColumn, wordColumns);
-    load(*engine, languageColumn, wordColumns, totalValues.data(), seenValues.data(),
-         static_cast<int>(rows));
-}
-
-/** Drops one kind of link's rows through `drop`: `languages`, then `words` in order. */
-template <size_t kWords, typename Drop>
-void dropLinkRows(JNIEnv* env, jlong handle, jobjectArray languages,
-                  const std::array<jobjectArray, kWords>& words, Drop drop) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || !given(languages, words)) {
-        return;
-    }
-    const jsize rows = env->GetArrayLength(words.front());
-    if (rows <= 0 || !hold(env, languages, words, rows)) {
-        return;
-    }
-    StringColumn languageColumn;
-    std::array<StringColumn, kWords> wordColumns;
-    if (!allocate(rows, languageColumn, wordColumns)) {
-        return;
-    }
-    copyRows(env, languages, words, languageColumn, wordColumns);
-    drop(*engine, languageColumn, wordColumns, static_cast<int>(rows));
-}
-
-/** Loads the remembered three-word sequences, as parallel arrays, after the pairs. */
-void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                            jobjectArray previous2, jobjectArray previous1, jobjectArray next,
-                            jintArray counts, jlongArray contextSeen, jlongArray languageSeen,
-                            jintArray asserted) {
-    loadLinkRows(env, handle, languages, std::array{previous2, previous1, next}, counts,
-                 contextSeen, languageSeen, asserted,
-                 [](Engine& engine, const StringColumn& language, const auto& words,
-                    const int32_t* uses, const uint64_t* byContext, const uint64_t* byLanguage,
-                    const int32_t* chosen, int rows) {
-                     const auto& [before2, before1, after] = words;
-                     engine.loadUserTrigrams(language.data(), language.lengths(), before2.data(),
-                                             before2.lengths(), before1.data(), before1.lengths(),
-                                             after.data(), after.lengths(), uses, rows, byContext,
-                                             byLanguage, chosen);
-                 });
-}
-
-/**
- * How often each previous word of a pair has been followed, and how many times it has been seen,
- * per language; after the pairs.
- */
-void nativeLoadUserPairTotals(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                              jobjectArray previous, jlongArray totals, jlongArray seen) {
-    loadContextTotals(env, handle, languages, std::array{previous}, totals, seen,
-                      [](Engine& engine, const StringColumn& language, const auto& words,
-                         const uint32_t* followed, const uint64_t* observed, int rows) {
-                          const auto& [before] = words;
-                          engine.loadUserPairTotals(language.data(), language.lengths(),
-                                                    before.data(), before.lengths(), followed,
-                                                    rows, observed);
-                      });
-}
-
-/** [nativeLoadUserPairTotals], for each start of a triple; after the triples. */
-void nativeLoadUserTripleTotals(JNIEnv* env, jobject /*thiz*/, jlong handle,
-                                jobjectArray languages, jobjectArray previous2,
-                                jobjectArray previous1, jlongArray totals, jlongArray seen) {
-    loadContextTotals(env, handle, languages, std::array{previous2, previous1}, totals, seen,
-                      [](Engine& engine, const StringColumn& language, const auto& words,
-                         const uint32_t* followed, const uint64_t* observed, int rows) {
-                          const auto& [before2, before1] = words;
-                          engine.loadUserTripleTotals(language.data(), language.lengths(),
-                                                      before2.data(), before2.lengths(),
-                                                      before1.data(), before1.lengths(), followed,
-                                                      rows, observed);
-                      });
-}
-
-/** Each language's pair clock and triple clock, as parallel arrays; after the links. */
-void nativeLoadUserClocks(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                          jlongArray pairClocks, jlongArray tripleClocks) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || languages == nullptr) {
-        return;
-    }
-    const jsize rows = env->GetArrayLength(languages);
-    if (rows < 0) {
-        return;
-    }
-    StringColumn languageColumn(rows);
-    NumberColumn<uint64_t> pairValues(rows);
-    NumberColumn<uint64_t> tripleValues(rows);
-    if (rows > 0 && (!languageColumn.valid() || !pairValues.valid() || !tripleValues.valid() ||
-                     !readLongs(env, pairClocks, pairValues) ||
-                     !readLongs(env, tripleClocks, tripleValues))) {
-        return;
-    }
-    languageColumn.copyFrom(env, languages);
-    engine->loadUserClocks(languageColumn.data(), languageColumn.lengths(), pairValues.data(),
-                           tripleValues.data(), static_cast<int>(rows));
-}
-
-/** Stores the key of personal entry `entry` in `array[slot]`; one with no key leaves it as is. */
-void setEntryKey(JNIEnv* env, const Engine& engine, jobjectArray array, jsize slot,
-                 int32_t entry) {
-    uint32_t length = 0;
-    const char* const key =
-        entry < 0 ? nullptr : engine.userEntryKey(static_cast<uint32_t>(entry), &length);
-    if (key == nullptr || length == 0 || length >= static_cast<uint32_t>(kStringBufferBytes)) {
-        return;
-    }
-    char text[kStringBufferBytes];
-    std::memcpy(text, key, length);
-    text[length] = '\0';
-    setText(env, array, slot, text);
-}
-
 /** Writes `value` into `array[slot]`, an exception cleared. */
 template <typename Array, typename Value, typename Write>
 void setNumber(JNIEnv* env, Array array, jsize slot, Value value, Write write) {
@@ -1018,78 +766,6 @@ void setNumber(JNIEnv* env, Array array, jsize slot, Value value, Write write) {
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
     }
-}
-
-/**
- * The links after `previous2` and `previous1` in `language`'s store, pairs when `previous2` is
- * null, in the order recorded: each next word's key into `outWords`, its count into `outCounts`
- * and how many times its context had been seen when it last was into `outContextSeen`, up to their
- * size; `outContext` gets the context's total and observations, zeros for a context not held.
- * Returns how many links follow it.
- */
-jint nativeContextLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring language,
-                        jstring previous2, jstring previous1, jobjectArray outWords,
-                        jintArray outCounts, jlongArray outContextSeen, jintArray outAsserted,
-                        jlongArray outContext) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || outWords == nullptr || outCounts == nullptr ||
-        outContextSeen == nullptr || outAsserted == nullptr || outContext == nullptr ||
-        env->GetArrayLength(outContext) < kContextSlots) {
-        return 0;
-    }
-    const jlong none[kContextSlots] = {};
-    env->SetLongArrayRegion(outContext, 0, kContextSlots, none);
-    char languageBuffer[kStringBufferBytes];
-    char previous2Buffer[kStringBufferBytes];
-    char previous1Buffer[kStringBufferBytes];
-    const jsize languageLength =
-        copyString(env, language, languageBuffer, sizeof(languageBuffer));
-    const jsize previous1Length =
-        copyString(env, previous1, previous1Buffer, sizeof(previous1Buffer));
-    jsize previous2Length = copyString(env, previous2, previous2Buffer, sizeof(previous2Buffer));
-    if (languageLength <= 0 || previous1Length <= 0) {
-        return 0;
-    }
-    if (previous2Length < 0) {
-        previous2Length = 0;
-    }
-    const auto read = [&](borderkeys::UserModel::ContextLink* out, int maxOut,
-                          borderkeys::UserModel::ContextCount* context) {
-        return engine->userContextLinks(
-            languageBuffer, static_cast<size_t>(languageLength), previous2Buffer,
-            static_cast<size_t>(previous2Length), previous1Buffer,
-            static_cast<size_t>(previous1Length), out, maxOut, context);
-    };
-    borderkeys::UserModel::ContextLink onStack[kContextLinksOnStack];
-    borderkeys::UserModel::ContextCount context{};
-    const int held = read(onStack, kContextLinksOnStack, &context);
-    std::unique_ptr<borderkeys::UserModel::ContextLink[]> spilled;
-    const borderkeys::UserModel::ContextLink* links = onStack;
-    if (held > kContextLinksOnStack) {
-        spilled.reset(new (std::nothrow) borderkeys::UserModel::ContextLink[held]);
-        if (spilled == nullptr) {
-            return 0;
-        }
-        read(spilled.get(), held, &context);
-        links = spilled.get();
-    }
-    jlong counted[kContextSlots] = {};
-    counted[kContextTotal] = static_cast<jlong>(context.total);
-    counted[kContextSeen] = static_cast<jlong>(context.seen);
-    env->SetLongArrayRegion(outContext, 0, kContextSlots, counted);
-    const jsize capacity = std::min({env->GetArrayLength(outWords), env->GetArrayLength(outCounts),
-                                     env->GetArrayLength(outContextSeen),
-                                     env->GetArrayLength(outAsserted)});
-    for (jsize i = 0; i < held && i < capacity; ++i) {
-        setEntryKey(env, *engine, outWords, i, links[i].nextIndex);
-        setNumber(env, outCounts, i, static_cast<jint>(links[i].count),
-                  &JNIEnv::SetIntArrayRegion);
-        setNumber(env, outContextSeen, i, static_cast<jlong>(links[i].contextSeen),
-                  &JNIEnv::SetLongArrayRegion);
-        setNumber(env, outAsserted, i, static_cast<jint>(links[i].asserted),
-                  &JNIEnv::SetIntArrayRegion);
-    }
-    return held;
 }
 
 /**
@@ -1119,94 +795,39 @@ void nativeLearnable(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray w
     }
 }
 
-/** How many triples, or pairs, `language`'s store holds. */
-jint nativeLinksHeld(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring language,
-                     jboolean triples) {
-    Engine* const engine = engineFrom(handle);
-    char languageBuffer[kStringBufferBytes];
-    const jsize languageLength =
-        engine == nullptr ? -1 : copyString(env, language, languageBuffer, sizeof(languageBuffer));
-    if (languageLength <= 0) {
-        return 0;
-    }
-    return engine->userLinksHeld(languageBuffer, static_cast<size_t>(languageLength),
-                                 triples == JNI_TRUE);
-}
+static_assert(Engine::kMaxPacks < 32, "each pack's bit fits a Java int");
 
 /**
- * Every triple, or pair, of `language`'s store, up to the arrays' size: the keys of the words
- * before its last into `outPrevious2` (left as is for a pair) and `outPrevious1`, its last into
- * `outWords`, its count, when its language last saw it, and its context's total. Returns how many
- * were written.
+ * The active packs that spell each of `words` (Engine::packsSpelling), one bit per slot, into
+ * `outSlots` up to its size; a word the bridge cannot take is left as `outSlots` holds it.
  */
-jint nativeLanguageLinks(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring language,
-                         jboolean triples, jobjectArray outPrevious2, jobjectArray outPrevious1,
-                         jobjectArray outWords, jintArray outCounts, jlongArray outLanguageSeen,
-                         jlongArray outContextTotals, jintArray outAsserted) {
+void nativePacksSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
+                         jintArray outSlots) {
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || outPrevious2 == nullptr || outPrevious1 == nullptr ||
-        outWords == nullptr || outCounts == nullptr || outLanguageSeen == nullptr ||
-        outContextTotals == nullptr || outAsserted == nullptr) {
-        return 0;
+    if (engine == nullptr || words == nullptr || outSlots == nullptr) {
+        return;
     }
-    char languageBuffer[kStringBufferBytes];
-    const jsize languageLength = copyString(env, language, languageBuffer, sizeof(languageBuffer));
-    if (languageLength <= 0) {
-        return 0;
+    const jsize count = std::min(env->GetArrayLength(words), env->GetArrayLength(outSlots));
+    char buffer[kStringBufferBytes];
+    for (jsize i = 0; i < count; ++i) {
+        jstring word = static_cast<jstring>(env->GetObjectArrayElement(words, i));
+        const jsize length = copyString(env, word, buffer, sizeof(buffer));
+        if (word != nullptr) {
+            env->DeleteLocalRef(word);
+        }
+        if (length <= 0) {
+            continue;
+        }
+        const jint slots =
+            static_cast<jint>(engine->packsSpelling(buffer, static_cast<size_t>(length)));
+        setNumber(env, outSlots, i, slots, &JNIEnv::SetIntArrayRegion);
     }
-    const jsize capacity = std::min(
-        {env->GetArrayLength(outPrevious2), env->GetArrayLength(outPrevious1),
-         env->GetArrayLength(outWords), env->GetArrayLength(outCounts),
-         env->GetArrayLength(outLanguageSeen), env->GetArrayLength(outContextTotals),
-         env->GetArrayLength(outAsserted)});
-    jsize written = 0;
-    Engine::StoredLink link{};
-    while (written < capacity &&
-           engine->userLinkAt(languageBuffer, static_cast<size_t>(languageLength),
-                              triples == JNI_TRUE, static_cast<int>(written), &link)) {
-        setEntryKey(env, *engine, outPrevious2, written, link.previous2Index);
-        setEntryKey(env, *engine, outPrevious1, written, link.previous1Index);
-        setEntryKey(env, *engine, outWords, written, link.nextIndex);
-        setNumber(env, outCounts, written, static_cast<jint>(link.count),
-                  &JNIEnv::SetIntArrayRegion);
-        setNumber(env, outLanguageSeen, written, static_cast<jlong>(link.languageSeen),
-                  &JNIEnv::SetLongArrayRegion);
-        setNumber(env, outContextTotals, written, static_cast<jlong>(link.contextTotal),
-                  &JNIEnv::SetLongArrayRegion);
-        setNumber(env, outAsserted, written, static_cast<jint>(link.asserted),
-                  &JNIEnv::SetIntArrayRegion);
-        ++written;
-    }
-    return written;
-}
-
-/** Drops the pairs the budget gave up, each from its language's store. */
-void nativeDropUserPairs(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                         jobjectArray previous, jobjectArray next) {
-    dropLinkRows(env, handle, languages, std::array{previous, next},
-                 [](Engine& engine, const StringColumn& language, const auto& words, int rows) {
-                     const auto& [before, after] = words;
-                     engine.dropUserPairs(language.data(), language.lengths(), before.data(),
-                                          before.lengths(), after.data(), after.lengths(), rows);
-                 });
-}
-
-/** Drops the triples the budget gave up, each from its language's store. */
-void nativeDropUserTriples(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                           jobjectArray previous2, jobjectArray previous1, jobjectArray next) {
-    dropLinkRows(env, handle, languages, std::array{previous2, previous1, next},
-                 [](Engine& engine, const StringColumn& language, const auto& words, int rows) {
-                     const auto& [before2, before1, after] = words;
-                     engine.dropUserTriples(language.data(), language.lengths(), before2.data(),
-                                            before2.lengths(), before1.data(), before1.lengths(),
-                                            after.data(), after.lengths(), rows);
-                 });
 }
 
 /** The score of `candidate` as an answer to `typed`, term by term, into `out` in
  *  ScoreExplanation.kt's slot order; false when the word is not offered. */
 jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
-                            jstring candidate, jfloatArray out) {
+                            jstring candidate, jintArray personalContext, jfloatArray out) {
     constexpr jsize kSlots = 15;
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || typed == nullptr || candidate == nullptr || out == nullptr ||
@@ -1227,7 +848,8 @@ jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring
     }
     Engine::ScoreParts parts;
     if (!engine->explainScore(typedBuffer, static_cast<size_t>(typedLength), candidateBuffer,
-                              static_cast<size_t>(candidateLength), &parts)) {
+                              static_cast<size_t>(candidateLength), &parts,
+                              personalContextOf(env, personalContext))) {
         return JNI_FALSE;
     }
     const jfloat values[kSlots] = {
@@ -1495,85 +1117,321 @@ void nativeSetLanguageEvidence(JNIEnv* env, jobject /*thiz*/, jlong handle, jstr
     }
 }
 
-void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray languages,
-                           jobjectArray previous, jobjectArray next, jintArray counts,
-                           jlongArray contextSeen, jlongArray languageSeen, jintArray asserted) {
-    loadLinkRows(env, handle, languages, std::array{previous, next}, counts, contextSeen,
-                 languageSeen, asserted,
-                 [](Engine& engine, const StringColumn& language, const auto& words,
-                    const int32_t* uses, const uint64_t* byContext, const uint64_t* byLanguage,
-                    const int32_t* chosen, int rows) {
-                     const auto& [before, after] = words;
-                     engine.loadUserBigrams(language.data(), language.lengths(), before.data(),
-                                            before.lengths(), after.data(), after.lengths(), uses,
-                                            rows, byContext, byLanguage, chosen);
-                 });
+static_assert(kWordCount == WordTable::kCountField &&
+                  kWordDeliberateCapitals == WordTable::kDeliberateCapitalsField &&
+                  kWordAsserted == WordTable::kAssertedField &&
+                  kWordAdded == WordTable::kAddedField && kWordFields == WordTable::kFields &&
+                  kNewWordId == WordTable::kNewWord,
+              "the bridge's word slots are the word table's");
+
+/**
+ * A word table call's rows, read from Kotlin: each row's spelling, null or unreadable for none,
+ * and its kWordFields counts; the ids and known bits the engine writes back, kNewWordId and
+ * false until it does.
+ */
+class WordRows {
+public:
+    WordRows(JNIEnv* env, jobjectArray spellings, jintArray fields, jsize rows)
+        : rows_(rows),
+          spellings_(rows),
+          fields_(rows * kWordFields),
+          ids_(rows),
+          known_(rows > 0 ? new (std::nothrow) bool[rows] : nullptr) {
+        valid_ = rows > 0 && spellings_.valid() && fields_.valid() && ids_.valid() &&
+                 known_ != nullptr && readInts(env, fields, fields_);
+        if (valid_) {
+            spellings_.copyFrom(env, spellings);
+            std::fill(ids_.data(), ids_.data() + rows, kNewWordId);
+            std::fill(known_.get(), known_.get() + rows, false);
+        }
+    }
+
+    bool valid() const { return valid_; }
+    const char* const* spellings() const { return spellings_.data(); }
+    const size_t* lengths() const { return spellings_.lengths(); }
+    const int32_t* fields() const { return fields_.data(); }
+    int32_t* ids() const { return ids_.data(); }
+    bool* known() const { return known_.get(); }
+
+    /** Writes the ids, and the known bits when `outKnown` is given, back to Kotlin. */
+    void writeBack(JNIEnv* env, jintArray outIds, jbooleanArray outKnown) const {
+        env->SetIntArrayRegion(outIds, 0, rows_, reinterpret_cast<const jint*>(ids_.data()));
+        if (outKnown != nullptr) {
+            std::unique_ptr<jboolean[]> bits(new (std::nothrow) jboolean[rows_]);
+            if (bits != nullptr) {
+                for (jsize i = 0; i < rows_; ++i) {
+                    bits[i] = known_[i] ? JNI_TRUE : JNI_FALSE;
+                }
+                env->SetBooleanArrayRegion(outKnown, 0, rows_, bits.get());
+            }
+        }
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+        }
+    }
+
+private:
+    jsize rows_;
+    StringColumn spellings_;
+    NumberColumn<int32_t> fields_;
+    NumberColumn<int32_t> ids_;
+    std::unique_ptr<bool[]> known_;
+    bool valid_ = false;
+};
+
+/**
+ * Whether a word table call's arrays agree: `fields` holds kWordFields ints per row of at most
+ * kMaxWordRowsPerCall (wordFieldsAgree), `outIds` one id per row, `outKnown`, when given, one bit
+ * per row, and `ids`, when given, one id per row.
+ */
+bool rowsAgree(JNIEnv* env, jsize rows, jintArray fields, jintArray outIds, jbooleanArray outKnown,
+               jintArray ids) {
+    return fields != nullptr && outIds != nullptr &&
+           wordFieldsAgree(rows, env->GetArrayLength(fields)) &&
+           env->GetArrayLength(outIds) == rows &&
+           (outKnown == nullptr || env->GetArrayLength(outKnown) == rows) &&
+           (ids == nullptr || env->GetArrayLength(ids) == rows);
 }
 
-void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
-                         jintArray counts, jintArray deliberateCapitals, jintArray asserted,
-                         jintArray added) {
+jint nativeLoadWordTable(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray spellings,
+                         jintArray fields, jintArray outIds, jbooleanArray outKnown) {
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || words == nullptr || counts == nullptr ||
-        deliberateCapitals == nullptr || asserted == nullptr || added == nullptr) {
-        return;
+    if (engine == nullptr || spellings == nullptr) {
+        return 0;
     }
-    const jsize wordCount = env->GetArrayLength(words);
-    const jsize countLength = env->GetArrayLength(counts);
-    const jsize capsLength = env->GetArrayLength(deliberateCapitals);
-    const jsize assertedLength = env->GetArrayLength(asserted);
-    const jsize addedLength = env->GetArrayLength(added);
-    // An empty list clears the words the engine holds.
-    if (wordCount == 0) {
-        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr, nullptr, nullptr);
-        return;
+    const jsize rows = env->GetArrayLength(spellings);
+    if (!rowsAgree(env, rows, fields, outIds, outKnown, nullptr)) {
+        return 0;
     }
-    if (wordCount < 0 || countLength < wordCount || capsLength < wordCount ||
-        assertedLength < wordCount || addedLength < wordCount ||
-        wordCount > kMaxUserWordsPerCall) {
-        return;
+    // An empty table clears the words the engine holds.
+    if (rows == 0) {
+        return engine->loadWordTable(nullptr, nullptr, nullptr, 0, nullptr);
     }
+    WordRows read(env, spellings, fields, rows);
+    if (!read.valid()) {
+        return 0;
+    }
+    const int held = engine->loadWordTable(read.spellings(), read.lengths(), read.fields(),
+                                           static_cast<int>(rows), read.ids(), read.known());
+    read.writeBack(env, outIds, outKnown);
+    return held;
+}
 
-    StringColumn column(wordCount);
-    NumberColumn<int32_t> countValues(wordCount);
-    NumberColumn<int32_t> capsValues(wordCount);
-    NumberColumn<int32_t> assertedValues(wordCount);
-    NumberColumn<int32_t> addedValues(wordCount);
-    if (!column.valid() || !countValues.valid() || !capsValues.valid() ||
-        !assertedValues.valid() || !addedValues.valid()) {
-        return;
+jint nativePutWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray ids,
+                    jobjectArray spellings, jintArray fields, jintArray outIds,
+                    jbooleanArray outKnown) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || ids == nullptr || spellings == nullptr) {
+        return 0;
     }
-
-    if (!readInts(env, counts, countValues) || !readInts(env, deliberateCapitals, capsValues) ||
-        !readInts(env, asserted, assertedValues) || !readInts(env, added, addedValues)) {
-        return;
+    const jsize rows = env->GetArrayLength(spellings);
+    if (rows == 0 || !rowsAgree(env, rows, fields, outIds, outKnown, ids)) {
+        return 0;
     }
+    WordRows read(env, spellings, fields, rows);
+    NumberColumn<int32_t> named(rows);
+    if (!read.valid() || !named.valid() || !readInts(env, ids, named)) {
+        return 0;
+    }
+    const int held = engine->putWords(named.data(), read.spellings(), read.lengths(),
+                                      read.fields(), static_cast<int>(rows), read.ids(),
+                                      read.known());
+    read.writeBack(env, outIds, outKnown);
+    return held;
+}
 
-    // Compacted: a dropped word's count, capital flag, assertion and add drop with it.
-    char** const storage = column.data();
-    size_t* const lengths = column.lengths();
-    int32_t* const counts32 = countValues.data();
-    int32_t* const caps32 = capsValues.data();
-    int32_t* const asserted32 = assertedValues.data();
-    int32_t* const added32 = addedValues.data();
-    jsize kept = 0;
-    for (jsize i = 0; i < wordCount; ++i) {
-        char* copy = nullptr;
-        const jsize length = copyStringAt(env, words, i, &copy);
-        if (length <= 0) {
-            continue;
+/**
+ * The personal word table's entry for `word`, in any case: its kWordFields counts into
+ * `outFields`, its spelling into `outSpelling[0]`, and whether an active pack knows it into
+ * `outKnown[0]`. Returns its id, kNewWordId for a word the table does not hold.
+ */
+jint nativeWordEntry(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jintArray outFields,
+                     jobjectArray outSpelling, jbooleanArray outKnown) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || outFields == nullptr || outSpelling == nullptr ||
+        outKnown == nullptr || env->GetArrayLength(outFields) < kWordFields ||
+        env->GetArrayLength(outSpelling) < 1 || env->GetArrayLength(outKnown) < 1) {
+        return kNewWordId;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, word, buffer, sizeof(buffer));
+    const WordTable& words = engine->personalWords();
+    const int32_t id =
+        length > 0 ? words.entryIndexFor(buffer, static_cast<size_t>(length)) : kNewWordId;
+    if (id < 0) {
+        return kNewWordId;
+    }
+    const uint32_t entry = static_cast<uint32_t>(id);
+    jint fields[kWordFields] = {};
+    fields[kWordCount] = static_cast<jint>(words.entryCount(entry));
+    fields[kWordDeliberateCapitals] = static_cast<jint>(words.deliberateCapitals(entry));
+    fields[kWordAsserted] = static_cast<jint>(words.asserted(entry));
+    fields[kWordAdded] = static_cast<jint>(words.added(entry));
+    env->SetIntArrayRegion(outFields, 0, kWordFields, fields);
+    bool known = false;
+    engine->markKnown(&id, 1, &known);
+    const jboolean bit = known ? JNI_TRUE : JNI_FALSE;
+    env->SetBooleanArrayRegion(outKnown, 0, 1, &bit);
+    uint32_t textLength = 0;
+    const char* const text = words.entryText(entry, &textLength);
+    if (text != nullptr && textLength < static_cast<uint32_t>(kStringBufferBytes)) {
+        char spelled[kStringBufferBytes];
+        std::memcpy(spelled, text, textLength);
+        spelled[textLength] = '\0';
+        setText(env, outSpelling, 0, spelled);
+    }
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+    }
+    return id;
+}
+
+static_assert(kSliceHeaderFields == ContextSlice::kHeaderFields &&
+                  kSliceLinkFields == ContextSlice::kLinkFields &&
+                  kSliceHopFields == ContextSlice::kHopFields &&
+                  kSliceContextSeenFields == ContextSlice::kContextSeenFields &&
+                  kSliceMaxHops == ContextSlice::kMaxHops && kSliceNone == ContextSlice::kNone &&
+                  kPersonalContextSlots == ContextSlice::kContext2Field + 1,
+              "the bridge's slice slots are the slice's");
+
+/** A Java int or long array's values, read whole, released on destruction. */
+template <typename Array, typename Value>
+class HandedArray {
+public:
+    using Get = Value* (JNIEnv::*)(Array, jboolean*);
+    using Release = void (JNIEnv::*)(Array, Value*, jint);
+
+    HandedArray(JNIEnv* env, Array array, Get get, Release release)
+        : env_(env), array_(array), release_(release),
+          length_(array != nullptr ? env->GetArrayLength(array) : 0),
+          values_(array != nullptr ? (env->*get)(array, nullptr) : nullptr) {}
+    ~HandedArray() {
+        if (values_ != nullptr) {
+            (env_->*release_)(array_, values_, JNI_ABORT);
         }
-        storage[kept] = copy;
-        lengths[kept] = static_cast<size_t>(length);
-        counts32[kept] = counts32[i];
-        caps32[kept] = caps32[i];
-        asserted32[kept] = asserted32[i];
-        added32[kept] = added32[i];
-        ++kept;
     }
 
-    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept), caps32,
-                          asserted32, added32);
+    HandedArray(const HandedArray&) = delete;
+    HandedArray& operator=(const HandedArray&) = delete;
+
+    bool valid() const { return array_ != nullptr && values_ != nullptr; }
+    const Value* values() const { return values_; }
+    size_t length() const { return static_cast<size_t>(length_); }
+
+private:
+    JNIEnv* env_;
+    Array array_;
+    Release release_;
+    jsize length_;
+    Value* values_;
+};
+
+/**
+ * How many of an array of `held` values a slice takes when its header counts `wanted`: `wanted`
+ * when the array holds that many, else all it holds, which the slice then refuses.
+ */
+size_t sliceLength(int64_t wanted, size_t held) {
+    const bool room = wanted >= 0 && static_cast<uint64_t>(wanted) <= held;
+    return room ? static_cast<size_t>(wanted) : held;
+}
+
+/**
+ * Replaces the slice the requests read their personal pairs and triples from with `header` and
+ * the links, hops and stamps it counts from the start of `links`, `hops` and `seen`, each array
+ * holding at least as many (Engine::pushSlice). False, the slice emptied, when one holds fewer or
+ * the header is malformed.
+ */
+jboolean nativePushSlice(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray header,
+                         jintArray links, jintArray hops, jlongArray seen) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return JNI_FALSE;
+    }
+    const HandedArray<jintArray, jint> headerInts(env, header, &JNIEnv::GetIntArrayElements,
+                                                  &JNIEnv::ReleaseIntArrayElements);
+    const HandedArray<jintArray, jint> linkInts(env, links, &JNIEnv::GetIntArrayElements,
+                                                &JNIEnv::ReleaseIntArrayElements);
+    const HandedArray<jintArray, jint> hopInts(env, hops, &JNIEnv::GetIntArrayElements,
+                                               &JNIEnv::ReleaseIntArrayElements);
+    const HandedArray<jlongArray, jlong> seenLongs(env, seen, &JNIEnv::GetLongArrayElements,
+                                                   &JNIEnv::ReleaseLongArrayElements);
+    if (!headerInts.valid() || !linkInts.valid() || !hopInts.valid() || !seenLongs.valid()) {
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+        }
+        engine->pushSlice(nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0);
+        return JNI_FALSE;
+    }
+    const jint* const counts = headerInts.values();
+    const bool counted = headerInts.length() == static_cast<size_t>(kSliceHeaderFields);
+    const int64_t linksCounted = counted ? static_cast<int64_t>(counts[ContextSlice::kPairsField]) +
+                                               counts[ContextSlice::kTriplesField]
+                                         : -1;
+    const int64_t hopsCounted = counted ? counts[ContextSlice::kHopsField] : -1;
+    const bool held = engine->pushSlice(
+        reinterpret_cast<const int32_t*>(counts), headerInts.length(),
+        reinterpret_cast<const int32_t*>(linkInts.values()),
+        sliceLength(linksCounted < 0 ? -1 : linksCounted * kSliceLinkFields, linkInts.length()),
+        reinterpret_cast<const int32_t*>(hopInts.values()),
+        sliceLength(hopsCounted < 0 ? -1 : hopsCounted * kSliceHopFields, hopInts.length()),
+        reinterpret_cast<const int64_t*>(seenLongs.values()),
+        sliceLength(linksCounted < 0 ? -1 : linksCounted + kSliceContextSeenFields,
+                    seenLongs.length()));
+    return held ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * The slice the engine holds, as nativePushSlice takes it: its header into `outHeader`, its links,
+ * hops and stamps into `outLinks`, `outHops` and `outSeen` up to their sizes. False, writing
+ * nothing, when the engine is gone or `outHeader` holds fewer than kSliceHeaderFields.
+ */
+jboolean nativeReadSlice(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray outHeader,
+                         jintArray outLinks, jintArray outHops, jlongArray outSeen) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || outHeader == nullptr || outLinks == nullptr || outHops == nullptr ||
+        outSeen == nullptr || env->GetArrayLength(outHeader) < kSliceHeaderFields) {
+        return JNI_FALSE;
+    }
+    const ContextSlice& slice = engine->slice();
+    jint header[kSliceHeaderFields] = {};
+    header[ContextSlice::kLanguageField] = slice.key().language;
+    header[ContextSlice::kContext1Field] = slice.key().context1;
+    header[ContextSlice::kContext2Field] = slice.key().context2;
+    header[ContextSlice::kPairTotalField] = static_cast<jint>(slice.pairTotal());
+    header[ContextSlice::kTripleTotalField] = static_cast<jint>(slice.tripleTotal());
+    header[ContextSlice::kPairsField] = slice.pairCount();
+    header[ContextSlice::kTriplesField] = slice.tripleCount();
+    header[ContextSlice::kHopsField] = slice.hopCount();
+    env->SetIntArrayRegion(outHeader, 0, kSliceHeaderFields, header);
+    const int links = slice.pairCount() + slice.tripleCount();
+    std::vector<jint> linkInts;
+    std::vector<jlong> seen = {static_cast<jlong>(slice.pairSeen()),
+                               static_cast<jlong>(slice.tripleSeen())};
+    for (int i = 0; i < links; ++i) {
+        const ContextSlice::Link& link =
+            i < slice.pairCount() ? slice.pair(i) : slice.triple(i - slice.pairCount());
+        linkInts.insert(linkInts.end(), {link.word, static_cast<jint>(link.count),
+                                         static_cast<jint>(link.asserted)});
+        seen.push_back(static_cast<jlong>(link.seen));
+    }
+    std::vector<jint> hopInts;
+    for (int i = 0; i < slice.hopCount(); ++i) {
+        const ContextSlice::Hop& hop = slice.hop(i);
+        hopInts.insert(hopInts.end(), {hop.word, static_cast<jint>(hop.count),
+                                       static_cast<jint>(hop.asserted),
+                                       static_cast<jint>(hop.middleTotal)});
+    }
+    const auto upTo = [env](auto array, size_t length) {
+        const auto room = static_cast<size_t>(env->GetArrayLength(array));
+        return static_cast<jsize>(std::min(length, room));
+    };
+    env->SetIntArrayRegion(outLinks, 0, upTo(outLinks, linkInts.size()), linkInts.data());
+    env->SetIntArrayRegion(outHops, 0, upTo(outHops, hopInts.size()), hopInts.data());
+    env->SetLongArrayRegion(outSeen, 0, upTo(outSeen, seen.size()), seen.data());
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+    }
+    return JNI_TRUE;
 }
 
 /** Replaces the blocked words; an empty array clears them. */
@@ -1600,7 +1458,7 @@ void nativeSetBlockedWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
 
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
                          jfloatArray ys, jlongArray ts, jint count, jstring prev1, jstring prev2,
-                         jobjectArray outWords, jfloatArray outScores,
+                         jintArray personalContext, jobjectArray outWords, jfloatArray outScores,
                          jbooleanArray outProperNoun, jobjectArray outTexts) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || xs == nullptr || ys == nullptr || outWords == nullptr ||
@@ -1644,6 +1502,8 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
         prev2Length = 0;
     }
 
+    const ContextSlice::Key personal = personalContextOf(env, personalContext);
+
     const jsize wordSlots = env->GetArrayLength(outWords);
     const jsize scoreSlots = env->GetArrayLength(outScores);
     jsize slots = (wordSlots < scoreSlots) ? wordSlots : scoreSlots;
@@ -1658,8 +1518,8 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
     const int found = engine->decodeGesture(
         pointsX, pointsY, reinterpret_cast<const int64_t*>(timestamps), static_cast<int>(points),
         prev1Buffer, static_cast<size_t>(prev1Length), prev2Buffer,
-        static_cast<size_t>(prev2Length), candidates, static_cast<int>(slots));
-    writeLanguage(env, *engine, outTexts);
+        static_cast<size_t>(prev2Length), candidates, static_cast<int>(slots), personal);
+    writeAnswerPack(env, *engine, outTexts);
     // Scores already in [0, 1000].
     return writeRanking(env, *engine, candidates, found, outWords, outScores, outProperNoun);
 }
@@ -1675,26 +1535,22 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF[I[I)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeAnswer",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[F[F[Ljava/lang/String;[F[Z"
-     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z[Z[Z)I",
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[I[F[F"
+     "[Ljava/lang/String;[F[Z[Ljava/lang/String;[Ljava/lang/String;[Z[Z[Z[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
     {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
     {"nativeSetTouchPatterns", "(J[I[F[F[F[F[F[F)V",
      reinterpret_cast<void*>(nativeSetTouchPatterns)},
-    {"nativeLearn",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZLjava/lang/String;Z)I",
-     reinterpret_cast<void*>(nativeLearn)},
-    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I[I)V",
-     reinterpret_cast<void*>(nativeLoadUserWords)},
+    {"nativeLoadWordTable", "(J[Ljava/lang/String;[I[I[Z)I",
+     reinterpret_cast<void*>(nativeLoadWordTable)},
+    {"nativePutWords", "(J[I[Ljava/lang/String;[I[I[Z)I",
+     reinterpret_cast<void*>(nativePutWords)},
+    {"nativeWordEntry", "(JLjava/lang/String;[I[Ljava/lang/String;[Z)I",
+     reinterpret_cast<void*>(nativeWordEntry)},
+    {"nativePushSlice", "(J[I[I[I[J)Z", reinterpret_cast<void*>(nativePushSlice)},
+    {"nativeReadSlice", "(J[I[I[I[J)Z", reinterpret_cast<void*>(nativeReadSlice)},
     {"nativeSetBlockedWords", "(J[Ljava/lang/String;)V",
      reinterpret_cast<void*>(nativeSetBlockedWords)},
-    {"nativeLoadUserBigrams",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)V",
-     reinterpret_cast<void*>(nativeLoadUserBigrams)},
-    {"nativeLoadUserPairTotals", "(J[Ljava/lang/String;[Ljava/lang/String;[J[J)V",
-     reinterpret_cast<void*>(nativeLoadUserPairTotals)},
-    {"nativeDropUserPairs", "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V",
-     reinterpret_cast<void*>(nativeDropUserPairs)},
     {"nativeSetLearnAfterUses", "(JI)V",
      reinterpret_cast<void*>(nativeSetLearnAfterUses)},
     {"nativeSetCorrectionStrictness", "(JF)V",
@@ -1722,29 +1578,14 @@ const JNINativeMethod kMethods[] = {
     {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
     {"nativeKnownStems", "(JLjava/lang/String;[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeKnownStems)},
-    {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[F)Z",
+    {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[I[F)Z",
      reinterpret_cast<void*>(nativeExplainScore)},
-    {"nativeLoadUserTrigrams",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)V",
-     reinterpret_cast<void*>(nativeLoadUserTrigrams)},
-    {"nativeLoadUserTripleTotals",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[J[J)V",
-     reinterpret_cast<void*>(nativeLoadUserTripleTotals)},
-    {"nativeDropUserTriples",
-     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V",
-     reinterpret_cast<void*>(nativeDropUserTriples)},
-    {"nativeLoadUserClocks", "(J[Ljava/lang/String;[J[J)V",
-     reinterpret_cast<void*>(nativeLoadUserClocks)},
-    {"nativeContextLinks",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[I[J[I[J)I",
-     reinterpret_cast<void*>(nativeContextLinks)},
-    {"nativeLinksHeld", "(JLjava/lang/String;Z)I", reinterpret_cast<void*>(nativeLinksHeld)},
     {"nativeLearnable", "(J[Ljava/lang/String;[Z)V", reinterpret_cast<void*>(nativeLearnable)},
-    {"nativeLanguageLinks",
-     "(JLjava/lang/String;Z[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I[J[J[I)I",
-     reinterpret_cast<void*>(nativeLanguageLinks)},
+    {"nativePacksSpelling", "(J[Ljava/lang/String;[I)V",
+     reinterpret_cast<void*>(nativePacksSpelling)},
     {"nativeDecodeGesture",
-     "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[Ljava/lang/String;)I",
+     "(J[F[F[JILjava/lang/String;Ljava/lang/String;[I[Ljava/lang/String;[F[Z"
+     "[Ljava/lang/String;)I",
      reinterpret_cast<void*>(nativeDecodeGesture)},
     {"nativeSetPersonalModelEnabled", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPersonalModelEnabled)},
@@ -1752,8 +1593,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeDominantLanguageTag)},
     {"nativePackTag", "(JI)Ljava/lang/String;", reinterpret_cast<void*>(nativePackTag)},
     {"nativeAnswerAs",
-     "(JILjava/lang/String;[Ljava/lang/String;[F[Z[Ljava/lang/String;[Ljava/lang/String;[Z[Z"
-     "[Z[Z)I",
+     "(JILjava/lang/String;[I[Ljava/lang/String;[F[Z[Ljava/lang/String;"
+     "[Ljava/lang/String;[Z[Z[Z[Z)I",
      reinterpret_cast<void*>(nativeAnswerAs)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},

@@ -1,0 +1,9 @@
+^ |keys
+^ k|keys
+^ ke|keys
+^ key|keys
+^ |a
+^ |test
+^ t|test
+^ te|test
+^ tes|test

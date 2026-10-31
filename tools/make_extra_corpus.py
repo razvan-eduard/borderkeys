@@ -6,7 +6,8 @@
 Each case inserts a letter at a random position, one that is neither a QWERTY neighbour of the
 letters on either side of it nor a repeat of them, so reaching the intended word needs one
 deletion that no cheaper reading explains. Emitted as `mangled<TAB>intended`, read by
-`suggest_eval --autocorrect`.
+`PipelineCorpusTest`, which types each case through the app's commit, and by `suggest_eval
+--autocorrect`, which ranks it on the strip.
 
 Cases whose mangled form is itself a dictionary word are skipped.
 

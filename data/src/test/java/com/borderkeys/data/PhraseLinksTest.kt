@@ -3,8 +3,6 @@
 
 package com.borderkeys.data
 
-import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserPairContext
 import com.borderkeys.data.entity.UserPhraseClock
@@ -29,10 +27,6 @@ class PhraseLinksTest {
         val context = UserPairContext("ro", "vreau", 7L, 5L, 8L)
         assertEquals(listOf("vreau"), context.row().context)
         assertEquals(context, context.row().toPairContext())
-        assertEquals(
-            LinkUpdate("ro", listOf("vreau"), "să", 2, 4L),
-            LearnedBigram("ro", "vreau", "să", 2, 4L).update(),
-        )
     }
 
     @Test
@@ -43,10 +37,6 @@ class PhraseLinksTest {
         val context = UserTripleContext("ro", "mi", "e", 7L, 5L, 8L)
         assertEquals(listOf("mi", "e"), context.row().context)
         assertEquals(context, context.row().toTripleContext())
-        assertEquals(
-            LinkUpdate("ro", listOf("mi", "e"), "dor", 2, 4L),
-            LearnedTrigram("ro", "mi", "e", "dor", 2, 4L).update(),
-        )
     }
 
     @Test

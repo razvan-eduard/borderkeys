@@ -34,8 +34,8 @@ that allocate, and what lets most of the logic be tested on a JVM with no device
 
 | Module | What lives there |
 |---|---|
-| `:keyboard` | The IME itself. Kotlin for the input method, the typing flow, views and policy; C++ for the engine, the trie, the n-gram model, the personal model, the touch model and both swipe decoders. |
-| `:data` | Room + SQLCipher. The durable copy of everything learned (words, phrases, the heatmap's totals), the clipboard, language packs, themes, drafts. |
+| `:keyboard` | The IME itself. Kotlin for the input method, the typing flow, views and policy; C++ for the engine, the trie, the n-gram model, the personal model's working copy, the touch model and both swipe decoders. |
+| `:data` | Room + SQLCipher. The durable copy of everything learned (words, phrases, the heatmap's totals) and the lookup the engine's personal model is handed from, the clipboard, language packs, themes, drafts. |
 | `:effects` | The particle effects, drawn on a `Canvas` by the keyboard and by the settings preview alike. |
 | `:settings` | The settings application, Jetpack Compose. Never on the typing path. |
 | `:i18n` | Every string the user can read, as JSON catalogues in twenty-two languages. No hardcoded text anywhere else. |
@@ -51,7 +51,7 @@ for it are absent from the binary rather than disabled in it.
 ```
 ime/          the input method, the views, the policy objects, and the dictionary loads
 typing/       the typing flow: TypingOrchestrator and the flows it drives
-predict/      the Kotlin side of the engine: threading, queueing, the learning buffer
+predict/      the Kotlin side of the engine: threading, queueing, the learning buffer, the working copy
 cpp/          the engine
 cpp/gesture/  both swipe decoders
 ```
@@ -120,7 +120,7 @@ one from the other, and it never was the answer to that question.
    |---|---|---|---|---|
    | `Primary` | always | the packs the request is [restricted to](#which-pack-a-request-is-restricted-to), or every pack | by length | yes |
    | `OtherPacks` | a restriction applied, the lock is not strict, and another pack could read the letters more closely than `Primary`'s closest reading | every other pack, keeping only [closer readings](#closer-readings) | by length, lowered to what outmatches `Primary` | yes |
-   | `UserModel` | something is typed | the personal trie | — | yes |
+   | `UserModel` | something is typed | the personal words' trie (`WordTable`) | — | yes |
    | `Wide` | something is typed and nothing has been found | every pack | `kFallbackEditCost` | no, the strip only |
    | `NextWord` | nothing is typed | the personal successors (the triples after the last two words, then the pairs after the last one) and phrases | — | yes |
 
@@ -129,10 +129,11 @@ one from the other, and it never was the answer to that question.
    cannot cross. With nothing typed, `searchNextWord()` instead walks the pack's successor index
    for the context word -- or the sentence-start list -- keeping the `kSuccessorWalk` strongest
    pairs and scoring those in full, then the 512-word frequent shortlist.
-4. The answer tiers, each overriding the one before: the corrections heap, then the respelling,
-   then the exact spelling. Then the main heap drains and the completion cap applies. Both heaps
+4. The answer tiers, each overriding the one before: the correction heap, then the respelling,
+   then the exact spelling. Then the [candidate sets](#the-candidate-sets) drain, the
+   continuations and the other candidates merged best first. The sets and the correction heap
    order equal scores by the word's unigram log-probability, then by pack and word index
-   (`Candidate::ranksBelow`), so a tie never depends on the order the walk met the words. A word
+   (`Candidate::ranksBelow`); a tie does not depend on the order the walk met the words. A word
    the packs spell exactly as typed keeps the strip's last place when the drain leaves it out
    (`keepTypedSpelling`); under a strict language lock only the decided language's spelling does.
 5. The [tap decoder](#heavy-typos-read-from-the-taps--engine_decodecpp) reads the typed word
@@ -184,15 +185,15 @@ real flow:
 | Interface | In the app | In the JVM tests |
 |---|---|---|
 | `FieldEditor` | `ConnectionFieldEditor`, over the `InputConnection` | `FakeFieldEditor` |
-| `EnginePort` | `PredictionEngine`, on its worker thread | `QueuedEngine`: the host JNI bridge, drained by the test |
+| `EnginePort` | `PredictionEngine`, on its worker thread, with the personal model's working copy | `QueuedEngine`: the host JNI bridge and the same working copy, drained by the test |
 | `TypingHost` | the service: the views, the strip, effects and stats | `FakeTypingHost` |
 | `RingUi` | the service: the swipe ring's view, its steering and its timeout | `FakeRingUi` |
-| `LearningStore` | Room, through the service | an in-memory store |
+| `LearningStore` | `DictionaryLearningStore`: the personal dictionary on Room, through the process's ordered worker | the same store on tables in memory, its worker on a thread the rig steps |
 | `TypingClock` | the system clocks | a clock the test moves |
 
 ### The flows
 
-The orchestrator drives eight flows, each a `TypingFlow`. The lifecycle is `final` in the base
+The orchestrator drives nine flows, each a `TypingFlow`. The lifecycle is `final` in the base
 class — `startField`, `finishField`, `applySettings`, `userUnlocked`, `shutdown` — so the field generation, the
 policy and flushing exactly once per field are written once. A flow supplies only what it does
 when a field starts (abstract: every flow states what it resets), ends, or the settings change,
@@ -200,11 +201,12 @@ and when the keyboard goes.
 
 | Flow | Owns |
 |---|---|
+| `LanguageFlow` | The language being written as the keyboard names it: the language lock and the preferred language each field starts with, the pack the last answer leaned on, and the language every request reads and every commit is learned under (`CommitLanguage`) |
 | `LearningFlow` | What is learned: the words, pairs and triples, and where the taps land; the buffer, its flush and its gate |
 | `ShiftFlow` | Shift, caps lock and auto-shift, and the casing of the strip's words and a swipe's candidates |
 | `SpacingFlow` | The spaces the keyboard adds or takes back on its own: after a mark, before one, the full stop two spaces make, the space typed out of habit; none in a verbatim field |
 | `TerminalWriter` | A terminal: each key out at once as the key event that carries it |
-| `CommitFlow` | The commit decision (`WordCommit`, its rules a first-claim-wins chain of `CommitRule`s), the pending correction and its revert, and the corrections a change of language leaves wrong |
+| `CommitFlow` | The commit decision (`WordCommit`, its rules a first-claim-wins chain of `CommitRule`s), the pending correction and its revert, the words put back with backspace in the field, and the corrections a change of language leaves wrong |
 | `SuggestionFlow` | The requests, the word last asked about, the answer a delimiter applies, the strip's row |
 | `SwipeFlow` | A swipe between its decode and its word, and the words its ring offers |
 | `AccentFlow` | An accent modifier (dead key) waiting for its letter, latched or locked, and a compose sequence being spelled against `ComposeSequences` |
@@ -255,17 +257,18 @@ before `the`. Autocorrect read the strip's first entry, so it applied none of th
 two faults — the strip was reporting its ranking honestly, and the ranking was answering the
 wrong question.
 
-So the engine keeps **two heaps**, filled during the same walk, at the same moment, with no
-second pass over any dictionary:
+The engine fills the candidate sets and the correction heap during the same walk, at the same
+moment, with no second pass over any dictionary:
 
-| | `heap` | `correctionHeap_` |
+| | the candidate sets (`CandidateSets`) | `correctionHeap_` |
 |---|---|---|
-| Holds | 16 candidates | 4 (`kMaxCorrections`) |
+| Holds | `kMaxShownCompletions` continuations and `kMaxCandidates` other candidates | `kMaxCorrections` |
 | Admits | everything reached | `reachesCorrectionHeap()` **and** `plausibleCorrectionTarget()` |
 | Keyed on | `ln w + context − strictness·(kEditPenalty·cost + kCorrectionSurcharge) − kCompletionPenalty·depth` | `ln w + context − strictness·(kEditPenalty·(cost + kPastTypedCost·depth) + kCorrectionSurcharge)` |
 | Read by | the strip | `corrections()` → `AutoCorrection` |
 
-The two heaps price the letters past the typed ones differently. The strip prices each as a
+The candidate sets and the correction heap price the letters past the typed ones differently.
+The strip prices each as a
 completion, at `kCompletionPenalty`. The correction heap prices each as a letter the user left
 out, at `kPastTypedCost` key widths, and adds the surcharge to any departure from the typed
 letters.
@@ -297,7 +300,7 @@ Three consequences worth stating plainly, because each was a device report befor
   commits `believe`, not `belief`, and `reall` commits `really`, not `real`, on a margin rather
   than on a free letter. Correction-first was measured at 12.0% on mid-word typing against
   98.5% for this.
-- A `LongCompletion` never reaches the corrections heap, which is why `teh` commits `the`
+- A `LongCompletion` never reaches the correction heap, which is why `teh` commits `the`
   although `tehran` outranks it in the strip by 25.7 points.
 - A `Respelling` outranks the heap outright rather than competing in it, because the two are not
   on one scale: a proposal must clear `kCorrectionFrequencyFloor` and a respelling is exempt.
@@ -460,7 +463,7 @@ Each word is then weighed against everything else the taps could be:
   typed letters and every other decoded word put together: a wrong correction counts as a
   hundred times worse than a missed one;
 - short of that, it takes the strip's second slot when it is likelier than the typed letters
-  alone (`placeOffered`);
+  alone, moved up there when the strip lists it lower (`placeOffered`);
 - each entry of autocorrect's list is scored the same way, by a beam held to that word's path
   (`listedTotal`), and is held back (`correctionConfident`, `Situation.Uncertain`) when the
   typed letters or any one other word is more than `kEvidenceRatio` likelier. A respelling, the
@@ -491,14 +494,14 @@ left out under the strict distance setting.
 |---|---|---|
 | `kUserOnlyLogProb` | −8.0 | The log-probability for a word that exists *only* in the personal dictionary. Deliberately pessimistic and fixed: the model's own totals cannot be used, because a word confirmed 40 times out of 50 would be three quarters of that distribution — likelier than `the`. |
 | `kMaxUserBoost` | 3.0 | The ceiling on what personal evidence adds; a word added by hand takes it at any count. |
-| `kMinPersonalEvidence` | 3.0 | Effective counts (raw × learning speed) at which repetition alone *establishes* a word no pack holds — offered from the personal model, treated as a known word by autocorrect, predicted as a successor. At the cautious 0.35 multiplier that is ~9 repetitions; at the immediate 3.0 the first use clears it. One assertion (a tap on the strip, a reverted correction) establishes a word at any count. The word is learned and listed the whole time. |
+| `kDefaultLearnAfterUses` | 3 | The uses at which repetition alone *establishes* a word no pack holds — offered from the personal model, treated as a known word by autocorrect, predicted as a successor — at the default of "How soon a word or phrase is learned"; the slider sets it from 1 to `kMaxLearnAfterUses` (13). One choice ([the learning path](#the-learning-path)) establishes a word at any count. The word is learned and listed the whole time. |
 | `kUserBigramPrior` | 4.0 | Smoothing, in observations. One `vreau să` out of one `vreau` is not evidence that `să` always follows. Four, not one, because this competes with a corpus. |
 | `kMaxUserBigramBoost` | 2.5 | Ceiling on what a personal pair adds; a link chosen on purpose takes it at any count, its share certain. |
 | `kUserChainPreference` | 1.5 | How far a phrase *this* person writes may outrank what the corpus says follows. Scaled by confidence: +0.4 once, +0.8 at three, +1.3 at twenty. |
 | `kUserChainHalfLife` | 3.0 | Observations to reach half that ceiling. |
 | `kPhraseUsesPerWordUses` | 2 | Each link of a two-word phrase needs this many times the learn-after uses: the phrase note's "about twice as many repetitions", at every setting of the slider. |
 | `kPhraseMinShare` | 0.34 | Share of its context a link must hold, count over the context's total, unsmoothed. Not a count: followed by one thing nine times in ten is a habit; followed by nine different things is not. |
-| `kChosenLinkBoost` | 5.5 (`kMaxPersonalScore`) | What a link chosen on purpose, added by hand on the Learned phrases page, carries as a next word and as a phrase's first link in place of the log of its share, counted as certain: the most the word boost and the context bonus add to any other candidate, so it ranks above them all after its context, and the chain preference orders chosen links by count among themselves. Such a link also passes the two rules above at any count, ranks before unchosen links among a context's successors, and is never the budget's, the prune's or the purge's victim. A two-word suggestion scores as its first link as the next word plus its second link as the next word after the first, each the log of its smoothed share plus `kUserChainPreference` by its count, so it starts under its first word and climbs over it once the second word is what usually follows the first. |
+| `kChosenLinkBoost` | 5.5 (`kMaxPersonalScore`) | What a link chosen on purpose, added by hand on the Learned phrases page or picked inside a phrase, carries as a next word and as a phrase's first link in place of the log of its share, counted as certain: the most the word boost and the context bonus add to any other candidate, so it ranks above them all after its context, and the chain preference orders chosen links by count among themselves. Such a link also passes the two rules above at any count, ranks before unchosen links among a context's successors, and is never the budget's, the prune's or the purge's victim. A two-word suggestion scores as its first link as the next word plus its second link as the next word after the first, each the log of its smoothed share plus `kUserChainPreference` by its count, so it starts under its first word and climbs over it once the second word is what usually follows the first. |
 
 ### Search bounds
 
@@ -510,8 +513,8 @@ left out under the strict distance setting.
 | `kMaxRunAhead` | 2 | An insertion advances the trie without consuming input, so it would otherwise recurse forever. |
 | `kMaxEndpoints` | 96 | |
 | `kArenaBytes` | 512 KiB | Bump allocator, reset per request. |
-| `kMaxCandidates` | 16 | The strip shows three; the rest feed the gesture decoder and reranking. |
-| `kMaxShownCompletions` | **4** | See below. |
+| `kMaxCandidates` | 16 | The candidates other than continuations of the letters typed one request keeps, the most one request returns, and the words one swipe's decode keeps. |
+| `kMaxShownCompletions` | **4** | The continuations of the letters typed one request keeps; see [the candidate sets](#the-candidate-sets). |
 
 `visitBudget_` is reset **per pack**, inside `searchPacks`, not once per request. A shared
 counter let one pack's fuzzy walk exhaust it before a later pack ran, silently starving that
@@ -522,19 +525,23 @@ requests could return different suggestions.
 The frame stack is LIFO, so branches pushed **first** are explored **last** and can be starved.
 This is why the apostrophe insertion is pushed last in its loop — so it is explored first.
 
-### The completion cap
+### The candidate sets
 
-Nothing is mis-scored: every continuation earns its place. The trouble is that a short stem has
-a great many of them and they arrive *as a block*, pushing corrections past the three or four
-slots anyone looks at. Measured through `explainScore`: for `teh`, `the` is 7.8 points **better**
-on the language model and loses by 35 points of edit penalty — a constant floored at 15 and so
-not adjustable.
+A request keeps two bounded heaps over storage the engine holds (`CandidateSets`): the best
+`kMaxShownCompletions` continuations of the letters typed, and the best `kMaxCandidates` other
+candidates. Each search site offers a word to the set it belongs to. The pack's words go through
+`offerBoosted`, which adds the personal boost and passes over a word that even the largest boost
+cannot lift past its set's floor; the walk tests a word against the lower of the two floors
+before it reads the word's text. The personal model's own words are offered as scored. The
+request drains both sets, merged best first by `Candidate::ranksBelow`, at most
+`kMaxCandidates` of them.
 
-So `kMaxShownCompletions = 4` is applied **after** draining, never during the search. The heap
-still ranks them all first, so the four kept are the best of them rather than whichever the walk
-reached first. A continuation is recognised from its text (`continuesTyped`) rather than recorded
-on the candidate, because `Candidate` is twelve bytes of plain data crossing JNI on a path that
-may not allocate.
+`continuesTyped` recognises a continuation from its text: it reads the word's folded letters
+one at a time (`FoldedLetters`, the reader `foldUtf8` folds with) against the folded letters
+typed, held for the request's search, and stops at the first that differs. A word the reader
+refuses with `kMaxComposing` as its room continues nothing: one with more letters, or with any
+character after its `kMaxComposing`-th. With nothing typed no word continues, and the swipe
+decoder's words go through a heap of their own.
 
 ---
 
@@ -553,9 +560,10 @@ Everything that can stop a correction, in the order it applies.
    7.81) from junk (`cr` 3.78, `eh` 3.32) cleanly. A spelling another active pack holds counts
    when it clears that pack's floor: `great` is rare in the Romanian list and common in the
    English one, and it is the same word in both.
-3. **`Engine::personalWordEstablished`** — a learned word no pack holds is offered, counts as
+3. **`Engine::establishedPersonalEntry`** — a learned word no pack holds is offered, counts as
    a known word, and is predicted after its context only once *established*: chosen on purpose
-   at least once, or written `kMinPersonalEvidence` effective times. Until then it is a count.
+   at least once, or written as many times as "How soon a word or phrase is learned" asks
+   (`PersonalScore::established`). Until then it is a count.
 
 ### In `AutoCorrection.pick`
 
@@ -603,6 +611,13 @@ rather than a correction:
   stems it vouches for, one language at a time, beside the other per-request answers, so the
   delimiter blocks on nothing.
 
+### In the commit decision
+
+`WordCommit`'s put-back claim, after the person's own text shortcut: a word whose correction was
+put back with backspace in this field stays as typed, so neither a bundled rewrite nor
+autocorrect claims it and the strip outlines nothing for it. `CommitFlow` keeps the field's
+put-back words, keyed as the personal dictionary keys a word, and starts each field with none.
+
 ### Cross-pack agreement
 
 `packsAgreeProperNoun()` — with several packs active, **every** pack that knows a word must agree
@@ -637,7 +652,9 @@ A word the user blocked is matched by its exact spelling, case aside: blocking `
 dictionary (`Engine::setBlockedWords`). It is never offered, on the strip, as a next word or
 from a swipe, and the next candidate takes its slot. It is never a correction, and it is not a
 known word, so autocorrect may replace it when typed: `maine` becomes `mâine`. `RefusedWords`
-keeps both lists out of learning.
+keeps both lists out of learning. A block forgets what was learned of the word the same way, case
+aside: its rows of every case and language, its pairs, triples and learned corrections
+(`DictionaryRepository.block`).
 
 ### Before the first unlock
 
@@ -662,31 +679,59 @@ the user commits a word — types or swipes it and moves on, or picks it from th
 the entire learning rule.
 
 **Typed and chosen are two different facts.** Every commit raises `count`. Only a choice raises
-`asserted`: a tap on the strip (the typed word's own chip included), a correction put back
-with backspace, or an add by hand on the Learned words page, which raises `added` too, the
-count the page's filter reads. A word no pack holds is *established* — offered as a completion, treated as a
+`asserted`, by one each time: a pick on the strip other than the word it leads with (the
+outlined correction, else the letters typed, else the first prediction, behind the typed chip
+while that chip can put a correction back), the typed chip, a correction the typed chip puts
+back, a wedge of the swipe ring below the top one, under the finger or tapped, and an add by hand
+on the Learned words page, which raises `added` too, the count the page's filter reads. The
+keyboard's own offer is counted and not chosen: the outlined correction, the ring's top word, its
+timeout and a lift with nothing under the finger, and a correction put back with backspace. A
+word put back with backspace stays as typed for the rest of the field (`CommitFlow` keeps the
+field's put-back words, `WordCommit` leaves them to the person's own text shortcut alone) and is
+corrected again in the next field until its uses establish it. A phrase picked from the strip
+raises the `asserted` of the pairs and the triples inside it, in the lookup as in the rows, never
+of its words, but over typed letters its first word is the one chosen. A
+word no pack holds is *established* — offered as a completion, treated as a
 known word by autocorrect, predicted after its context — once it has been asserted at all, or
-written `kMinPersonalEvidence` effective times (three at the balanced setting). Until then it is
+written as many times as "How soon a word or phrase is learned" asks (three by default). Until then it is
 recorded and listed. Words the packs already hold need none of this — `knownSpelling` answers
 from the packs first.
 
 **Sentence openers are learned too.** A word committed with nothing before it — an empty
 field, or a sentence end or line break before it — is recorded as a pair under a sentence-start
-marker the personal model reserves (`\x02start`, a word no key can type), and at a sentence
-start the engine asks the personal model for that marker's successors before the packs' own
+marker the lookup hands the word table at every load (`UserBigram.SENTENCE_START`, a word no key
+can type, which only Kotlin names), and at a sentence start the request names that marker as the
+word before, so the slice it hands holds the marker's successors, offered before the packs' own
 openers fill the remaining slots. The Learned phrases page lists such a pair as the word "at the
 start of a sentence".
 
 **The learning switch gates both halves.** Off, nothing typed is recorded and nothing personal
 is offered: the dictionaries alone answer, exactly as in a private field. Switching it off asks
-first, then forgets everything learned, the heatmap included.
+first, then forgets everything learned, the heatmap included. What a field gathered and had not
+yet written, dropped as a private field starts or Learning goes off, never reaches the personal
+dictionary: the lookup counted those uses at their commits, so once anything is dropped, or a
+commit is still on its way, the keyboard reads the personal model again from the dictionary
+(`TypingHost.reloadPersonalModel`), and no link row of a commit is kept until it has. Every
+reload does the same: once the engine settles, what waits is written and the link rows still to
+come are kept out, computed as they are from the model being replaced, until the engine settles
+again after the load (`PersonalModelReload`, `LearningFlow.linksStale`). The two switches differ:
+the Learning switch in the settings drops what waits, while pressing Disabled on the quick
+actions writes what the field gathered, its words, links and taps, a commit still on its way
+included once it comes back, and then closes the gate; pressing it again opens the gate on the
+same field, the uses before the press still counted. A gate that opens in the open field, by
+either switch or the unlock, gives the next word no pair and the one after it no triple: the
+words before it were written while it was closed. Before the personal model's first load a
+commit learns nothing in it; the load reads its word from the dictionary.
 
 ```
 user commits a word  (types a delimiter or Enter after it, swipes it, or picks it from the strip)
   └─ LearningFlow              the gate; the word, its pair and triple, and its taps
-      └─ LearningBuffer        in-memory, debounced; carries count, deliberate capital, assertion
-          └─ Room (:data)      the one durable copy, SQLCipher
-          └─ UserModel (C++)   rebuilt from Room at every start
+      ├─ PersonalLookup        on the engine's thread, loaded from Room; a commit counts its word and links here
+      │   ├─ WordTable (C++)     the words the lookup puts
+      │   └─ ContextSlice (C++)  the links of the context a request names, handed before it
+      └─ LearningBuffer        in-memory, debounced; the words' uses, capitals and choices, the link rows the lookup changed
+          └─ OrderedWorker     one thread, the personal dictionary's reads and writes in order
+              └─ Room (:data)  the one durable copy, SQLCipher
 ```
 
 **Why the buffer exists.** A key press has two milliseconds to reach `InputConnection`. An
@@ -695,26 +740,111 @@ memory and flush when the buffer is old enough, full enough, or the field ends
 (`LearningFlow.onFieldFinished`). `LearningBuffer` is free of Android and of coroutines — a
 counter with a clock passed in — so the debounce and the eviction are testable on the JVM.
 
-**Structure.** `UserModel` is a node-per-character trie with a sorted child list, keyed by
-folded letters, each node holding one entry per spelling that folds to it, case aside. Insertion is
-off the hot path by construction; prefix lookup is on it, and is a binary search per character
-over a list almost always one or two entries long. A mutable double-array trie would have to be
-rebuilt on nearly every insertion. The pairs and triples sit beside it, one store per language:
-each store keys its links by their entries in hash maps, with every context's links and its
-total, so a count, a total or a context's successors is one lookup however many are held.
+**One ordered worker.** Every read and write of the personal dictionary but its flows runs on one
+worker (`OrderedWorker`, `DataGraph.personalWorker`, the thread `borderkeys-personal`), one task
+at a time in the order sent, each to its end: the keyboard's flushes and its clean-up, the
+settings pages' and the onboarding's edits, a restore's dictionary part, the personal model's
+rows read at start and at every reload, the heatmap's load. A flush, its words, pairs, triples and taps, is one
+transaction. So a forget sent after a flush is applied after it and stays, and a load sees every
+write sent before it. The keyboard hands a flush over without waiting (`DictionaryLearningStore`);
+at shutdown it sends the last batch and
+waits at most `FINAL_FLUSH_TIMEOUT_MILLIS` while the worker drains, then stops its thread; past the
+wait the thread finishes on its own, and the next task starts it again.
 
-**One store per language.** A pair or triple belongs to the language it was written in, its
-primary subtag (`ro`, `en`, `es`): the pack the engine answers in when the word is committed,
-else the preferred language's pack, else the heaviest active one (`Engine::personalLanguagePack`).
-Every answer names that language (`NativePredictor.TEXT_LANGUAGE`), `LearningFlow` files the
-next pairs and triples under it, and the engine reads only that language's store. The words
-themselves stay in one table for every language. Words and links are keyed in lower case with
-their marks kept, in the database and in the engine alike: `masă` and `masa` are two words with
-pairs of their own. The engine's trie is walked by folded letters, so a prefix typed without its
-marks still reaches both spellings.
+**Every edit reaches the personal model.** The settings pages, the onboarding, a restore and the
+clean-up write through `DictionaryRepository`, which hands each edit to the personal model of the
+keyboard running in the same process (`PersonalModelHost`, `KeyboardPersonalModel`, attached once
+the user has unlocked); with no keyboard running only the tables are written, and the next load
+reads them. Each edit runs under the loads' lock, after every commit handed before it. An add by
+hand, of a word or a phrase, a block, the trim of *Words kept* and the clean-up's purge change the
+lookup in place: the tables are written first, then the lookup makes the same change on the engine's
+thread, the word table takes every word it changed (a deleted word keeps its id, the deleted row's
+counts taken out of it and what the lookup counted beyond them kept), a block drops what of the word
+waits to be written, in every case and language, with its pairs and triples, and the link rows it
+changed are written over the rows waiting (`LearningFlow.writeEdit`), so the tables end as the
+lookup holds them whatever commit came in between; while the links are stale the rows are dropped,
+the reload to come reading the edit from the tables. A word added by hand is counted and stored in
+the language it is added in, its locale's primary subtag. A forget, of a word, its phrases in any
+case whether or not a case of it is held, of a phrase or of everything, a restore and the clean-up's
+halving and deletions read the personal model again instead: once the engine settles, what waits is
+written, then the edit, which forgets what of it was just written, and the model is loaded. A block,
+an unblock and a restore hand the engine and the learning the blocked words again. A change to what
+a load reads, the word limit, the fade or the offensive-word switch, reads the personal model again
+(`PersonalModelLoad.Settings`); no other setting does (`PersonalModelWritesTest`,
+`TypingScenarioTest`).
 
-**The budget** (`PhraseBudget`, `PhraseRecorder` in `:data`). The database is the store; the
-engine holds what it loads and mirrors what the store gives up.
+**Structure.** The engine's words are a `WordTable`: a node-per-character trie with a sorted
+child list, keyed by folded letters, each node holding one entry per spelling that folds to it,
+case aside. Insertion is off the hot path by construction; prefix lookup is on it, and is a binary
+search per character over a list almost always one or two entries long. A mutable double-array
+trie would have to be rebuilt on nearly every insertion. The engine holds no pairs or triples of
+its own: before a request, Kotlin hands it the links of that request's context alone (the
+slice, below), and a link's count is a scan of the few that follow one context.
+
+**Kotlin hands the engine its words.** `PersonalLookup` (`:data`), on the engine's thread, holds
+every word with its case forms, its uses in each language (below) and the id the word table gave
+it. `PersonalSpelling` makes a word's forms one entry: their counts summed, and the spelling
+served is the form's added by hand, else the most used, else the last used. A load hands the
+table every word, then the sentence start and each word the loaded links name, with no counts of
+their own; ids are given densely in that order. A commit counts its word in the lookup, and the lookup puts every word whose entry
+changed, the counted word and each of the two before it when new, under its id, a new word taking
+the next one, before the lookup records the pair and the triple; the engine counts and merges
+nothing. Each id comes back with whether an active pack knows the word. The lookup records the
+pair when the engine counts the word before and the word learnable (`nativeLearnable`), and the
+triple when the word two before is too; the sentence start is learnable without asking, and a
+link needs both its words held and its last two different (`PersonalLookup.commitLinks`).
+
+**Kotlin hands the engine its links, one context at a time.** A request names its context by a
+key: the language's id and the ids of the word before (the sentence start's when there is none)
+and of the one before that, each `SliceRows.NONE` for a word not held. On the engine's thread,
+before the request runs, the working copy hands the engine that context's slice
+(`EngineWorkingCopy.contextFor`, `nativePushSlice`) unless the engine holds it already, the same
+key with the lookup unchanged since. The slice is every pair after the word before and every
+triple after the two, in the order the engine offers them (chosen on purpose first, then the most
+used, then the first recorded), each by its last word's id with its count, its choices and its
+context's observations at its last use; each context's total and observations; and, for each of
+the first `SliceRows.MAX_HOPS` pairs, the first pair after that pair's word with the total of that
+word's context, a phrase's second link. The engine reads it only when it is the request's
+context's and never writes it (`ContextSlice`): the first eight links of each kind are the
+next-word successors, the first one's share the ceiling, any one's share a candidate's context
+bonus, and a hop a phrase's second link. A load of the words empties it, its ids then naming
+other words (`ContextSliceBridgeTest`, `LookupLinksMatchEngineLearningTest`).
+
+**One store per language.** A pair or triple belongs to the language it was written in, a
+primary subtag (`ro`, `en`, `es`), and Kotlin decides it. Every answer names the pack it leaned
+on (`NativePredictor.TEXT_ANSWER_PACK`): the pack the request was restricted to, else the
+heaviest active one (`Engine::answerPack`). The language is that pack's, else the input-method
+subtype's until an answer in the field or subtype names one (`CommitLanguage`, held by
+`LanguageFlow`); a subtype naming no language, with no pack answering, gives `und`, a language
+like any other. Each request names it in its context's key, and the engine reads the slice of
+that context in that language alone; a word committed is learned under it, its row's and its
+pair's and triple's `language` alike. The words stay in one table for every language,
+counted in each (below). Words and links are keyed in lower case with their marks kept, in the
+database, the lookup and the engine alike: `masă` and `masa` are two words with pairs of their
+own. The engine's trie is walked by folded letters, so a prefix typed without its marks still
+reaches both spellings.
+
+**A word is counted in each language.** The personal dictionary keeps one row per spelling and
+language (`user_words`, keyed by both), and a commit adds to the row of the language it is committed
+in. A row learned before version 14 has no language (`UserWord.UNPLACED`): the migration keeps each
+such row's uses, last use, capitals and adds by hand, and its choices only as its adds by hand,
+since every pick then counted as one (`WordMigration`). The lookup counts each row in its language,
+a spelling's rows as one form. At every load it places the uses in no language known by evidence: in
+the language of each active pack that spells one of the word's forms, in any case but a name only in
+its own (`nativePacksSpelling`), else in each language of the links it is a word of, else in no
+language known, counted whole in each. A commit adds its uses to the language it is committed in.
+Uses in no language known count in every language, so a word's count in a language is its uses there
+plus those. The word table is handed the word's highest count in a language an active pack is in,
+every language counting while no pack is active. A word whose count is zero there, one of a disabled
+language, keeps its row and id, every count zero, and stays in the lookup; the next load under its
+pack hands its counts again. A change of the enabled packs reloads the personal model
+(`DictionaryLoader.load`), so the placement and each word's known bit follow the packs active then
+(`PersonalLookupTest`, `WordTableBridgeTest`).
+
+**The budget** (`PhraseBudget`, run by `PersonalLookup` in `:data`). It runs once, at the commit,
+in the lookup; the flush writes what the lookup kept and deletes what it gave up, and the tables
+run no budget of their own, on a flush, a phrase added by hand or a restore (`LinkFlushTest`,
+`PhraseRecorderTest`).
 
 | Rule | Pairs | Triples |
 |---|---|---|
@@ -722,35 +852,46 @@ engine holds what it loads and mirrors what the store gives up.
 | Places for newcomers on top | 4 | 3 |
 | Established from | `DEFAULT_LEARN_AFTER_USES` uses | the same |
 | A link's age in its context | halves its score every 100 times the context is seen | the same |
-| Links a language keeps | 10,000 (`LANGUAGE_CAP`, `UserModel::kMaxBigrams`) | 10,000 |
+| Links a language keeps | 10,000 (`LANGUAGE_CAP`) | 10,000 |
 | Past the cap | pruned to 9,000 by count × ½^(links recorded since ÷ 10,000) | the same |
 
 The link just recorded never goes, nor a link chosen on purpose (`asserted`, raised by an add
-by hand), however many a context holds: the context's limit, its newcomers' places and the
+by hand and by a phrase's pick, in the lookup as in the rows), however many a context holds: the context's limit, its newcomers' places and the
 language's cap count the links not chosen on purpose, so a hand add never costs a learned link;
 the prune and the clean-up's purge leave such a link too, and its count never decays below
 one. While a context's newcomers outnumber their places,
 the newcomer seen longest ago goes; otherwise the established link with the lowest aged score. A
-restore, with nothing just recorded, lets every link compete on its aged score. A context's
+restore keeps every link it brings, each field the larger of the tables' and the file's
+(`PhraseRecorder.restore`), every word and correction alike (`DictionaryRepository.restore`), so
+a file read twice changes nothing; a word blocked here is left out with its links, and a word the
+file blocks is blocked and forgotten first. A context it fills past its limits gives up its links
+at its next commit, and a language it leaves past its cap, as a phrase added with no keyboard
+running may, is pruned by the next clean-up (`PhraseRecorder.pruneLanguages`). A context's
 total counts every use, those of links it gave up included, so a share stays a share of what
-followed; forgetting a word takes its uses out. Each link carries the context's total and the
+followed; forgetting a word takes its uses out. A context left with no link goes, in the lookup
+as in the tables, and its next use starts its total again. Each link carries the context's total and the
 language's clock when it was last seen (`contextSeen`, `languageSeen`); `user_pair_contexts`,
-`user_triple_contexts` and `user_phrase_clocks` hold the totals and clocks. A flush applies the
-budget and hands what it gave up to `EnginePort.dropLinks`. The wall-clock fade below halves
-stale counts and stale totals alike.
+`user_triple_contexts` and `user_phrase_clocks` hold the totals and clocks. A commit hands back
+the link rows it changed (`LinkWrites`): each link, context and language's clocks at its value in
+the lookup then, and the links it gave up. The buffer keeps the latest row of each key, and the
+flush writes them as they hold and deletes the links given up (`PhraseRecorder.write`), a link's
+choices and adds never below the ones the tables hold, nor a link the tables hold chosen deleted:
+a phrase added by hand or a restore may have marked it since the load; a link
+loaded faded for its time unused is written back at its faded count with the session's uses on
+top. The wall-clock fade below halves stale counts and stale totals alike.
 
 Words are capped by the *Words kept* setting (`learnedWordLimit`, 20,000 by default, 1,000 to
 50,000): the daily sweep deletes the words past that many among those not added by hand, by
-count and then recency, and the engine loads every word added by hand and then the same words
+count and then recency, and a load reads every word added by hand and then the same words
 the sweep keeps, in the same order; a word added by hand is never capped away. A word's phrases
 go when no case of it is left.
 Lowering the setting below the words already learned asks first, then deletes them at once
-(`keepWords`). `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
+(`keepWords`), in the personal model as in the tables. `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
 
 **Deliberate capitals.** A word whose first capital the user chose *themselves* — shift pressed
 for it, or a caps lock they set (`ShiftFlow.capitalByUser`), never auto-capitalise's or the
 field's doing — typed, swiped or picked from the strip, is treated as a name from then on,
-regardless of how it is typed next time (`UserModel::deliberateCapitals`). A word written all in
+regardless of how it is typed next time (`WordTable::deliberateCapitals`). A word written all in
 capitals, two letters or more, is learned as written and never as a name (`LearningFlow`). A
 word a pack knows keeps the pack's casing.
 
@@ -792,9 +933,9 @@ Every total halves each half-life since its last tap (`KeyTouches.decayed`, `mer
 way of holding the phone takes over.
 
 **Forgetting.** Switching Learning or the Heatmap off drops the taps not yet written at once;
-switching the Heatmap off asks, then deletes the table, and Forget everything deletes it too.
-An edit made on the settings screen fires `DictionaryRepository.edits`, and the keyboard reloads
-the current bucket's totals. The table is left out of backups.
+switching the Heatmap off asks, then deletes the table, and Forget everything deletes it too;
+either drops the taps not yet written and reads the current bucket's totals again
+(`PersonalModelHost.forgetTouches`). The table is left out of backups.
 
 **The preview.** The settings screen draws a bucket's stored totals on the keyboard preview
 (`KeyboardCanvasView.touchGlows`, which the keyboard itself never sets): each key's glow centred
@@ -1249,7 +1390,8 @@ the letters it types.
 It is held out on both counts: the pairs and triples are counted from the Leipzig corpora, and
 the grammar of the five languages read on their own treebank from its train and dev splits only;
 of the word forms that occur only in the test split, none carries a tag in their `.pos` files.
-Italian reads UD Italian PUD, which is not among the treebanks its grammar comes from.
+Italian reads the half of UD Italian PUD that its dev text leaves (`docs/testing.md`), and PUD is
+not among the treebanks its grammar comes from.
 
 Top three with context, and the gain in points over the same request without the words before,
 on the packs of 30 September 2026:
@@ -1281,9 +1423,8 @@ Things that will silently break if not respected.
   there are no child views per key. The flick labels are eight packed slots per key in
   `KeyboardGeometry`, read by index like the labels. `InlineSuggestionsHostView` is the one place framework
   `View`s are hosted, and it has no alternative.
-- **`Candidate` is twelve bytes of plain data** crossing JNI on a path that may not allocate. Do
-  not add fields to it; `continuesTyped` recognising a completion from text rather than a flag is
-  this rule in action.
+- **`Candidate` is plain data** crossing JNI on a path that may not allocate. Fields are not
+  added to it; `continuesTyped` recognises a continuation from its text.
 - **`bkd_format.hpp` is the authority** on the pack layout. `build_dict.py --selftest` is what
   proves the Python still agrees with it.
 - **`BundledDictionaries.kt`'s word counts and byte sizes are load-bearing.** `repairBundledPacks`
@@ -1292,7 +1433,8 @@ Things that will silently break if not respected.
 - **Packs are build output**, never committed.
 - **The engine is single-writer by construction** — a bump allocator, no locks — so it needs one
   thread that is always the same thread. That is why `PredictionEngine` owns a dedicated
-  `HandlerThread` rather than using `Dispatchers.Default`.
+  `HandlerThread` rather than using `Dispatchers.Default`, reached through `EngineThread` so its
+  tests step it by hand.
 - **Two privacy checks**, not one. See [the gates](#privacy-gates).
 - **The typing package holds no Android class.** `com.borderkeys.typing` takes only the
   constants of `KeyEvent` and `EditorInfo`; the field, the engine, the views and the database

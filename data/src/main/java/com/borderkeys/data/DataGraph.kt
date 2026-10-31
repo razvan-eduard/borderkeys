@@ -179,7 +179,17 @@ object DataGraph {
         ClipboardRepository(database.clipboardDao(), themes.preferences, ClipMediaStore(unlockedContext))
     }
 
-    val dictionary: DictionaryRepository by lazy { DictionaryRepository(database) }
+    /**
+     * The one thread the personal dictionary's reads and writes run on, in the order they are
+     * asked for, from the keyboard and the settings alike; a failure no caller awaits is logged.
+     */
+    val personalWorker: OrderedWorker by lazy {
+        OrderedWorker(SingleThread(PERSONAL_THREAD)) { error ->
+            android.util.Log.e(LOG_TAG, "a personal dictionary task failed", error)
+        }
+    }
+
+    val dictionary: DictionaryRepository by lazy { DictionaryRepository(database, personalWorker) }
 
     val languagePacks: LanguagePackRepository by lazy {
         LanguagePackRepository(
@@ -208,4 +218,9 @@ object DataGraph {
 
     /** The device-protected file [lockedAppearance] is kept in. */
     const val LOCKED_APPEARANCE_FILE = "keyboard_locked_appearance.json"
+
+    /** The name of [personalWorker]'s thread. */
+    private const val PERSONAL_THREAD = "borderkeys-personal"
+
+    private const val LOG_TAG = "BorderKeys"
 }

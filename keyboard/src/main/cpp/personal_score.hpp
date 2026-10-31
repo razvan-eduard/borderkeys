@@ -8,13 +8,14 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "user_model.hpp"
+#include "context_slice.hpp"
+#include "word_table.hpp"
 
 namespace borderkeys {
 
 // What the personal dictionary adds to a candidate's score: a boost for a word learned on its
-// own, and a bonus for a word learned after the words before the cursor, in the store of the
-// language the request reads.
+// own, from the word table, and a bonus for a word learned after the words before the cursor,
+// from the context slice of the context the request names.
 class PersonalScore {
 public:
     /** The most a learned word's own uses add. */
@@ -44,7 +45,7 @@ public:
      */
     static constexpr float kChosenLinkBoost = kMaxPersonalScore;
 
-    PersonalScore(const UserModel& model, uint32_t learnAfterUses);
+    PersonalScore(const WordTable& words, const ContextSlice& slice, uint32_t learnAfterUses);
 
     void setEnabled(bool enabled) { enabled_ = enabled; }
     bool enabled() const { return enabled_; }
@@ -101,14 +102,19 @@ public:
     bool established(uint32_t entry) const;
 
     /**
-     * Sets the context the requests that follow read: the links of [store] after [context1],
-     * and after [context2] then [context1]; -1 for none.
+     * Sets the context the requests that follow read: the slice's links when it is the one of
+     * [key]'s context and the personal model is on, else none.
      */
-    void resolve(int32_t store, int32_t context1, int32_t context2);
+    void resolve(const ContextSlice::Key& key);
 
-    int32_t store() const { return store_; }
-    int32_t context1() const { return context1_; }
-    int32_t context2() const { return context2_; }
+    /** Whether the requests read the slice's pairs, and its triples when [hasTriples]. */
+    bool hasContext() const { return context_; }
+
+    /** Whether the resolved context names the word two before, so the slice's triples count. */
+    bool hasTriples() const { return context_ && slice_.key().context2 != ContextSlice::kNone; }
+
+    /** The slice the requests read, as handed. */
+    const ContextSlice& slice() const { return slice_; }
 
     /** A learned word's boost for [count] uses: logarithmic, up to kMaxUserBoost. */
     static float wordBoostForCount(uint32_t count);
@@ -148,12 +154,11 @@ private:
      */
     float bonusFor(uint32_t count, uint32_t asserted, uint32_t total) const;
 
-    const UserModel& model_;
+    const WordTable& words_;
+    const ContextSlice& slice_;
     uint32_t learnAfterUses_;
     bool enabled_ = true;
-    int32_t store_ = -1;
-    int32_t context1_ = -1;
-    int32_t context2_ = -1;
+    bool context_ = false;
     float largestBonus_ = 0.0f;
 };
 

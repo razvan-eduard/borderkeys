@@ -3,55 +3,42 @@
 
 package com.borderkeys.predict
 
-import com.borderkeys.data.SharedNativeTextRunner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
-/** [PredictionEngine.shutdown] answers the verdict requests still queued on the prediction thread. */
-@RunWith(SharedNativeLibraryRunner::class)
-@Config(sdk = [SharedNativeTextRunner.SDK])
+/**
+ * [PredictionEngine.shutdown] on the host library, its main and prediction threads stepped by hand:
+ * the verdict requests still queued on the prediction thread are answered, and the thread stops.
+ */
 class PredictionEngineShutdownTest {
 
     @Test
-    fun `a verdict request still queued at shutdown is answered every word learnable, once`() {
+    fun `a verdict request still queued at shutdown is answered every word learnable, once, and the prediction thread stops`() {
         Pipeline.require()
-        val engine = PredictionEngine()
-        val release = CountDownLatch(1)
+        val main = SteppedThread()
+        val prediction = SteppedThread()
+        val engine = PredictionEngine(main) { prediction }
         try {
             assertTrue(engine.start())
-            val held = CountDownLatch(1)
-            var worker: Thread? = null
-            engine.learnableWords(WORDS) {
-                worker = Thread.currentThread()
-                held.countDown()
-                release.await(WAIT_SECONDS, TimeUnit.SECONDS)
-            }
-            assertTrue("the prediction thread is held", held.await(WAIT_SECONDS, TimeUnit.SECONDS))
-            val answers = CopyOnWriteArrayList<List<Boolean>>()
+            val answers = mutableListOf<List<Boolean>>()
             engine.learnableWords(WORDS) { answers += it }
+            assertEquals("the request waits on the prediction thread", emptyList<List<Boolean>>(), answers)
 
             engine.shutdown()
-            assertEquals(listOf(ALL_LEARNABLE), answers.toList())
+            assertEquals(listOf(ALL_LEARNABLE), answers)
 
-            release.countDown()
-            worker!!.join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS))
-            assertEquals(listOf(ALL_LEARNABLE), answers.toList())
+            prediction.drain()
+            main.drain()
+            assertEquals(listOf(ALL_LEARNABLE), answers)
+            assertTrue("the prediction thread has stopped", prediction.stopped)
         } finally {
-            release.countDown()
             engine.shutdown()
+            prediction.drain()
         }
     }
 
     companion object {
-        /** How long the test waits for the prediction thread at most. */
-        const val WAIT_SECONDS = 10L
-
         val WORDS = listOf("the", "zqx")
 
         /** Every word of [WORDS] learnable. */

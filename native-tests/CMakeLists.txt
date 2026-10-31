@@ -10,6 +10,10 @@ project(borderkeys_native_tests CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# A RelWithDebInfo build here compiles as the shipped library's release variant does, whatever
+# this host's CMake defaults to; scripts/timing.sh times such a build.
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
+
 set(ENGINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../keyboard/src/main/cpp)
 set(TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 set(ASSIST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../assist/src/main/cpp)
@@ -23,7 +27,8 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/letter_model.cpp
     ${ENGINE_DIR}/packed_trie.cpp
     ${ENGINE_DIR}/ngram_model.cpp
-    ${ENGINE_DIR}/user_model.cpp
+    ${ENGINE_DIR}/context_slice.cpp
+    ${ENGINE_DIR}/word_table.cpp
     ${ENGINE_DIR}/personal_score.cpp
     ${ENGINE_DIR}/proximity.cpp
     ${ENGINE_DIR}/touch_model.cpp
@@ -135,7 +140,8 @@ add_executable(gesture_replay gesture_replay.cpp)
 target_link_libraries(gesture_replay borderkeys_engine)
 target_compile_options(gesture_replay PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 
-# The binary tools/tcn_replay.py drives: gesture_replay's formats, with a TcnDecoder.
+# The binary tools/tcn_replay.py drives: gesture_replay's formats, each gesture decoded through
+# Engine::decodeGesture as the keyboard decodes a swipe, with the neural decoder on.
 add_executable(tcn_replay tcn_replay.cpp)
 target_link_libraries(tcn_replay borderkeys_engine)
 target_compile_options(tcn_replay PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
@@ -151,8 +157,94 @@ add_executable(touch_eval touch_eval.cpp)
 target_link_libraries(touch_eval borderkeys_engine)
 target_compile_options(touch_eval PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 
+# Each engine call a keystroke or a swipe makes, timed one by one, for scripts/timing.sh: a
+# measurement, read on an optimised build.
+add_executable(timing_eval timing_eval.cpp)
+target_link_libraries(timing_eval borderkeys_engine)
+target_compile_options(timing_eval PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
+
 enable_testing()
 add_test(NAME engine COMMAND borderkeys_tests)
+
+# suggest_eval --start-rows asks each run's first word, from its first letter, at each depth its
+# letters allow: the keys of the rows it writes, against data/start_rows_keys.txt.
+add_test(NAME suggest_eval_start_rows
+    COMMAND sh -c "mkdir -p start-rows && cp '${TEST_PACK}' start-rows/ro_RO.bkd && \
+'$<TARGET_FILE:suggest_eval>' start-rows --context \
+'${CMAKE_CURRENT_SOURCE_DIR}/data/start_rows_runs.txt' ro-RO --start-rows start-rows/rows.tsv \
+> /dev/null && tail -n +2 start-rows/rows.tsv | cut -f3 | \
+diff - '${CMAKE_CURRENT_SOURCE_DIR}/data/start_rows_keys.txt'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# suggest_eval --autocorrect --rows on data/strip_rows_corpus.tsv with the test pack: the
+# measures line naming the strip's first place and top three, then per row its verdicts, its key
+# (the letters typed) and its reading (the word expected and its place), against
+# data/strip_rows_expected.tsv.
+add_test(NAME suggest_eval_autocorrect_rows
+    COMMAND sh -c "mkdir -p autocorrect-rows && cp '${TEST_PACK}' autocorrect-rows/ro_RO.bkd && \
+'$<TARGET_FILE:suggest_eval>' autocorrect-rows --autocorrect \
+'${CMAKE_CURRENT_SOURCE_DIR}/data/strip_rows_corpus.tsv' ro-RO \
+--rows autocorrect-rows/rows.tsv > /dev/null && \
+diff autocorrect-rows/rows.tsv '${CMAKE_CURRENT_SOURCE_DIR}/data/strip_rows_expected.tsv'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# suggest_eval --context writes each row's sentence and genre after its key, from the corpus's
+# sentence lines, on its context rows and its start rows: against data/sentence_rows_fields.txt.
+# The same runs without sentence lines write the same rows without the fields.
+add_test(NAME suggest_eval_sentence_rows
+    COMMAND sh -c "mkdir -p sentence-rows && cp '${TEST_PACK}' sentence-rows/ro_RO.bkd && \
+'$<TARGET_FILE:suggest_eval>' sentence-rows --context \
+'${CMAKE_CURRENT_SOURCE_DIR}/data/sentence_rows_runs.txt' ro-RO --rows sentence-rows/rows.tsv \
+--start-rows sentence-rows/starts.tsv > /dev/null && \
+{ sed -n 2p sentence-rows/rows.tsv; tail -n +3 sentence-rows/rows.tsv | cut -f5-7; \
+sed -n 2p sentence-rows/starts.tsv; tail -n +3 sentence-rows/starts.tsv | cut -f3-5; } | \
+diff - '${CMAKE_CURRENT_SOURCE_DIR}/data/sentence_rows_fields.txt' && \
+grep -v '^# sentence ' '${CMAKE_CURRENT_SOURCE_DIR}/data/sentence_rows_runs.txt' \
+> sentence-rows/plain_runs.txt && '$<TARGET_FILE:suggest_eval>' sentence-rows --context \
+sentence-rows/plain_runs.txt ro-RO --rows sentence-rows/plain.tsv > /dev/null && \
+sed 2d sentence-rows/rows.tsv | cut -f1-5,8- | diff - sentence-rows/plain.tsv"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# tools/tcn_replay.py --rows over data/gestures.csv with the test pack and the shipped weights: a
+# row per gesture keyed by its id and word, and the first gesture, `the`, first once its context is
+# resolved to a sentence start: against data/tcn_rows_expected.tsv.
+add_test(NAME tcn_replay_rows
+    COMMAND sh -c "mkdir -p tcn-rows && '${Python3_EXECUTABLE}' '${TOOLS_DIR}/tcn_replay.py' \
+--binary '$<TARGET_FILE:tcn_replay>' --pack '${TEST_PACK}' \
+--weights '${CMAKE_CURRENT_SOURCE_DIR}/../keyboard/src/plus/assets/model.bkw' \
+--corpus '${CMAKE_CURRENT_SOURCE_DIR}/data/gestures.csv' --rows tcn-rows/rows.tsv > /dev/null && \
+{ tail -n +2 tcn-rows/rows.tsv | cut -f3; grep -w 'g0000 the' tcn-rows/rows.tsv; } | \
+diff - '${CMAKE_CURRENT_SOURCE_DIR}/data/tcn_rows_expected.tsv'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# touch_eval --rows on data/touch_rows_taps.tsv with the test pack and nothing trained: the
+# measures line, then per slipped word and setting its verdicts, its key (the word's place in the
+# corpus, the setting, the typed string and the word meant) and its reading, against
+# data/touch_rows_expected.tsv. The word typed as meant is no row.
+add_test(NAME touch_eval_rows
+    COMMAND sh -c "mkdir -p touch-rows && cp '${TEST_PACK}' touch-rows/ro_RO.bkd && \
+'$<TARGET_FILE:touch_eval>' touch-rows ro-RO '${CMAKE_CURRENT_SOURCE_DIR}/data/qwerty_1080.layout' \
+'${CMAKE_CURRENT_SOURCE_DIR}/data/touch_rows_taps.tsv' --train-taps 0 --test-words 10 \
+--rows touch-rows/rows.tsv > /dev/null && \
+diff touch-rows/rows.tsv '${CMAKE_CURRENT_SOURCE_DIR}/data/touch_rows_expected.tsv'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# timing_eval with the test pack on data/start_rows_runs.txt, learned as the history too, the taps
+# of data/touch_rows_taps.tsv and the first gesture of data/gestures.csv with the shipped weights:
+# one line per call, its workload, language, model and kind against data/timing_calls_expected.tsv,
+# its microseconds a number, and both `tcn` calls answered by the neural decoder.
+add_test(NAME timing_eval_calls
+    COMMAND sh -c "mkdir -p timing-calls && cp '${TEST_PACK}' timing-calls/ro_RO.bkd && \
+grep -E '^(id,|g0000,)' '${CMAKE_CURRENT_SOURCE_DIR}/data/gestures.csv' > timing-calls/gestures.csv && \
+'$<TARGET_FILE:timing_eval>' timing-calls ro-RO '${CMAKE_CURRENT_SOURCE_DIR}/data/qwerty_1080.layout' \
+timing-calls/calls.tsv --context '${CMAKE_CURRENT_SOURCE_DIR}/data/start_rows_runs.txt' \
+--history '${CMAKE_CURRENT_SOURCE_DIR}/data/start_rows_runs.txt' \
+--taps '${CMAKE_CURRENT_SOURCE_DIR}/data/touch_rows_taps.tsv' --gestures timing-calls/gestures.csv \
+--weights '${CMAKE_CURRENT_SOURCE_DIR}/../keyboard/src/plus/assets/model.bkw' > timing-calls/report.txt && \
+grep -q ', 2 of 2 tcn calls through the neural decoder$' timing-calls/report.txt && \
+cut -f1-4 timing-calls/calls.tsv | diff - '${CMAKE_CURRENT_SOURCE_DIR}/data/timing_calls_expected.tsv' && \
+! tail -n +2 timing-calls/calls.tsv | cut -f5 | grep -vqE '^[0-9]+[.][0-9]{3}$'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # --------------------------------------------------------------------------------------------
 # Fuzzing the language-pack loader.

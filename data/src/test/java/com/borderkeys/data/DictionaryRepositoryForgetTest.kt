@@ -3,21 +3,17 @@
 
 package com.borderkeys.data
 
-import androidx.room.withTransaction
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserCorrection
+import com.borderkeys.data.personal.recordUses
 import com.borderkeys.data.theme.KeyboardPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,32 +26,28 @@ class DictionaryRepositoryForgetTest {
     private val pairs = MemoryPairs()
     private val triples = MemoryTriples()
     private val clocks = MemoryClocks()
+    private val corrections = MemoryCorrections()
     private val words = mockk<UserWordDao>(relaxed = true)
-    private val database = mockk<BorderKeysDatabase>(relaxed = true)
+    private val transactor = CountedTransactor()
     private lateinit var repository: DictionaryRepository
 
     @Before
     fun open() {
-        mockkStatic(ROOM_DATABASE_KT)
-        coEvery { database.withTransaction<Any?>(any()) } coAnswers { secondArg<suspend () -> Any?>().invoke() }
         repository = DictionaryRepository(
-            database, words, mockk(relaxed = true), pairs, triples, mockk(relaxed = true), clocks,
+            testWorker(), transactor, words, mockk(relaxed = true), pairs, triples, mockk(relaxed = true), clocks,
+            corrections,
         )
     }
 
-    @After
-    fun close() {
-        unmockkStatic(ROOM_DATABASE_KT)
-    }
+    /** Records [pairUses] and [tripleUses] as typing does. */
+    private suspend fun record(pairUses: List<LearnedBigram> = emptyList(), tripleUses: List<LearnedTrigram> = emptyList()) =
+        recordUses(pairs, triples, clocks, pairUses, tripleUses)
 
     /** Pairs and a triple through "paris" in each of [LANGUAGES]. */
     private suspend fun learnParis() {
-        val recorder = PhraseRecorder(pairs, triples, clocks)
         for (language in LANGUAGES) {
-            recorder.recordPairs(
-                listOf(LearnedBigram(language, "in", "Paris", 1, AT), LearnedBigram(language, "Paris", "now", 1, AT)).map(::PairStep),
-            )
-            recorder.recordTriples(listOf(LearnedTrigram(language, "back", "in", "Paris", 1, AT)).map(::TripleStep))
+            record(pairUses = listOf(LearnedBigram(language, "in", "Paris", 1, AT), LearnedBigram(language, "Paris", "now", 1, AT)))
+            record(tripleUses = listOf(LearnedTrigram(language, "back", "in", "Paris", 1, AT)))
         }
     }
 
@@ -71,9 +63,7 @@ class DictionaryRepositoryForgetTest {
 
     @Test
     fun `forgetting every case of a word keeps the word that differs from it by a mark, and its phrases`() = runTest {
-        PhraseRecorder(pairs, triples, clocks).recordPairs(
-            listOf(LearnedBigram("ro", "pe", "masă", 1, AT), LearnedBigram("ro", "pe", "masa", 1, AT)).map(::PairStep),
-        )
+        record(pairUses = listOf(LearnedBigram("ro", "pe", "masă", 1, AT), LearnedBigram("ro", "pe", "masa", 1, AT)))
         coEvery { words.allWords() } returns listOf("masă", "Masă", "masa")
         val deleted = mutableListOf<String>()
         coEvery { words.delete(capture(deleted)) } returns Unit
@@ -83,13 +73,31 @@ class DictionaryRepositoryForgetTest {
     }
 
     @Test
+    fun `forgetting a word, blocking it or forgetting everything takes its learned corrections, those to it and after it`() = runTest {
+        suspend fun learnCorrections() {
+            corrections.merge(UserCorrection("en", "teh", "paris", "the", 1, AT))
+            corrections.merge(UserCorrection("en", "pris", "in", "paris", 1, AT))
+            corrections.merge(UserCorrection("en", "cta", "the", "cat", 1, AT))
+        }
+        learnCorrections()
+        repository.forget(listOf("Paris"))
+        assertEquals(listOf("cat"), corrections.all().map { it.word })
+        learnCorrections()
+        repository.block("PARIS")
+        assertEquals(listOf("cat"), corrections.all().map { it.word })
+        learnCorrections()
+        repository.forgetEverything()
+        assertTrue(corrections.all().isEmpty())
+    }
+
+    @Test
     fun `the sweep leaves the phrases of a word one case of which is still learned`() = runTest {
         learnParis()
         val pairsHeld = pairs.rows.size
         val triplesHeld = triples.rows.size
         coEvery { words.unconfirmedBefore(any()) } returns listOf("Paris")
         coEvery { words.allWords() } returns listOf("paris")
-        coEvery { words.wordsBeyond(any()) } returns emptyList()
+        coEvery { words.rowsBeyond(any()) } returns emptyList()
         repository.decayStaleEntries(
             keep = Int.MAX_VALUE,
             halfLifeMillis = AT,
@@ -109,7 +117,7 @@ class DictionaryRepositoryForgetTest {
         val cutoffs = mutableListOf<Long>()
         coEvery { words.unconfirmedBefore(capture(cutoffs)) } returns listOf("Paris")
         coEvery { words.allWords() } returns emptyList()
-        coEvery { words.wordsBeyond(any()) } returns emptyList()
+        coEvery { words.rowsBeyond(any()) } returns emptyList()
         repository.decayStaleEntries(keep = Int.MAX_VALUE, halfLifeMillis = shorter, unconfirmedLifeMillis = life, now = now)
         assertEquals(listOf(now - life), cutoffs)
         coVerify { words.deleteUnconfirmedBefore(now - life) }
@@ -118,11 +126,20 @@ class DictionaryRepositoryForgetTest {
     }
 
     @Test
+    fun `the clean-up prunes a language a restore left past its cap to what a language keeps`() = runTest {
+        val links = (0..PhraseBudget.LANGUAGE_CAP).map { UserBigram("en", "w$it", "x$it", 1, AT, 0L, 0L) }
+        PhraseRecorder(pairs, triples, clocks).restore(links, emptyList(), emptyList(), emptyList())
+        assertEquals(PhraseBudget.LANGUAGE_CAP + 1, pairs.countIn("en"))
+        repository.decayStaleEntries(keep = Int.MAX_VALUE, halfLifeMillis = AT, unconfirmedLifeMillis = null, now = AT)
+        assertEquals(PhraseBudget.LANGUAGE_KEEP, pairs.countIn("en"))
+    }
+
+    @Test
     fun `with Off a word used once stays, however long unused`() = runTest {
         learnParis()
         val pairsHeld = pairs.rows.size
         val triplesHeld = triples.rows.size
-        coEvery { words.wordsBeyond(any()) } returns emptyList()
+        coEvery { words.rowsBeyond(any()) } returns emptyList()
         val halfLife = PersonalWordDecay.halfLifeMillis(KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS)
         repository.decayStaleEntries(
             keep = Int.MAX_VALUE,
@@ -139,16 +156,13 @@ class DictionaryRepositoryForgetTest {
     @Test
     fun `the purge deletes a phrase used at most twice holding an unlearnable word, and keeps the rest`() = runTest {
         val most = PhraseBudget.PURGE_MOST_USES
-        val recorder = PhraseRecorder(pairs, triples, clocks)
-        recorder.recordPairs(
-            listOf(
+        record(pairUses = listOf(
                 LearnedBigram("en", "the", UNLEARNABLE, most, AT),
                 LearnedBigram("en", "a", UNLEARNABLE, most + 1, AT),
                 LearnedBigram("en", "the", "cat", 1, AT),
                 LearnedBigram("en", UserBigram.SENTENCE_START, "cat", 1, AT),
-            ).map(::PairStep),
-        )
-        recorder.recordTriples(listOf(LearnedTrigram("en", "on", "the", UNLEARNABLE, 1, AT)).map(::TripleStep))
+            ))
+        record(tripleUses = listOf(LearnedTrigram("en", "on", "the", UNLEARNABLE, 1, AT)))
         val asked = mutableListOf<String>()
         val purged = repository.purgeUnlearnable { words ->
             asked += words
@@ -169,14 +183,13 @@ class DictionaryRepositoryForgetTest {
     @Test
     fun `the purge keeps a pair and a triple whose uses rise past the threshold while the verdicts are taken`() = runTest {
         val most = PhraseBudget.PURGE_MOST_USES
-        val recorder = PhraseRecorder(pairs, triples, clocks)
         val pair = LearnedBigram("en", "the", UNLEARNABLE, most, AT)
         val triple = LearnedTrigram("en", "on", "the", UNLEARNABLE, most, AT)
-        recorder.recordPairs(listOf(PairStep(pair)))
-        recorder.recordTriples(listOf(TripleStep(triple)))
+        record(pairUses = listOf(pair))
+        record(tripleUses = listOf(triple))
         val purged = repository.purgeUnlearnable { words ->
-            recorder.recordPairs(listOf(PairStep(pair.copy(delta = 1))))
-            recorder.recordTriples(listOf(TripleStep(triple.copy(delta = 1))))
+            record(pairUses = listOf(pair.copy(delta = 1)))
+            record(tripleUses = listOf(triple.copy(delta = 1)))
             words.map { it != UNLEARNABLE }
         }
         assertTrue(purged.pairs.isEmpty())
@@ -187,12 +200,11 @@ class DictionaryRepositoryForgetTest {
 
     @Test
     fun `the purge keeps a phrase first recorded while the verdicts are taken`() = runTest {
-        val recorder = PhraseRecorder(pairs, triples, clocks)
-        recorder.recordPairs(listOf(PairStep(LearnedBigram("en", "the", UNLEARNABLE, 1, AT))))
-        recorder.recordTriples(listOf(TripleStep(LearnedTrigram("en", "on", "the", UNLEARNABLE, 1, AT))))
+        record(pairUses = listOf(LearnedBigram("en", "the", UNLEARNABLE, 1, AT)))
+        record(tripleUses = listOf(LearnedTrigram("en", "on", "the", UNLEARNABLE, 1, AT)))
         val purged = repository.purgeUnlearnable { words ->
-            recorder.recordPairs(listOf(PairStep(LearnedBigram("en", "a", UNLEARNABLE, 1, AT))))
-            recorder.recordTriples(listOf(TripleStep(LearnedTrigram("en", "in", "a", UNLEARNABLE, 1, AT))))
+            record(pairUses = listOf(LearnedBigram("en", "a", UNLEARNABLE, 1, AT)))
+            record(tripleUses = listOf(LearnedTrigram("en", "in", "a", UNLEARNABLE, 1, AT)))
             words.map { it != UNLEARNABLE }
         }
         assertEquals(listOf("the" to UNLEARNABLE), purged.pairs.map { it.previousWord to it.word })
@@ -203,26 +215,33 @@ class DictionaryRepositoryForgetTest {
 
     @Test
     fun `a purge that finds no unlearnable word opens no transaction and deletes nothing`() = runTest {
-        PhraseRecorder(pairs, triples, clocks).recordPairs(listOf(PairStep(LearnedBigram("en", "the", "cat", 1, AT))))
+        record(pairUses = listOf(LearnedBigram("en", "the", "cat", 1, AT)))
         val purged = repository.purgeUnlearnable { words -> words.map { true } }
         assertTrue(purged.pairs.isEmpty())
         assertTrue(purged.triples.isEmpty())
         assertEquals(1, pairs.rows.size)
-        coVerify(exactly = 0) { database.withTransaction<Any?>(any()) }
+        assertEquals(0, transactor.opened)
     }
 
     @Test
     fun `the purge keeps the phrases of a word the verdicts give no answer for`() = runTest {
-        PhraseRecorder(pairs, triples, clocks)
-            .recordPairs(listOf(PairStep(LearnedBigram("en", "the", UNLEARNABLE, 1, AT))))
+        record(pairUses = listOf(LearnedBigram("en", "the", UNLEARNABLE, 1, AT)))
         val purged = repository.purgeUnlearnable { words -> words.dropLast(1).map { true } }
         assertTrue(purged.pairs.isEmpty())
         assertEquals(1, pairs.rows.size)
     }
 
-    private companion object {
-        const val ROOM_DATABASE_KT = "androidx.room.RoomDatabaseKt"
+    /** [MemoryTransactor], counting the transactions it opens. */
+    private class CountedTransactor : Transactor {
+        var opened = 0
 
+        override suspend fun <T> inTransaction(block: suspend () -> T): T {
+            opened++
+            return block()
+        }
+    }
+
+    private companion object {
         /** A word the purge's test answers is not learnable. */
         const val UNLEARNABLE = "zqx"
         val LANGUAGES = listOf("en", "fr")

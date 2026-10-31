@@ -25,5 +25,10 @@
   },
   "single_letter_words": "авзійоуяює",
   "expected_beyond_ascii": [],
-  "reachability_budget": 204
+  "reachability_budget": 204,
+  "sha256": {
+    "ukr_news_2024_1M.tar.gz": "b3a5436a0f44c891f8beb71c1d7a2b0c038dafe25d4705b35fe378cb698fbb0d",
+    "ukr_newscrawl_2018_1M.tar.gz": "f7ac7122a35fc287cb0d8cb550ac68dccc59de8d91d81518a36a19d14cf723bd",
+    "ukr_wikipedia_2021_1M.tar.gz": "399f29325400856db24b596bf1b9c67189f0989244662f800cd77fb56afc7d80"
+  }
 }

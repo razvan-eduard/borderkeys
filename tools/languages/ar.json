@@ -26,5 +26,10 @@
   },
   "single_letter_words": "و",
   "expected_beyond_ascii": [],
-  "reachability_budget": 348
+  "reachability_budget": 348,
+  "sha256": {
+    "ara_news_2020_1M.tar.gz": "69a3a5b91023c347ebd93c588c9f6681864a35002742418b6093a898919fb548",
+    "ara_news_2022_1M.tar.gz": "507bad9a842ec48d91f7843b7ff198a7d222357972c591567c7ea2acc8fb5a5a",
+    "ara_wikipedia_2021_1M.tar.gz": "7814867e473c295aa1076a8afe8dfac76841a72ba05d8140d51c9a19b3e267a5"
+  }
 }

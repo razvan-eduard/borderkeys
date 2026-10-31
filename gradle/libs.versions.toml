@@ -18,6 +18,8 @@ targetSdk = "36"
 
 # Runtime libraries.
 composeBom = "2026.06.01"
+# The Compose UI test artifacts the settings tests run on, held below the Compose the rich editor brings.
+composeUiTest = "1.11.4"
 room = "2.8.4"
 datastore = "1.2.1"
 coroutines = "1.11.0"
@@ -54,6 +56,8 @@ androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", versi
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeUiTest" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeUiTest" }
 richeditor-compose = { group = "com.mohamedrejeb.richeditor", name = "richeditor-compose", version.ref = "richeditor" }
 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

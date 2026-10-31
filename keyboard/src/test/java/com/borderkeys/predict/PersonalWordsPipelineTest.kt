@@ -57,7 +57,7 @@ class PersonalWordsPipelineTest {
             val word = LEARNED
             val uses = KeyboardPreferences.DEFAULT_LEARN_AFTER_USES
             val model = PersonalModelLoad(
-                words = listOf(UserWord(word, ENGLISH, uses, AT)),
+                words = listOf(UserWord(word, language, uses, AT)),
                 pairs = listOf(UserBigram(language, PREVIOUS1, word, uses, AT, SEEN, SEEN)),
                 pairContexts = listOf(UserPairContext(language, PREVIOUS1, TOTAL, AT, SEEN)),
                 triples = listOf(UserTrigram(language, PREVIOUS2, PREVIOUS1, word, uses, AT, SEEN, SEEN)),

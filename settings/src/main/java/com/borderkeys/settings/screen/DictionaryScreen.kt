@@ -86,7 +86,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     val appearance by themes.appearance
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
     // What counts as learned, as the keyboard counts it: only those are listed and counted.
-    val learnedWords = rememberLearned(savedWords, PersonalEntries::words).size
+    val learnedWords = rememberLearned(savedWords, PersonalEntries::byLanguage).distinctBy { it.key }.size
     val learnedPhrases = rememberLearned(savedPhrases, PersonalEntries::phrases).size
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {

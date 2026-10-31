@@ -422,10 +422,13 @@ void runGestureTests() {
         };
         const uint32_t uses = Engine::kDefaultLearnAfterUses;
         const char word[] = "timer";
-        const auto learnAfter = [&word](Engine& engine, const char* previous) {
+        // The pack's language, whose store the learning writes and the decode reads.
+        const char language[] = "ro";
+        const auto learnAfter = [&word, &language](WorkingCopyFixture& copy, const char* previous) {
             for (uint32_t i = 0; i < uses; ++i) {
-                engine.learn(previous, std::strlen(previous), nullptr, 0, nullptr, 0);
-                engine.learn(word, std::strlen(word), previous, std::strlen(previous), nullptr, 0);
+                copy.commit(previous, std::strlen(previous), nullptr, 0, nullptr, 0);
+                copy.commit(word, std::strlen(word), previous, std::strlen(previous), nullptr, 0,
+                            false, false, language, std::strlen(language));
             }
         };
         // One word learned after one context in one engine, and after another in the other.
@@ -433,19 +436,22 @@ void runGestureTests() {
         Engine elsewhere;
         openPack(learned);
         openPack(elsewhere);
-        learnAfter(learned, "the");
-        learnAfter(elsewhere, "border");
+        WorkingCopyFixture learnedCopy(learned);
+        WorkingCopyFixture elsewhereCopy(elsewhere);
+        learnAfter(learnedCopy, "the");
+        learnAfter(elsewhereCopy, "border");
 
         Random random(20260904u);
         std::vector<float> xs;
         std::vector<float> ys;
         std::vector<int64_t> times;
         synthesiseGesture(layout, "time", 0.f, random, xs, ys, times);
-        const auto swipedScore = [&](Engine& engine) {
+        const auto swipedScore = [&](Engine& engine, WorkingCopyFixture& copy) {
             Candidate out[Engine::kMaxCandidates];
-            const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
-                                                   static_cast<int>(xs.size()), "the", 3,
-                                                   nullptr, 0, out, Engine::kMaxCandidates);
+            const int found = copy.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                 static_cast<int>(xs.size()), "the", 3, nullptr, 0,
+                                                 out, Engine::kMaxCandidates, language,
+                                                 std::strlen(language));
             for (int i = 0; i < found; ++i) {
                 uint32_t length = 0;
                 const char* const text = engine.candidateText(out[i], &length);
@@ -456,8 +462,8 @@ void runGestureTests() {
             }
             return 0.0f;
         };
-        const float learnedSwipe = swipedScore(learned);
-        const float elsewhereSwipe = swipedScore(elsewhere);
+        const float learnedSwipe = swipedScore(learned, learnedCopy);
+        const float elsewhereSwipe = swipedScore(elsewhere, elsewhereCopy);
         check(learnedSwipe != 0.0f && elsewhereSwipe != 0.0f, "a swipe offers the word in both");
         check(learnedSwipe > elsewhereSwipe,
               "after the word it was learned after, a swipe offers the word higher");

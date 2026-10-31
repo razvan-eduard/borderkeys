@@ -4,24 +4,17 @@
 package com.borderkeys.typing
 
 import com.borderkeys.data.DictionaryRepository
-import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.entity.KeyTouch
-import com.borderkeys.data.entity.UserBigram
-import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.personal.LinkWrites
 
 /** Where learned words, pairs and triples are kept. */
 interface LearningStore {
-    /**
-     * Writes [batch], off the typing flow's thread, and hands the pairs and triples the store
-     * gave up under its budget beyond the engine's to [onDropped] on the typing flow's thread.
-     */
-    fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit)
+    /** Writes [batch], off the typing flow's thread. */
+    fun persist(batch: LearningBatch)
 
-    /** Writes [batch] and returns the pairs and triples the store gave up beyond the engine's, awaited. */
-    suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped
+    /** Writes [batch], and returns once it is written. */
+    suspend fun persistNow(batch: LearningBatch)
 
     /** Writes [batch], when there is one, and waits a bounded time for every write in flight. */
     fun persistBeforeShutdown(batch: LearningBatch?)
@@ -33,19 +26,14 @@ interface LearningStore {
 /** What the learning buffer had accumulated, taken out of it in one go. */
 class LearningBatch(
     val updates: List<LearnedWord>,
-    /** Each pair use the engine recorded, with what it dropped right after, in order. */
-    val pairs: List<PairStep>,
-    /** [pairs], for the triples. */
-    val triples: List<TripleStep>,
+    /** The link rows the commits changed, as they hold now. */
+    val links: LinkWrites,
     /** The heatmap's samples since the last write, as totals by bucket and letter. */
     val touches: List<KeyTouch> = emptyList(),
     /** The half-life [touches] are merged into what is stored under. */
     val touchHalfLifeMillis: Long = 0L,
 ) {
-    /**
-     * Writes [updates], [pairs] and [triples] into [dictionary] ([DictionaryRepository.applyLearning]);
-     * returns the pairs and triples it gave up beyond the engine's.
-     */
-    suspend fun writeTo(dictionary: DictionaryRepository): PhraseRecorder.Dropped =
-        dictionary.applyLearning(updates, pairs, triples)
+    /** Writes [updates], [links] and [touches] into [dictionary] in one transaction ([DictionaryRepository.applyLearning]). */
+    suspend fun writeTo(dictionary: DictionaryRepository) =
+        dictionary.applyLearning(updates, links, touches, touchHalfLifeMillis)
 }

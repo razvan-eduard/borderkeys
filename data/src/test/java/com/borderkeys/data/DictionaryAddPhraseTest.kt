@@ -6,7 +6,7 @@ package com.borderkeys.data
 import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.DictionaryRepository.Added
 import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.personal.recordUses
 import com.borderkeys.data.theme.KeyboardPreferences
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -50,13 +50,13 @@ class DictionaryAddPhraseTest {
         assertEquals(listOf(2L to 1L), rows.clocks.map { it.pairs to it.triples })
         val words = rows.words.associateBy { it.word }
         assertEquals(setOf("We", "go", "home"), words.keys)
-        assertEquals(listOf(1, 1, 1, 1, LOCALE), words.getValue("We").let { listOf(it.count, it.asserted, it.added, it.deliberateCapitals, it.locale) })
+        assertEquals(listOf(1, 1, 1, 1, LANGUAGE), words.getValue("We").let { listOf(it.count, it.asserted, it.added, it.deliberateCapitals, it.language) })
         assertEquals(0, words.getValue("go").deliberateCapitals)
     }
 
     @Test
     fun `adding a phrase already stored at one use adds one use and the marks`() = runTest {
-        repository.applyLearning(emptyList(), listOf(PairStep(LearnedBigram(LANGUAGE, "see", "you", 1, AT))), emptyList())
+        repository.recordUses(pairUses = listOf(LearnedBigram(LANGUAGE, "see", "you", 1, AT)))
         assertEquals(Added.ADDED, repository.addPhrase(listOf("see", "you"), LOCALE, AT + 1, unblock = false))
         val pair = repository.personalRows(LIMIT).pairs.single()
         assertEquals(listOf<Any>(2, 1, 1, AT + 1), listOf(pair.count, pair.asserted, pair.added, pair.lastUsedAt))
@@ -84,11 +84,7 @@ class DictionaryAddPhraseTest {
 
     @Test
     fun `an added phrase is listed at once, and apart from the phrases learned by use`() = runTest {
-        repository.applyLearning(
-            emptyList(),
-            listOf(PairStep(LearnedBigram(LANGUAGE, "good", "morning", KeyboardPreferences().learnAfter, AT))),
-            emptyList(),
-        )
+        repository.recordUses(pairUses = listOf(LearnedBigram(LANGUAGE, "good", "morning", KeyboardPreferences().learnAfter, AT)))
         repository.addPhrase(listOf("see", "you"), LOCALE, AT, unblock = false)
         val listed = PersonalEntries.phrases(phrases(), KeyboardPreferences(), AT)
         assertEquals(setOf("good morning", "see you"), listed.mapTo(HashSet()) { it.words.joinToString(" ") })

@@ -59,12 +59,12 @@ inline Reading readingOf(float cost, int depth, const char* text, uint32_t lengt
                                                : Reading::LongCompletion;
 }
 
-/** Whether this reading is offered to the corrections heap. */
+/** Whether this reading is offered to the correction heap. */
 inline bool reachesCorrectionHeap(Reading reading) {
     return reading == Reading::Correction || reading == Reading::ShortCompletion;
 }
 
-/** Whether this reading takes the respelling tier, which outranks the corrections heap. */
+/** Whether this reading takes the respelling tier, which outranks the correction heap. */
 inline bool takesRespellingTier(Reading reading) {
     return reading == Reading::Respelling;
 }

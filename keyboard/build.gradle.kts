@@ -74,6 +74,22 @@ android {
     }
 
     testOptions {
+        /**
+         * The directory the Gradle property [name] names, relative to the repository's root; null
+         * when it is unset. An empty name or one that is no directory stops the build.
+         */
+        fun namedDirectory(name: String): File? {
+            val value = providers.gradleProperty(name).orNull ?: return null
+            if (value.isBlank()) {
+                throw GradleException("-P$name names no directory")
+            }
+            val directory = rootProject.file(value)
+            if (!directory.isDirectory) {
+                throw GradleException("-P$name: no directory at $directory")
+            }
+            return directory
+        }
+
         unitTests {
             isReturnDefaultValues = true
             // The drawables and the merged resources, for the Robolectric view tests.
@@ -81,23 +97,51 @@ android {
             all {
                 // The host build of the native library and the compiled packs, for the JVM
                 // tests that drive the engine; without them the pipeline tests skip themselves.
-                it.systemProperty(
-                    "java.library.path",
-                    rootProject.layout.projectDirectory.dir("native-tests/build").asFile.path,
-                )
+                // `borderkeys.libraryDir` and `borderkeys.packsDir` name another host library's
+                // directory and another directory of packs, as a design sheet's arm reads its own
+                // engine; unset, the tree's own.
+                val otherLibraryDir = namedDirectory("borderkeys.libraryDir")
+                val otherPacksDir = namedDirectory("borderkeys.packsDir")
+                val hostLibraryDir = otherLibraryDir
+                    ?: rootProject.layout.projectDirectory.dir("native-tests/build").asFile
+                it.systemProperty("java.library.path", hostLibraryDir.path)
                 it.systemProperty(
                     "borderkeys.packs",
-                    layout.buildDirectory.dir("generated/dictionaries/dict").get().asFile.path,
+                    (otherPacksDir ?: layout.buildDirectory.dir("generated/dictionaries/dict").get().asFile).path,
                 )
                 // For FileDescriptor's private fd field, which the tests hand nativeLoadLanguage.
                 it.jvmArgs("--add-opens", "java.base/java.io=ALL-UNNAMED")
                 // The host library and the packs the pipeline tests load: a change to either reruns
-                // the tests, and out-of-date packs are built first.
+                // the tests, and the tree's out-of-date packs are built first.
                 it.inputs.files(
-                    rootProject.fileTree("native-tests/build") { include("libborderkeys.*") },
+                    rootProject.fileTree(hostLibraryDir) { include("libborderkeys.*") },
                 ).withPropertyName("hostLibrary").withPathSensitivity(PathSensitivity.NONE)
-                it.inputs.files(tasks.named("buildDictionaries"))
-                    .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
+                // The tree's host library older than an engine source would run an older engine: the
+                // tests stop with the command that rebuilds it.
+                val engineSources = rootProject.layout.projectDirectory.dir("keyboard/src/main/cpp").asFile
+                it.inputs.dir(engineSources)
+                    .withPropertyName("engineSources").withPathSensitivity(PathSensitivity.RELATIVE)
+                if (otherLibraryDir == null) {
+                    it.doFirst {
+                        val library = hostLibraryDir.listFiles { file -> file.name.startsWith("libborderkeys.") }
+                            ?.maxByOrNull { file -> file.lastModified() } ?: return@doFirst
+                        val newest = engineSources.walkTopDown().filter { file -> file.isFile }
+                            .maxByOrNull { file -> file.lastModified() } ?: return@doFirst
+                        if (newest.lastModified() > library.lastModified()) {
+                            throw GradleException(
+                                "${library.name} is older than ${newest.relativeTo(engineSources)}: rebuild it with " +
+                                    "cmake --build native-tests/build --target borderkeys",
+                            )
+                        }
+                    }
+                }
+                if (otherPacksDir == null) {
+                    it.inputs.files(tasks.named("buildDictionaries"))
+                        .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
+                } else {
+                    it.inputs.dir(otherPacksDir)
+                        .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
+                }
                 // The assets, the plus flavour's swipe models, drawables and corpora the tests read
                 // from disk: a change to one reruns them.
                 it.inputs.dir("src/main/assets")
@@ -115,14 +159,36 @@ android {
                 it.inputs.file(
                     rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/engine.hpp"),
                 ).withPropertyName("engineHeader").withPathSensitivity(PathSensitivity.NONE)
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/context_slice.hpp"),
+                ).withPropertyName("contextSliceHeader").withPathSensitivity(PathSensitivity.NONE)
                 // The directory the pipeline tests write one line per case into; unset writes none.
                 providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
                     it.systemProperty("borderkeys.readings", directory)
+                }
+                // The languages PersonalCorpusTest reads, by code (`en,ro`); unset reads them all.
+                providers.gradleProperty("borderkeys.personalLanguages").orNull?.let { languages ->
+                    it.systemProperty("borderkeys.personalLanguages", languages)
+                    it.inputs.property("personalLanguages", languages)
                 }
                 // The tap corpora TapCorpusTest types, one per profile; unset, it skips itself.
                 providers.gradleProperty("borderkeys.taps").orNull?.let { directory ->
                     it.systemProperty("borderkeys.taps", directory)
                     it.inputs.dir(directory).withPropertyName("taps")
+                        .withPathSensitivity(PathSensitivity.RELATIVE)
+                }
+                // The swipe traces SwipePersonalCorpusTest replays, one per language; unset, it skips
+                // its corpus.
+                providers.gradleProperty("borderkeys.swipes").orNull?.let { directory ->
+                    it.systemProperty("borderkeys.swipes", directory)
+                    it.inputs.dir(directory).withPropertyName("swipes")
+                        .withPathSensitivity(PathSensitivity.RELATIVE)
+                }
+                // The DEV corpora CorrectionDevReadingsTest types (tools/make_dev_corpus.py); unset,
+                // it skips its reading.
+                namedDirectory("borderkeys.dev")?.let { directory ->
+                    it.systemProperty("borderkeys.dev", directory.path)
+                    it.inputs.dir(directory).withPropertyName("dev")
                         .withPathSensitivity(PathSensitivity.RELATIVE)
                 }
             }

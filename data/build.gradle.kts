@@ -59,9 +59,6 @@ android {
                     rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/engine.hpp"),
                 ).withPropertyName("engineHeader").withPathSensitivity(PathSensitivity.NONE)
                 it.inputs.file(
-                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/user_model.hpp"),
-                ).withPropertyName("userModelHeader").withPathSensitivity(PathSensitivity.NONE)
-                it.inputs.file(
                     rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/bkd_format.hpp"),
                 ).withPropertyName("packFormatHeader").withPathSensitivity(PathSensitivity.NONE)
             }
@@ -101,6 +98,7 @@ dependencies {
 
     testFixturesImplementation(libs.kotlinx.coroutines.android)
     testFixturesImplementation(libs.androidx.room.runtime)
+    testFixturesImplementation(libs.mockk)
     testFixturesImplementation(libs.robolectric)
     testFixturesImplementation(libs.junit)
 

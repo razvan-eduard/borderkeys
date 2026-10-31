@@ -16,6 +16,7 @@
   ],
   "treebank": {
     "repository": "UD_Armenian-ArmTDP",
+    "release": "r2.18",
     "files": [
       "hy_armtdp-ud-train.conllu",
       "hy_armtdp-ud-dev.conllu",
@@ -31,5 +32,9 @@
   },
   "single_letter_words": "",
   "expected_beyond_ascii": [],
-  "reachability_budget": 164
+  "reachability_budget": 164,
+  "sha256": {
+    "hye_wikipedia_2016_300K.tar.gz": "27dc26d1ccecb2b5d6cb343076765cc07ae3b63398e94a7e486972c0d1319a38",
+    "hye_wikipedia_2021_1M.tar.gz": "bc038accf78ac416c02d6207a18f61b5008ca492e8f17324f5dc9e5020f0621a"
+  }
 }

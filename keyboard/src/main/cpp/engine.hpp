@@ -14,6 +14,8 @@
 #include "arena.hpp"
 #include "bkd_format.hpp"
 #include "candidate.hpp"
+#include "candidate_sets.hpp"
+#include "context_slice.hpp"
 #include "gesture/gesture_decoder.hpp"
 #include "letter_model.hpp"
 #include "marks.hpp"
@@ -24,7 +26,7 @@
 #include "search_plan.hpp"
 #include "topk.hpp"
 #include "touch_model.hpp"
-#include "user_model.hpp"
+#include "word_table.hpp"
 
 #ifdef BORDERKEYS_NEURAL_SWIPE
 #include "gesture/tcn_decoder.hpp"
@@ -133,10 +135,6 @@ public:
     /** No pack: what the pack queries answer while none is decided, and what clears answerAs. */
     static constexpr int kNoPack = -1;
 
-    /** The personal model's context word for "a sentence began here", as Kotlin records it; no key types its first byte. */
-    static constexpr char kUserSentenceStart[] = "\x02start";
-    static constexpr size_t kUserSentenceStartLength = sizeof(kUserSentenceStart) - 1;
-
     /** A possessive's ending, folded: the apostrophe and the s [learnable] looks behind. */
     static constexpr uint32_t kPossessiveEnding[] = {kApostrophe, 's'};
     static constexpr int kPossessiveEndingLength =
@@ -175,8 +173,11 @@ public:
     static constexpr float kDefaultCorrectionStrictness = 1.0f;
     static constexpr float kMinCorrectionStrictness = 0.5f;
     static constexpr float kMaxCorrectionStrictness = 2.0f;
-    // The size of the candidate heap.
+    // How many candidates other than continuations of the letters typed one request keeps, the
+    // most one request returns, and how many one swipe's decode keeps.
     static constexpr int kMaxCandidates = 16;
+    // How many continuations of the letters typed one request keeps, the most the strip shows.
+    static constexpr int kMaxShownCompletions = 4;
     static constexpr int kMaxComposing = 48;
 
     bool create();
@@ -236,13 +237,10 @@ public:
     int restrictedPack() const;
 
     /**
-     * The pack whose language's pairs and triples are read and learned: [restrictedPack], else
-     * the heaviest active one; [kNoPack] with no active pack.
+     * The pack an answer leans on: [restrictedPack], else the heaviest active one; [kNoPack] with
+     * no active pack.
      */
-    int personalLanguagePack() const;
-
-    /** The primary language subtag of [personalLanguagePack]'s tag, kUnknownLanguage for none. */
-    std::string currentPersonalLanguage() const;
+    int answerPack() const;
 
     /**
      * Locates a spelling the dictionaries hold that differs from `word` only by case: the
@@ -291,24 +289,29 @@ public:
 
     // Fills `out` with at most `maxOut` candidates, best first, and returns how many were
     // written. `composing` may be empty, in which case this answers "what word comes next".
+    // The personal pairs and triples are the slice's when it is the one of `personalContext`
+    // ([pushSlice]); else none are read.
     int suggest(const char* composing, size_t composingLength, const char* previous1,
                 size_t previous1Length, const char* previous2, size_t previous2Length,
-                Candidate* out, int maxOut);
+                Candidate* out, int maxOut, const ContextSlice::Key& personalContext = {});
 
     // suggest, with where each code point of `composing` was tapped, in the keyboard view's
     // pixels: `tapCount` entries, NaN for none. The touch model prices each tapped letter's
     // substitutions from them.
     int suggest(const char* composing, size_t composingLength, const char* previous1,
                 size_t previous1Length, const char* previous2, size_t previous2Length,
-                const float* tapX, const float* tapY, int tapCount, Candidate* out, int maxOut);
+                const float* tapX, const float* tapY, int tapCount, Candidate* out, int maxOut,
+                const ContextSlice::Key& personalContext = {});
 
     /**
      * Decodes a swipe into candidates, best first, from raw touch points in view pixels,
-     * historical ones included; the decoder smooths and resamples them.
+     * historical ones included; the decoder smooths and resamples them. The personal pairs and
+     * triples are read as [suggest] reads them.
      */
     int decodeGesture(const float* xs, const float* ys, const int64_t* ts, int count,
                       const char* previous1, size_t previous1Length, const char* previous2,
-                      size_t previous2Length, Candidate* out, int maxOut);
+                      size_t previous2Length, Candidate* out, int maxOut,
+                      const ContextSlice::Key& personalContext = {});
 
     const char* gestureDecoderName() const;
 
@@ -363,128 +366,53 @@ public:
     float personalScore(const char* text, uint32_t length) const override;
     int32_t offeredSpelling(int packIndex, uint32_t firstIndex) const override;
 
-    struct Learned {
-        bool pair = false;
-        bool triple = false;
-    };
-
-    /**
-     * Records a committed word, counted when [tally], and the pair and triple it makes with the
-     * words before it in the store of [language], a primary language subtag; with none, the
-     * [currentPersonalLanguage] at the call. The pair is recorded only when the word before and
-     * the word are [learnable], the triple only when all three are. [deliberateCapital] and
-     * [asserted] are UserModel::learn's -- see PersonalScore::established for what the second one
-     * gates. Returns which links it recorded.
-     */
-    Learned learn(const char* word, size_t wordLength, const char* previous1,
-                  size_t previous1Length, const char* previous2, size_t previous2Length,
-                  bool deliberateCapital = false, bool asserted = false,
-                  const char* language = nullptr, size_t languageLength = 0, bool tally = true);
-
     /**
      * Whether `word` may be part of a learned pair or triple: an active pack knows it, its form
      * without apostrophes, the word before a final possessive, or every part between its hyphens;
-     * or the personal model holds it established. Every word is, with no pack active, and the
-     * sentence start always is.
+     * or the personal model holds it established. Every word is, with no pack active.
      */
     bool learnable(const char* word, size_t length) const;
 
-    void loadUserWords(const char* const* words, const size_t* lengths, const int32_t* counts,
-                       int count, const int32_t* deliberateCapitals = nullptr,
-                       const int32_t* asserted = nullptr, const int32_t* added = nullptr);
+    /**
+     * Replaces the personal words with the rows Kotlin hands over (WordTable::load), and empties
+     * the slice, whose ids named the words before: each row's id goes to `outIds[i]`, and to
+     * `outKnown[i]`, when given, whether an active pack knows the word.
+     */
+    int loadWordTable(const char* const* spellings, const size_t* lengths, const int32_t* fields,
+                      int count, int32_t* outIds, bool* outKnown = nullptr);
 
     /**
-     * Replaces the remembered word pairs, each in the store of its language, with their stamps
-     * and how often each was chosen on purpose (UserModel::bulkLoadBigrams); called after
-     * [loadUserWords].
+     * Sets the personal words the rows name to what they hand (WordTable::put), a new word taking
+     * the next id: each row's id goes to `outIds[i]`, and to `outKnown[i]`, when given, whether
+     * an active pack knows the word.
      */
-    void loadUserBigrams(const char* const* languages, const size_t* languageLengths,
-                         const char* const* previous, const size_t* previousLengths,
-                         const char* const* next, const size_t* nextLengths,
-                         const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                         const uint64_t* languageSeen = nullptr,
-                         const int32_t* asserted = nullptr);
+    int putWords(const int32_t* ids, const char* const* spellings, const size_t* lengths,
+                 const int32_t* fields, int count, int32_t* outIds, bool* outKnown = nullptr);
+
+    /** The personal words, as the last load and puts left them. */
+    const WordTable& personalWords() const { return personalWords_; }
 
     /**
-     * Replaces the remembered three-word sequences, with their stamps and how often each was
-     * chosen on purpose. Called after the pairs.
+     * Writes to `outKnown[i]`, when given, whether an active pack knows the personal word with
+     * id `ids[i]`; false for no word.
      */
-    void loadUserTrigrams(const char* const* languages, const size_t* languageLengths,
-                          const char* const* previous2, const size_t* previous2Lengths,
-                          const char* const* previous1, const size_t* previous1Lengths,
-                          const char* const* next, const size_t* nextLengths,
-                          const int32_t* counts, int count, const uint64_t* contextSeen = nullptr,
-                          const uint64_t* languageSeen = nullptr,
-                          const int32_t* asserted = nullptr);
+    void markKnown(const int32_t* ids, int count, bool* outKnown) const;
 
     /**
-     * How often each previous word of a pair has been followed, and how many times it has been
-     * seen, per language; after the pairs.
+     * The active packs that spell `word` in any case, a name only in its own (exactSpellingIn),
+     * one bit per pack: bit i for the pack at slot i. None for a word that does not fold.
      */
-    void loadUserPairTotals(const char* const* languages, const size_t* languageLengths,
-                            const char* const* previous, const size_t* previousLengths,
-                            const uint32_t* totals, int count, const uint64_t* seen = nullptr);
-
-    /** [loadUserPairTotals], for each start of a triple; after the triples. */
-    void loadUserTripleTotals(const char* const* languages, const size_t* languageLengths,
-                              const char* const* previous2, const size_t* previous2Lengths,
-                              const char* const* previous1, const size_t* previous1Lengths,
-                              const uint32_t* totals, int count, const uint64_t* seen = nullptr);
-
-    /** Each language's pair clock and triple clock (UserModel::loadClocks); after the links. */
-    void loadUserClocks(const char* const* languages, const size_t* languageLengths,
-                        const uint64_t* pairClocks, const uint64_t* tripleClocks, int count);
+    uint32_t packsSpelling(const char* word, size_t length) const;
 
     /**
-     * The links after `previous2` and `previous1` in `language`'s store, pairs when `previous2`
-     * is empty, as UserModel::pairsAfter gives them; zeros for a store or a context not held.
+     * Replaces the slice the requests read their personal pairs and triples from with the arrays
+     * Kotlin hands over (ContextSlice::replace); false, the slice emptied, when they disagree.
      */
-    int userContextLinks(const char* language, size_t languageLength, const char* previous2,
-                         size_t previous2Length, const char* previous1, size_t previous1Length,
-                         UserModel::ContextLink* out, int maxOut,
-                         UserModel::ContextCount* context) const;
+    bool pushSlice(const int32_t* header, size_t headerInts, const int32_t* links, size_t linkInts,
+                   const int32_t* hops, size_t hopInts, const int64_t* seen, size_t seenLongs);
 
-    /** How many triples, or pairs, `language`'s store holds; zero for a store not held. */
-    int userLinksHeld(const char* language, size_t languageLength, bool triples) const;
-
-    /**
-     * A link of `language`'s store as the budget weighs it: the entries of its words, the first
-     * -1 for a pair, its count, when its language last saw it, its context's total, and how many
-     * times it was chosen on purpose.
-     */
-    struct StoredLink {
-        int32_t previous2Index;
-        int32_t previous1Index;
-        int32_t nextIndex;
-        uint32_t count;
-        uint64_t languageSeen;
-        uint32_t contextTotal;
-        uint32_t asserted;
-    };
-
-    /** The triple, or pair, at `index` of `language`'s store; false for none. */
-    bool userLinkAt(const char* language, size_t languageLength, bool triples, int index,
-                    StoredLink* out) const;
-
-    /** A personal entry's key, the word as links name it (UserModel::entryKey); null for none. */
-    const char* userEntryKey(uint32_t entryIndex, uint32_t* lengthOut) const;
-
-    /** Drops the pairs the budget gave up, each from its language's store. */
-    void dropUserPairs(const char* const* languages, const size_t* languageLengths,
-                       const char* const* previous, const size_t* previousLengths,
-                       const char* const* next, const size_t* nextLengths, int count);
-
-    /** Drops the triples the budget gave up, each from its language's store. */
-    void dropUserTriples(const char* const* languages, const size_t* languageLengths,
-                         const char* const* previous2, const size_t* previous2Lengths,
-                         const char* const* previous1, const size_t* previous1Lengths,
-                         const char* const* next, const size_t* nextLengths, int count);
-
-    /**
-     * The primary language subtag whose pairs and triples the last request read: its
-     * [currentPersonalLanguage].
-     */
-    const char* personalLanguage() const { return personalLanguage_.c_str(); }
+    /** The slice, as the last push left it. */
+    const ContextSlice& slice() const { return slice_; }
 
     /**
      * How many uses a word, pair or triple needs before it is learned, from 1 to
@@ -584,10 +512,11 @@ public:
         float completion = 0.0f;
     };
 
-    /** Fills [out] for [candidate] as an answer to [typed]; false when the search does not
-     *  offer that word. */
+    /** Fills [out] for [candidate] as an answer to [typed], the personal pairs and triples read
+     *  as [suggest] reads them; false when the search does not offer that word. */
     bool explainScore(const char* typed, size_t typedLength, const char* candidate,
-                      size_t candidateLength, ScoreParts* out);
+                      size_t candidateLength, ScoreParts* out,
+                      const ContextSlice::Key& personalContext = {});
 
     /**
      * Autocorrect's answer from the last [suggest] request, or null: the best correction,
@@ -659,10 +588,11 @@ public:
     /** Whether a word is within kCorrectionFrequencyFloor of its own pack's commonest word. */
     bool commonIn(const LanguagePack& pack, uint32_t wordIndex) const;
 
-    /** Whether [candidate] carries the typed letters on further, rather than being reached by an
-     *  edit. */
-    bool continuesTyped(const Candidate& candidate, const uint32_t* folded,
-                        int foldedLength) const;
+    /**
+     * Whether [text] carries the letters typed in this request on further, rather than being
+     * reached by an edit; false with nothing typed.
+     */
+    bool continuesTyped(const char* text, uint32_t length) const;
 
     const KeyGeometry& geometry() const { return geometry_; }
 
@@ -676,12 +606,12 @@ private:
 
     int packIndexForTag(const char* tag) const;
     void searchPack(int packIndex, const uint32_t* folded, int foldedLength,
-                    TopK<Candidate>& heap);
-    void searchNextWord(int packIndex, TopK<Candidate>& heap);
+                    CandidateSets& sets);
+    void searchNextWord(int packIndex, CandidateSets& sets);
     // Scores the language's most frequent words that start with the typed prefix.
     void searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int foldedLength,
-                                  TopK<Candidate>& heap);
-    void searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap);
+                                  CandidateSets& sets);
+    void searchUserModel(const uint32_t* folded, int foldedLength, CandidateSets& sets);
 
     /** The established personal entry spelled `word`, or -1; -1 while the personal model is off. */
     int32_t establishedPersonalEntry(const char* word, size_t length) const;
@@ -710,13 +640,13 @@ private:
     int32_t firstUnblockedSpelling(const PackedTrie& trie, int32_t firstIndex) const;
 
     /** Offers the words this person writes after the context word; for the empty prefix. */
-    void searchUserSuccessors(TopK<Candidate>& heap);
+    void searchUserSuccessors(CandidateSets& sets);
 
     /**
      * Offers a two-word continuation from the personal model when each link has twice the
      * learn-after uses and holds its share of its context.
      */
-    void searchUserPhrases(TopK<Candidate>& heap);
+    void searchUserPhrases(CandidateSets& sets);
 
 
 
@@ -726,16 +656,32 @@ private:
                          float maxCost, Endpoint* out, int maxOut);
     // Descends from an endpoint collecting whole words.
     void collectWords(int packIndex, const LanguagePack& pack, const Endpoint& endpoint,
-                      TopK<Candidate>& heap);
+                      CandidateSets& sets);
 
     /** Normalises the active packs' weights; used by tapping and swiping. */
     void refreshWeights();
-    // Offers a candidate, replacing an entry for the same word instead of adding a second one.
+    // Offers a candidate to [heap], replacing an entry for the same word instead of adding a
+    // second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                         uint32_t textLength) const;
-    // Looks a word up and offers it with how it was reached, unless even the largest personal
-    // boost cannot reach the heap's floor.
+    // Whether [score] stays at or below [floor] with even the largest personal boost added.
+    bool outOfReach(float score, float floor) const;
+    // Offers [candidate], spelled [text], to [heap] with its personal boost added, unless it is
+    // out of reach of the heap's floor.
+    void offerBoosted(TopK<Candidate>& heap, Candidate candidate, const char* text,
+                      uint32_t textLength) const;
+    // The candidate for [trie]'s word at [wordIndex], scored [score], with how it was reached.
+    Candidate scoredCandidate(const PackedTrie& trie, int packIndex, uint32_t wordIndex,
+                              float score, float editCost, int edits, int pastTyped,
+                              int slips) const;
+    // Looks a word up and offers it with how it was reached through offerBoosted; a word out of
+    // reach of the heap's floor is passed over before its text is read.
     void offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
+                         uint32_t wordIndex, float score, float editCost, int edits,
+                         int pastTyped, int slips = 0) const;
+    // The same, into the heap of [sets] the word belongs to; a word out of reach of the lower of
+    // the two floors is passed over before its text is read.
+    void offerScoredWord(CandidateSets& sets, const PackedTrie& trie, int packIndex,
                          uint32_t wordIndex, float score, float editCost, int edits,
                          int pastTyped, int slips = 0) const;
     // Which language is being written, decided from the words already committed. dominantPack_
@@ -750,7 +696,7 @@ private:
      * leaving out [skipPack] when it is not [kNoPack].
      */
     void searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
-                     TopK<Candidate>& heap, int skipPack = kNoPack);
+                     CandidateSets& sets, int skipPack = kNoPack);
 
     /** Locates, in the pack at [index], a spelling that differs from `word` only by case. */
     bool exactSpellingIn(int index, const char* word, size_t length, const uint32_t* folded,
@@ -807,30 +753,30 @@ private:
     Closeness primaryClosest_ = {0.0f, Fit::Spells};
     bool primaryReached_ = false;
 
-    /** The word being typed, as typed, for one request; and whether it carries a folded mark. */
-    const char* typedText_ = nullptr;
-    uint32_t typedTextLength_ = 0;
-    bool typedCarriesMark_ = false;
+    /** The word being typed in one request: as typed, whether it carries a folded mark, folded. */
+    struct TypedWord {
+        const char* text = nullptr;
+        uint32_t length = 0;
+        bool carriesMark = false;
+        const uint32_t* folded = nullptr;
+        int foldedLength = 0;
+    };
+
+    /** The word being typed while one request's search runs; none outside it. */
+    TypedWord typed_;
 
     /** Runs one pass of kSearchPlan: sets its ceiling and searches its source. */
     void runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength, int restrictTo,
-                 TopK<Candidate>& heap);
+                 CandidateSets& sets);
 
     /**
-     * Settles autocorrect's answer: the corrections heap's best, overridden by the respelling of
+     * Settles autocorrect's answer: the correction heap's best, overridden by the respelling of
      * the typed letters, overridden by the dictionaries' exact spelling of them.
      */
     void settleCorrection(const char* composing, size_t composingLength);
 
-    /**
-     * Drains [heap] into [out], best first, keeping at most kMaxShownCompletions continuations of
-     * the typed letters. Returns how many were written.
-     */
-    int writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap,
-                   Candidate* out, int maxOut);
-
-    // Puts decodedSuggestion() into `out` second, or first when nothing is there, unless its
-    // spelling is already among the `written`; returns how many `out` holds.
+    // Places decodedSuggestion() in `out` as placeOffered places a word; returns how many `out`
+    // holds.
     int placeDecodedSuggestion(Candidate* out, int written, int maxOut) const;
 
     // Puts the dictionaries' exact spelling of the typed letters into `out` last, in place of
@@ -880,10 +826,9 @@ private:
     /** Re-resolves [preferredPack_] from [preferredTag_] when either or the open packs change. */
     void resolvePreferredPack();
 
+    // Resolves the words before the request, and whether the slice is the one of `personalContext`.
     void resolveContext(const char* previous1, size_t previous1Length, const char* previous2,
-                        size_t previous2Length);
-    // Sets the language whose pairs and triples this request reads.
-    void resolveLanguage();
+                        size_t previous2Length, const ContextSlice::Key& personalContext);
 
     /**
      * Rescales `candidates[0..count)`'s scores in place to a fixed-temperature softmax over
@@ -921,13 +866,23 @@ private:
     bool lastDecodeUsedNeural_ = false;
 #ifdef BORDERKEYS_NEURAL_SWIPE
 #endif
-    UserModel userModel_;
-    /** What userModel_ adds to a candidate's score, under the context each request resolves. */
-    PersonalScore personal_{userModel_, kDefaultLearnAfterUses};
+    /** The personal words, as Kotlin hands them over. */
+    WordTable personalWords_;
+    /** The personal links of the context Kotlin last handed over. */
+    ContextSlice slice_;
+    /** What the two add to a candidate's score, under the context each request resolves. */
+    PersonalScore personal_{personalWords_, slice_, kDefaultLearnAfterUses};
     Arena arena_;
 
-    Candidate heapStorage_[kMaxCandidates];
-    Candidate drainBuffer_[kMaxCandidates];
+    /** The heaps of one request's two candidate sets, and the scratch their drain uses. */
+    Candidate continuationStorage_[kMaxShownCompletions];
+    Candidate otherStorage_[kMaxCandidates];
+    Candidate continuationDrain_[kMaxShownCompletions];
+    Candidate otherDrain_[kMaxCandidates];
+
+    /** The heap one swipe's decode re-offers its words through, and its drain. */
+    Candidate gestureStorage_[kMaxCandidates];
+    Candidate gestureDrain_[kMaxCandidates];
 
     /** The walk's candidates reached by an edit, completions left out, for autocorrect. */
     static constexpr int kMaxCorrections = 4;
@@ -1009,9 +964,6 @@ private:
 
     /** Multiplier on kEditPenalty and kCorrectionSurcharge. 1.0 is the default. */
     float correctionStrictness_ = kDefaultCorrectionStrictness;
-
-    /** See [personalLanguage]. */
-    std::string personalLanguage_ = kUnknownLanguage;
 
     bool phraseSuggestions_ = false;
 

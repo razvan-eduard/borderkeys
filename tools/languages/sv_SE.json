@@ -16,6 +16,7 @@
   ],
   "treebank": {
     "repository": "UD_Swedish-Talbanken",
+    "release": "r2.18",
     "files": [
       "sv_talbanken-ud-train.conllu",
       "sv_talbanken-ud-dev.conllu",
@@ -29,5 +30,10 @@
   },
   "single_letter_words": "iå",
   "expected_beyond_ascii": [],
-  "reachability_budget": 255
+  "reachability_budget": 255,
+  "sha256": {
+    "swe_news_2023_1M.tar.gz": "899447b8d42d2acca48d0c193a571678cac814e761329895d0e55ac37ad075c9",
+    "swe_newscrawl_2018_1M.tar.gz": "20d9c7318d8e65658dc27f7475d15be87888bb656a84d6ad7a97c7d5bc9183ee",
+    "swe_wikipedia_2021_1M.tar.gz": "706a42dbc652635f53cc60c03d4e010d2599e6674671ac22b63e149d9de535f5"
+  }
 }

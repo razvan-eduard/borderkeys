@@ -37,8 +37,8 @@ internal class DictionaryLoader(
     /** Runs on the main thread once a load has read what the packs bring, before they load. */
     private val onPacksChosen: () -> Unit,
 ) {
-    /** Serialises [load] and [reloadPersonal]. */
-    private val lock = Mutex()
+    /** Serialises [load] and the personal model's edits and reloads ([KeyboardPersonalModel]). */
+    val lock = Mutex()
 
     /** Diacritics for the enabled languages, merged onto the letter keys. */
     var accentOverlays: Map<Char, String> = emptyMap()
@@ -134,18 +134,6 @@ internal class DictionaryLoader(
     }
 
     /**
-     * Reloads the blocked words and the personal dictionary, with [between] as [loadPersonalModel]
-     * runs it, under [load]'s lock.
-     */
-    suspend fun reloadPersonal(between: suspend () -> Unit = {}) {
-        lock.withLock {
-            val dictionary = DataGraph.dictionary
-            refreshBlockedWords(dictionary)
-            loadPersonalModel(dictionary, between)
-        }
-    }
-
-    /**
      * Pushes the blocked words to the engine, which treats them as absent from every dictionary,
      * and them and the offensive words, while their switch is on, to the engine's filter and to
      * the learning buffer. Not under [load]'s lock.
@@ -175,6 +163,8 @@ internal class DictionaryLoader(
                     PersonalModelLoad.read(dictionary, preferences(), offensiveWords, System.currentTimeMillis()),
                 )
             },
+            stale = { withContext(Dispatchers.Main) { orchestrator.personalModelStale() } },
+            fresh = { withContext(Dispatchers.Main) { orchestrator.personalModelFresh() } },
         ).reload(between)
     }
 

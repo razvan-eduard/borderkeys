@@ -417,31 +417,16 @@ int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut) {
 }
 
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut, int* sourceOut) {
-    const char* p = text;
-    const char* const end = text + length;
-    int written = 0;
-    int source = 0;
-    while (p < end) {
-        if (written >= maxOut) {
-            return -1;
+    FoldedLetters letters(text, length, maxOut);
+    uint32_t letter = 0;
+    while (letters.next(&letter)) {
+        const int at = letters.count() - 1;
+        out[at] = letter;
+        if (sourceOut != nullptr) {
+            sourceOut[at] = letters.source();
         }
-        uint32_t codePoint = 0;
-        const char* const next = utf8Decode(p, end, &codePoint);
-        if (next == nullptr) {
-            return -1;
-        }
-        const uint32_t folded = foldCodePoint(codePoint);
-        if (folded != kDroppedCodePoint) {
-            out[written] = folded;
-            if (sourceOut != nullptr) {
-                sourceOut[written] = source;
-            }
-            ++written;
-        }
-        ++source;
-        p = next;
     }
-    return written;
+    return letters.refused() ? -1 : letters.count();
 }
 
 void KeyGeometry::clear() {

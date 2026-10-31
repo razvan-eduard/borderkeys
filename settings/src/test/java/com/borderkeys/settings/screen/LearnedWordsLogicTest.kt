@@ -4,13 +4,15 @@
 package com.borderkeys.settings.screen
 
 import com.borderkeys.data.PersonalEntries
+import com.borderkeys.data.entity.UserWord
 import com.borderkeys.i18n.Keys
+import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Learned words page's rules: what can be added, the languages offered, what the delete button says. */
+/** The Learned words page's rules: what can be added, the languages offered, how words are grouped, what the delete button says. */
 class LearnedWordsLogicTest {
 
     @Test
@@ -35,6 +37,33 @@ class LearnedWordsLogicTest {
         assertEquals(listOf("ro-RO", "en-US", "de-DE"), languageChoices(enabled, "ro-RO"))
         assertEquals(enabled, languageChoices(enabled, null))
         assertEquals(enabled, languageChoices(enabled, "fr-FR"))
+    }
+
+    @Test
+    fun `words are grouped by language, the languages counted first, then those off, then the uses in no language known`() {
+        fun listed(key: String, language: String) = PersonalEntries.ListedWord(key, language, key, 3, 0, listOf(key))
+        val words = listOf(
+            listed("taxi", UserWord.UNPLACED),
+            listed("drum", "ro"),
+            listed("casa", "ro"),
+            listed("taxi", "en"),
+            listed("zqxw", LanguageTags.UNKNOWN),
+            listed("kelpa", "en"),
+        )
+        assertEquals(
+            listOf(
+                WordGroup("en", off = false, words = listOf(words[3], words[5])),
+                WordGroup("ro", off = true, words = listOf(words[1], words[2])),
+                WordGroup(LanguageTags.UNKNOWN, off = true, words = listOf(words[4])),
+                WordGroup(UserWord.UNPLACED, off = false, words = listOf(words[0])),
+            ),
+            wordGroups(words, active = setOf("en")),
+        )
+        assertEquals(
+            "with no pack active every language counts",
+            listOf(false, false, false, false),
+            wordGroups(words, active = emptySet()).map { it.off },
+        )
     }
 
     @Test

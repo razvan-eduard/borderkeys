@@ -3,13 +3,16 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.theme.KeyboardPreferences
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 /**
  * The autocorrect corpora with Romanian and English both on, each word typed right after a
- * sentence that decided either language.
+ * sentence that decided either language. With `borderkeys.readings` set, each run is a rows
+ * file, `two_<corpus>_after_<language>.tsv`, its measure whether the field kept what the row
+ * meant ([Pipeline.Outcome.rightFor]).
  */
 class TwoLanguageCorpusTest {
 
@@ -42,7 +45,7 @@ class TwoLanguageCorpusTest {
         val failures = mutableListOf<String>()
         val pipeline = Pipeline.open("ro-RO", "en-US")
         try {
-            pipeline.languageLock(BALANCED_EVIDENCE)
+            pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
             for (run in runs) {
                 val file = File(Pipeline.CORPUS_DIRECTORY, run.file)
                 if (!file.isFile) {
@@ -55,27 +58,31 @@ class TwoLanguageCorpusTest {
                 var cases = 0
                 var right = 0
                 val misses = mutableListOf<String>()
-                for (line in file.readLines()) {
-                    if (line.isBlank() || line.startsWith("#")) {
-                        continue
+                val leadLanguage = if (run.lead == ENGLISH) ENGLISH_CODE else ROMANIAN_CODE
+                val readings = Pipeline.readings(
+                    "two_${run.file.removeSuffix(".tsv")}_after_$leadLanguage.tsv",
+                    measures = listOf(Pipeline.RIGHT),
+                )
+                try {
+                    for (line in file.readLines()) {
+                        if (line.isBlank() || line.startsWith("#")) {
+                            continue
+                        }
+                        val typed = line.substringBefore('\t')
+                        val expected = line.substringAfter('\t').substringBefore('\t')
+                        pipeline.restoreLanguageEvidence(decided)
+                        val outcome = pipeline.commit(typed)
+                        cases++
+                        val isRight = outcome.rightFor(expected)
+                        readings?.println(Pipeline.row(listOf(isRight), typed, pipeline.readingLine(outcome)))
+                        if (isRight) {
+                            right++
+                        } else {
+                            misses += "$typed -> ${outcome.committed ?: "(nothing)"} [${outcome.reason}]"
+                        }
                     }
-                    val typed = line.substringBefore('\t')
-                    val expected = line.substringAfter('\t').substringBefore('\t')
-                    pipeline.restoreLanguageEvidence(decided)
-                    val outcome = pipeline.commit(typed)
-                    val committed = outcome.committed
-                    cases++
-                    // Compared ignoring case.
-                    val isRight = if (expected == typed) {
-                        committed == null
-                    } else {
-                        committed.equals(expected, ignoreCase = true)
-                    }
-                    if (isRight) {
-                        right++
-                    } else {
-                        misses += "$typed -> ${committed ?: "(nothing)"} [${outcome.reason}]"
-                    }
+                } finally {
+                    readings?.close()
                 }
                 val after = if (run.lead == ENGLISH) "after English" else "after Romanian"
                 report.append(
@@ -99,14 +106,15 @@ class TwoLanguageCorpusTest {
         )
     }
 
-    private companion object {
+    internal companion object {
         const val MISSES_LISTED = 12
-
-        /** The Languages screen's default. */
-        const val BALANCED_EVIDENCE = 1.8f
 
         const val ENGLISH = "what is the best way to learn this song before the weekend"
         const val ROMANIAN = "mi-a trecut prin cap că ar fi bine să vorbim despre asta mâine"
+
+        /** The two languages' codes, as the corpora and the rows files name them. */
+        const val ENGLISH_CODE = "en"
+        const val ROMANIAN_CODE = "ro"
 
         /** Rows answered as the corpus expects, out of 200; 248 for accents, 240 for marks. */
         const val ACCENTS_RO_AFTER_ENGLISH = 234

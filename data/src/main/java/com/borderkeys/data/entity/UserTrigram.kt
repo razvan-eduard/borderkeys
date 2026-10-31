@@ -32,7 +32,7 @@ data class UserTrigram(
     val contextSeen: Long,
     /** The language's triple clock when this triple was last seen. */
     val languageSeen: Long,
-    /** How many times this triple was chosen on purpose: added by hand. Never decremented. */
+    /** How many times this triple was chosen on purpose: added by hand, or picked inside a phrase. Never decremented. */
     val asserted: Int = 0,
     /** How many times this triple was added by hand on the Learned phrases screen. Never decremented. */
     val added: Int = 0,

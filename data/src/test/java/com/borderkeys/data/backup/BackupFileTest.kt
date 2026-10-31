@@ -215,34 +215,49 @@ class BackupFileTest {
     }
 
     @Test
-    fun `a phrase's stamps, its context's uses and its language's clocks survive a round trip`() {
-        val phrases = BackupPayload(
-            bigrams = listOf(BackupBigram("o", "cana", 4, "ro", lastUsedAt = 7L, contextSeen = 9L, languageSeen = 11L)),
-            trigrams = listOf(BackupTrigram("vreau", "o", "cana", 2, "ro", 7L, 5L, 3L)),
+    fun `a word's language and marks, a phrase's stamps, its context's uses and a correction survive a round trip`() {
+        val dictionary = BackupPayload(
+            words = listOf(BackupWord("Pizza", "ro", 3, lastUsedAt = 7L, deliberateCapitals = 1, asserted = 2, added = 1)),
+            bigrams = listOf(BackupBigram("o", "cana", 4, "ro", lastUsedAt = 7L, contextSeen = 9L)),
+            trigrams = listOf(BackupTrigram("vreau", "o", "cana", 2, "ro", 7L, 5L)),
             pairContexts = listOf(BackupPairContext("ro", "o", total = 6L, seen = 9L, lastUsedAt = 7L)),
             tripleContexts = listOf(BackupTripleContext("ro", "vreau", "o", total = 2L, seen = 5L, lastUsedAt = 7L)),
-            phraseClocks = listOf(BackupPhraseClock("ro", pairs = 11L, triples = 3L)),
+            corrections = listOf(BackupCorrection("ro", "cnaa", "o", "cana", 2, 7L)),
         )
-        val read = BackupFile.read(BackupFile.write(phrases, passphrase = "correct horse"), "correct horse").payload
-        assertEquals(phrases, read)
+        val read = BackupFile.read(BackupFile.write(dictionary, passphrase = "correct horse"), "correct horse").payload
+        assertEquals(dictionary, read)
     }
 
     @Test
-    fun `a file from before the stamps reads with none, and no contexts or clocks`() {
+    fun `a file names its format, and an earlier one's word language is the subtype tag it kept as its locale`() {
+        val text = BackupFile.write(BackupPayload(), passphrase = "")
+            .replace("\"format\":${BackupFile.FORMAT}", "\"format\":${BackupFile.LANGUAGE_FORMAT - 1}")
+        assertEquals(BackupFile.LANGUAGE_FORMAT - 1, BackupFile.read(text, "").payload!!.format)
+        assertEquals(BackupFile.FORMAT, BackupFile.read(BackupFile.write(BackupPayload(), ""), "").payload!!.format)
+        val older = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
+            BackupPayload.serializer(),
+            """{"words":[{"word":"cana","locale":"ro-RO","count":4}],"phraseClocks":[{"language":"ro","pairs":1,"triples":1}]}""",
+        )
+        assertEquals(listOf(BackupWord("cana", "ro-RO", 4)), older.words)
+    }
+
+    @Test
+    fun `a file from before the stamps reads with none, and no contexts`() {
         val older = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
             BackupPayload.serializer(),
             """{"bigrams":[{"previous":"o","word":"cana","count":4,"language":"ro"}]}""",
         )
         assertEquals(listOf(BackupBigram("o", "cana", 4, "ro")), older.bigrams)
         assertEquals(0L, older.bigrams.single().lastUsedAt)
-        assertTrue(older.pairContexts.isEmpty() && older.tripleContexts.isEmpty() && older.phraseClocks.isEmpty())
+        assertTrue(older.pairContexts.isEmpty() && older.tripleContexts.isEmpty())
     }
 
     @Test
-    fun `a phrase's contexts or its clocks alone make a backup private`() {
+    fun `a phrase's contexts, a correction or a blocked word alone make a backup private`() {
         assertTrue(BackupPayload(pairContexts = listOf(BackupPairContext("ro", "o", 1L, 1L, 1L))).isSensitive)
         assertTrue(BackupPayload(tripleContexts = listOf(BackupTripleContext("ro", "a", "b", 1L, 1L, 1L))).isSensitive)
-        assertTrue(BackupPayload(phraseClocks = listOf(BackupPhraseClock("ro", 1L, 1L))).isSensitive)
+        assertTrue(BackupPayload(corrections = listOf(BackupCorrection("ro", "cnaa", "o", "cana", 1, 1L))).isSensitive)
+        assertTrue(BackupPayload(blocked = listOf("spam")).isSensitive)
     }
 
     @Test

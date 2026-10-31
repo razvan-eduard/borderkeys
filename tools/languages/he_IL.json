@@ -34,5 +34,10 @@
   "overlay": {},
   "single_letter_words": "",
   "expected_beyond_ascii": [],
-  "reachability_budget": 218
+  "reachability_budget": 218,
+  "sha256": {
+    "heb_news_2020_1M.tar.gz": "e81bb0b4f2f13bc343da8b732768582075257634600c359e55283774690b3213",
+    "heb_newscrawl_2011_1M.tar.gz": "ad78abb765890d4055bd5105b6ae0471c45c76ad0b0fcb54b55a4d8e193bac7b",
+    "heb_wikipedia_2021_1M.tar.gz": "a0553067de7752a3c98d70dbf17ac697ad2bc06a9416089d3758ca0183e0931f"
+  }
 }

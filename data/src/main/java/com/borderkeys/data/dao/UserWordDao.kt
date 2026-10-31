@@ -25,7 +25,7 @@ interface UserWordDao {
     )
     fun observeMatching(query: String): Flow<List<UserWord>>
 
-    /** The first [limit] words in [wordsBeyond]'s order: by count, then by recency. */
+    /** The first [limit] rows in [rowsBeyond]'s order: by count, then by recency. */
     @Query("SELECT * FROM user_words ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
     suspend fun topWords(limit: Int): List<UserWord>
 
@@ -37,27 +37,26 @@ interface UserWordDao {
     @Query("SELECT * FROM user_words WHERE added = 0 ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
     suspend fun topWordsNotAdded(limit: Int): List<UserWord>
 
-    @Query("SELECT * FROM user_words WHERE word = :word LIMIT 1")
-    suspend fun find(word: String): UserWord?
+    /** Every language's row of the spelling [word]. */
+    @Query("SELECT * FROM user_words WHERE word = :word")
+    suspend fun rows(word: String): List<UserWord>
 
-    /** Every learned spelling, in no order. */
-    @Query("SELECT word FROM user_words")
+    /** Every learned spelling, each once, in no order. */
+    @Query("SELECT DISTINCT word FROM user_words")
     suspend fun allWords(): List<String>
 
     /**
-     * Adds [delta] to a word's count, inserting it if it is new, in one statement. Two processes
-     * write this table. [deliberateCapitalDelta], [assertedDelta] and [addedDelta] are each 0 or
-     * 1, added the same way; see [UserWord.deliberateCapitals], [UserWord.asserted] and
-     * [UserWord.added].
+     * Adds [delta] to a word's count in [language], inserting its row if it is new, in one
+     * statement. [deliberateCapitalDelta], [assertedDelta] and [addedDelta] are added the same way;
+     * see [UserWord.deliberateCapitals], [UserWord.asserted] and [UserWord.added].
      */
     @Query(
         """
-        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals, asserted, added)
-        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta, :assertedDelta, :addedDelta)
-        ON CONFLICT(word) DO UPDATE SET
+        INSERT INTO user_words (word, language, count, lastUsedAt, deliberateCapitals, asserted, added)
+        VALUES (:word, :language, :delta, :lastUsedAt, :deliberateCapitalDelta, :assertedDelta, :addedDelta)
+        ON CONFLICT(word, language) DO UPDATE SET
             count = count + :delta,
             lastUsedAt = :lastUsedAt,
-            locale = :locale,
             deliberateCapitals = deliberateCapitals + :deliberateCapitalDelta,
             asserted = asserted + :assertedDelta,
             added = added + :addedDelta
@@ -65,7 +64,7 @@ interface UserWordDao {
     )
     suspend fun increment(
         word: String,
-        locale: String,
+        language: String,
         delta: Int,
         lastUsedAt: Long,
         deliberateCapitalDelta: Int,
@@ -77,25 +76,43 @@ interface UserWordDao {
     suspend fun incrementAll(words: List<LearnedWord>) {
         for (entry in words) {
             increment(
-                entry.word, entry.locale, entry.delta, entry.lastUsedAt,
+                entry.word, entry.language, entry.delta, entry.lastUsedAt,
                 if (entry.deliberateCapital) 1 else 0,
-                if (entry.asserted) 1 else 0,
+                entry.asserted,
                 addedDelta = 0,
             )
         }
     }
 
-    /** Lifts a word's deliberate-capital count to at least [count], for a restore. */
-    @Query("UPDATE user_words SET deliberateCapitals = MAX(deliberateCapitals, :count) WHERE word = :word")
-    suspend fun raiseDeliberateCapitals(word: String, count: Int)
+    /**
+     * Merges [row] into the row of its word and language, as a restore does: each count and the
+     * last use the larger of the two, the row inserted when new.
+     */
+    @Query(
+        """
+        INSERT INTO user_words (word, language, count, lastUsedAt, deliberateCapitals, asserted, added)
+        VALUES (:word, :language, :count, :lastUsedAt, :deliberateCapitals, :asserted, :added)
+        ON CONFLICT(word, language) DO UPDATE SET
+            count = MAX(count, :count),
+            lastUsedAt = MAX(lastUsedAt, :lastUsedAt),
+            deliberateCapitals = MAX(deliberateCapitals, :deliberateCapitals),
+            asserted = MAX(asserted, :asserted),
+            added = MAX(added, :added)
+        """,
+    )
+    suspend fun merge(
+        word: String,
+        language: String,
+        count: Int,
+        lastUsedAt: Long,
+        deliberateCapitals: Int,
+        asserted: Int,
+        added: Int,
+    )
 
-    /** The same for the asserted count -- see [raiseDeliberateCapitals]. */
-    @Query("UPDATE user_words SET asserted = MAX(asserted, :count) WHERE word = :word")
-    suspend fun raiseAsserted(word: String, count: Int)
-
-    /** The same for the added-by-hand count -- see [raiseDeliberateCapitals]. */
-    @Query("UPDATE user_words SET added = MAX(added, :count) WHERE word = :word")
-    suspend fun raiseAdded(word: String, count: Int)
+    /** [merge] of [row]. */
+    suspend fun merge(row: UserWord) =
+        merge(row.word, row.language, row.count, row.lastUsedAt, row.deliberateCapitals, row.asserted, row.added)
 
     /**
      * Halves every count above one not used since [cutoff], in one statement, and stamps those
@@ -119,21 +136,26 @@ interface UserWordDao {
     suspend fun unconfirmedBefore(cutoff: Long): List<String>
 
     /**
-     * The words past the first [keep] not added by hand, ordered by count and then by recency,
+     * The rows past the first [keep] not added by hand, ordered by count and then by recency,
      * worst last. `LIMIT -1` is SQLite's "no limit".
      */
     @Query(
         """
-        SELECT word FROM user_words
+        SELECT * FROM user_words
         WHERE added = 0
         ORDER BY count DESC, lastUsedAt DESC
         LIMIT -1 OFFSET :keep
         """,
     )
-    suspend fun wordsBeyond(keep: Int): List<String>
+    suspend fun rowsBeyond(keep: Int): List<UserWord>
 
+    /** Deletes the spelling [word] in every language. */
     @Query("DELETE FROM user_words WHERE word = :word")
     suspend fun delete(word: String)
+
+    /** Deletes the spelling [word]'s row in [language]. */
+    @Query("DELETE FROM user_words WHERE word = :word AND language = :language")
+    suspend fun delete(word: String, language: String)
 
     @Query("DELETE FROM user_words")
     suspend fun deleteAll()
@@ -157,11 +179,12 @@ interface UserWordDao {
 /** One pending learning update, as accumulated in memory between flushes. */
 data class LearnedWord(
     val word: String,
-    val locale: String,
+    /** The primary language subtag the word was committed in, [UserWord.language]. */
+    val language: String,
     val delta: Int,
     val lastUsedAt: Long,
     /** See [UserWord.deliberateCapitals]. */
     val deliberateCapital: Boolean = false,
-    /** See [UserWord.asserted]: the word was chosen on purpose, not merely written. */
-    val asserted: Boolean = false,
+    /** See [UserWord.asserted]: how many of these uses were choices. */
+    val asserted: Int = 0,
 )

@@ -53,8 +53,58 @@ int lowerUtf8(const char* text, size_t length, char* out, int outBytes);
 /** Whether two UTF-8 spellings differ only by case, each lowered as lowerUtf8 lowers it. */
 bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size_t bLength);
 
-// Folds a UTF-8 string into code points. Returns the number written, or -1 if the input is
-// malformed or longer than `maxOut`. Writes nothing on failure.
+// A UTF-8 text's folded letters, one at a time: each code point folded by foldCodePoint, those
+// that fold to kDroppedCodePoint left out. The text is refused when it is malformed or holds a
+// code point after its `room`-th letter.
+class FoldedLetters {
+public:
+    FoldedLetters(const char* text, size_t length, int room)
+        : cursor_(text), end_(text + length), room_(room) {}
+
+    // Writes the next letter into `letter`; false at the end of the text or when it is refused.
+    bool next(uint32_t* letter) {
+        while (cursor_ < end_) {
+            if (count_ >= room_) {
+                refused_ = true;
+                return false;
+            }
+            uint32_t codePoint = 0;
+            const char* const after = utf8Decode(cursor_, end_, &codePoint);
+            if (after == nullptr) {
+                refused_ = true;
+                return false;
+            }
+            cursor_ = after;
+            ++codePoints_;
+            const uint32_t folded = foldCodePoint(codePoint);
+            if (folded != kDroppedCodePoint) {
+                *letter = folded;
+                ++count_;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool refused() const { return refused_; }
+
+    // How many letters next() has given.
+    int count() const { return count_; }
+
+    // The index, among the text's code points, of the letter next() gave last.
+    int source() const { return codePoints_ - 1; }
+
+private:
+    const char* cursor_;
+    const char* end_;
+    int room_;
+    int count_ = 0;
+    int codePoints_ = 0;
+    bool refused_ = false;
+};
+
+// Folds a UTF-8 string into code points, as FoldedLetters reads it with `maxOut` as its room.
+// Returns the number written, or -1 if the text is refused.
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut);
 
 // foldUtf8, also writing into `sourceOut` the index of the input code point each folded one

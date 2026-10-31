@@ -188,6 +188,25 @@ void runFoldTests() {
               "and so are İstanbul and istanbul");
     }
 
+    section("a word folds into the room it is given, or not at all");
+    {
+        // A Hebrew vowel point, which folds to nothing.
+        const std::string point = "\xD6\xB8";
+        constexpr int kRoom = 3;
+        uint32_t folded[kRoom + 1];
+        int source[kRoom + 1];
+        const auto foldInto = [&](const std::string& text) {
+            return foldUtf8(text.data(), text.size(), folded, kRoom, source);
+        };
+        check(foldInto("abc") == kRoom, "as many letters as there is room for fold");
+        check(foldInto("abcd") == -1, "one letter more is refused");
+        check(foldInto("abc" + point) == -1,
+              "and so is a character after the last letter there is room for, though it folds to nothing");
+        check(foldInto("ab" + point + "c") == kRoom && source[0] == 0 && source[1] == 1 && source[2] == 3,
+              "one that folds to nothing before it takes no room, and each letter names where it came from");
+        check(foldInto("ab\xFF") == -1, "malformed text is refused");
+    }
+
     section("character folding agrees with tools/build_dict.py");
     {
         // The pack compiler folds in Python and the engine in C++: the two tables are diffed

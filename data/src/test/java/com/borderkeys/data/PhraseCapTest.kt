@@ -8,14 +8,8 @@ import com.borderkeys.data.entity.UserTrigram
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** What one language keeps of its links, in the database and in the engine, and what is loaded. */
+/** What the load reads of one language's links. */
 class PhraseCapTest {
-
-    @Test
-    fun `a language's engine store holds what the database keeps of it`() {
-        assertEquals(PhraseBudget.LANGUAGE_CAP, NativeSource.number(NativeSource.USER_MODEL_HEADER, "kMaxBigrams"))
-        assertEquals(PhraseBudget.LANGUAGE_CAP, NativeSource.number(NativeSource.USER_MODEL_HEADER, "kMaxTrigrams"))
-    }
 
     @Test
     fun `the load keeps each language's most used pairs, in the order they were first recorded`() {

@@ -3,9 +3,10 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Builds a corpus of words whose first letter was hit one key over.
 
-Each case replaces the first letter with a QWERTY neighbour of it, so reaching the intended
-word needs one substitution at the position the geometry prices lowest. Emitted as
-`mangled<TAB>intended`, read by `suggest_eval --autocorrect`.
+Each case replaces the first letter with a QWERTY neighbour of it, so reaching the intended word
+needs one substitution at the position the geometry prices lowest. Emitted as
+`mangled<TAB>intended`, read by `PipelineCorpusTest`, which types each case through the app's
+commit, and by `suggest_eval --autocorrect`, which ranks it on the strip.
 
 Cases whose mangled form is itself a dictionary word are skipped.
 

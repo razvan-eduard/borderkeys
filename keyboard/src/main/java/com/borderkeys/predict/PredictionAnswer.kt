@@ -4,6 +4,7 @@
 package com.borderkeys.predict
 
 import com.borderkeys.ime.WordStems
+import com.borderkeys.language.LanguageTags
 import com.borderkeys.typing.SearchAnswer
 
 /** One request's answer, as the engine gave it, before refused words are dropped. */
@@ -26,13 +27,13 @@ internal class PredictionAnswer(
     val knownWordIsName: Boolean,
     /** The possessive of a name missing its apostrophe, or null. */
     val possessive: String?,
-    /** The primary language subtag whose learned pairs and triples the engine read, or null. */
-    val language: String? = null,
+    /** The tag of the pack the answer leaned on, or null with no pack active. */
+    val answerPack: String? = null,
 ) {
     /** This answer with its ranking dropped, as a cancelled request leaves it. */
     fun withoutRanking(): PredictionAnswer = PredictionAnswer(
         query, emptyList(), emptyList(), emptyList(), corrections, knownWord, knownWordExact,
-        knownWordIsName, possessive, language,
+        knownWordIsName, possessive, answerPack,
     )
 
     /** The candidates the listener receives: the ranking, with [refused] words dropped. */
@@ -94,15 +95,17 @@ internal class AnswerScratch {
 }
 
 /**
- * Asks the engine at [handle] about [composing] after [previous1] and [previous2], through
- * [scratch], with [languages] the active tags. [tapXs] and [tapYs] are where each code point of
- * [composing] was tapped, in the keyboard view's pixels, NaN for none; null for no taps.
+ * Asks the engine at [handle] about [composing] after [previous1] and [previous2], the learned
+ * pairs and triples read from the slice of [personalContext], the key of the request's context
+ * ([EngineWorkingCopy.contextFor]), through [scratch], with [languages] the active tags. [tapXs] and [tapYs] are where each code point of [composing] was tapped, in the
+ * keyboard view's pixels, NaN for none; null for no taps.
  */
 internal fun answerRequest(
     handle: Long,
     composing: String,
     previous1: String?,
     previous2: String?,
+    personalContext: IntArray,
     languages: List<String>,
     scratch: AnswerScratch,
     tapXs: FloatArray? = null,
@@ -110,16 +113,19 @@ internal fun answerRequest(
 ): PredictionAnswer {
     scratch.clear()
     val count = NativePredictor.nativeAnswer(
-        handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
-        scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames,
-        scratch.correctionSlips, scratch.correctionConfident, scratch.spellingFlags,
+        handle, composing, previous1, previous2, personalContext, tapXs, tapYs, scratch.words,
+        scratch.scores, scratch.properNoun, scratch.texts, scratch.corrections,
+        scratch.correctionNames, scratch.correctionSlips, scratch.correctionConfident,
+        scratch.spellingFlags,
     )
     return readAnswer(handle, composing, languages, scratch, count)
 }
 
 /**
  * [answerRequest] for [composing] alone, with no words before it and no taps, as if the pack at
- * [packIndex] were the language being written; null when that pack is not open and active.
+ * [packIndex] were the language being written, the learned pairs and triples read in that pack's
+ * language, whose context's key [personalContext] gives ([EngineWorkingCopy.contextFor]); null
+ * when that pack is not open and active.
  */
 internal fun answerRequestAs(
     handle: Long,
@@ -127,10 +133,12 @@ internal fun answerRequestAs(
     composing: String,
     languages: List<String>,
     scratch: AnswerScratch,
+    personalContext: (language: String) -> IntArray,
 ): PredictionAnswer? {
     scratch.clear()
+    val key = personalContext(LanguageTags.primary(NativePredictor.nativePackTag(handle, packIndex)))
     val count = NativePredictor.nativeAnswerAs(
-        handle, packIndex, composing, scratch.words, scratch.scores, scratch.properNoun,
+        handle, packIndex, composing, key, scratch.words, scratch.scores, scratch.properNoun,
         scratch.texts, scratch.corrections, scratch.correctionNames, scratch.correctionSlips,
         scratch.correctionConfident, scratch.spellingFlags,
     )
@@ -176,7 +184,7 @@ private fun readAnswer(
         knownWordExact = scratch.spellingFlags[NativePredictor.SPELLING_EXACT],
         knownWordIsName = scratch.spellingFlags[NativePredictor.SPELLING_NAME],
         possessive = scratch.texts[NativePredictor.TEXT_POSSESSIVE],
-        language = scratch.texts[NativePredictor.TEXT_LANGUAGE],
+        answerPack = scratch.texts[NativePredictor.TEXT_ANSWER_PACK],
     )
 }
 

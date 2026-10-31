@@ -32,14 +32,10 @@ import com.borderkeys.data.DirectBoot
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.PersonalWordDecay
-import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.WordShape
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.entity.ClipEntry
-import com.borderkeys.data.entity.KeyTouch
-import com.borderkeys.data.entity.UserBigram
-import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
 import com.borderkeys.data.theme.Feature
@@ -68,11 +64,10 @@ import com.borderkeys.predict.SwipeModelLoad
 import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
+import com.borderkeys.typing.DictionaryLearningStore
 import com.borderkeys.typing.FieldPolicy
 import com.borderkeys.typing.FieldSession
 import com.borderkeys.typing.KeyGeometrySnapshot
-import com.borderkeys.typing.LearningBatch
-import com.borderkeys.typing.LearningStore
 import com.borderkeys.typing.RingUi
 import com.borderkeys.typing.TypingClock
 import com.borderkeys.typing.TypingFeatures
@@ -81,13 +76,14 @@ import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.ZonedDateTime
@@ -113,10 +109,6 @@ class BorderKeysService :
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-
-    /** Where learning is written to the database; not cancelled in [onDestroy]. */
-    private val learningJob = SupervisorJob()
-    private val learningScope = CoroutineScope(learningJob + Dispatchers.IO)
 
     private val paints = ThemePaints()
     private val engine = PredictionEngine()
@@ -314,6 +306,8 @@ class BorderKeysService :
 
         override fun stripTypedIndex(): Int? = host?.suggestionStrip?.typedIndex
 
+        override fun stripAppliedIndex(): Int? = host?.suggestionStrip?.appliedIndex
+
         override fun clearStripActions() {
             val strip = host?.suggestionStrip ?: return
             if (strip.actionMode) {
@@ -382,6 +376,12 @@ class BorderKeysService :
 
         override fun forgetWord(word: String, blockWhenNotPersonal: Boolean) =
             this@BorderKeysService.forgetWord(word, blockWhenNotPersonal)
+
+        override fun reloadPersonalModel() {
+            if (unlocked) {
+                scope.launch { personalModel.reload {} }
+            }
+        }
 
         override fun subtypeTag(): String = currentSubtypeTag()
 
@@ -489,59 +489,19 @@ class BorderKeysService :
         }
     }
 
-    /** The personal dictionary, as what the typing flow learns is written to it. */
-    private val learningStore = object : LearningStore {
-        override fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit) {
-            learningScope.launch {
-                runCatching { persistLearning(batch) }
-                    .onSuccess { (pairs, triples) ->
-                        if (pairs.isNotEmpty() || triples.isNotEmpty()) {
-                            withContext(Dispatchers.Main) { onDropped(pairs, triples) }
-                        }
-                    }
-                    .onFailure { error ->
-                        android.util.Log.e("BorderKeys", "learning flush failed", error)
-                    }
-            }
-        }
+    /** The main thread, which the learning store hands its results back on. */
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
-        /** The write runs under [learningJob], which [persistBeforeShutdown] waits for; a failure is logged. */
-        override suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped =
-            learningScope.async {
-                runCatching { persistLearning(batch) }
-                    .onFailure { error -> android.util.Log.e("BorderKeys", "learning flush failed", error) }
-                    .getOrDefault(PhraseRecorder.Dropped())
-            }.await()
-
-        override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
-            learningScope.launch {
-                val rows = runCatching { DataGraph.dictionary.touchesIn(bucket) }
-                    .onFailure { error -> android.util.Log.e("BorderKeys", "heatmap load failed", error) }
-                    .getOrDefault(emptyList())
-                withContext(Dispatchers.Main) { onLoaded(rows) }
-            }
-        }
-
-        /** Waits up to [FINAL_FLUSH_TIMEOUT_MILLIS] for the writes in flight and for [batch]. */
-        override fun persistBeforeShutdown(batch: LearningBatch?) {
-            val inFlight = learningJob.children.toList()
-            if (batch == null && inFlight.isEmpty()) {
-                return
-            }
-            runCatching {
-                kotlinx.coroutines.runBlocking {
-                    kotlinx.coroutines.withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) {
-                        inFlight.forEach { it.join() }
-                        if (batch != null) {
-                            withContext(Dispatchers.IO) { persistLearning(batch) }
-                        }
-                    }
-                }
-            }.onFailure { error ->
-                android.util.Log.w("BorderKeys", "the final learning flush failed", error)
-            }
-        }
-    }
+    /**
+     * The personal dictionary, as what the typing flow learns is written to it, on the process's
+     * ordered worker; each write followed by the clean-up, when it is due, as an edit of its own.
+     */
+    private val learningStore = DictionaryLearningStore(
+        DataGraph.personalWorker,
+        { DataGraph.dictionary },
+        { task -> mainHandler.post(task) },
+        afterWrite = { scope.launch { maybeDecayPersonalDictionary() } },
+    )
 
     private val typingClock = object : TypingClock {
         override fun currentTimeMillis(): Long = System.currentTimeMillis()
@@ -561,6 +521,21 @@ class BorderKeysService :
         store = learningStore,
         clock = typingClock,
     )
+
+    /**
+     * The personal model as the personal dictionary's edits reach it ([KeyboardPersonalModel]), under
+     * the loads' lock; attached once the user has unlocked.
+     */
+    private val personalModel: KeyboardPersonalModel by lazy {
+        KeyboardPersonalModel(
+            scope,
+            dictionaryLoader.lock,
+            engine,
+            orchestrator,
+            reloadModel = { between -> dictionaryLoader.loadPersonalModel(DataGraph.dictionary, between) },
+            refreshBlocked = { dictionaryLoader.refreshBlockedWords(DataGraph.dictionary) },
+        )
+    }
 
     /** The language packs, the blocked words and the personal dictionary, loaded into [engine]. */
     private val dictionaryLoader: DictionaryLoader by lazy {
@@ -646,11 +621,14 @@ class BorderKeysService :
         runCatching { DataGraph.clipboard.sweepMedia() }
     }
 
-    /** What reads credential-encrypted storage: the settings, the packs and the dictionary edits. */
+    /**
+     * What reads credential-encrypted storage: the settings, the packs, and the personal
+     * dictionary, whose edits reach the personal model.
+     */
     private fun startUnlocked() {
         observeSettings()
         observeLanguagePacks()
-        observeDictionaryEdits()
+        DataGraph.dictionary.attach(personalModel)
     }
 
     /** The user unlocked while the keyboard ran from the device-protected copy. */
@@ -677,20 +655,6 @@ class BorderKeysService :
                     android.util.Log.e("BorderKeys", "locked appearance unreadable, using defaults", error)
                 }
                 .collect { locked -> applyAppearance(locked.asAppearance()) }
-        }
-    }
-
-    /**
-     * Reloads the blocked words and the personal model after an edit on the Personal dictionary
-     * screen.
-     */
-    private fun observeDictionaryEdits() {
-        scope.launch {
-            DataGraph.dictionary.edits.collect {
-                withContext(Dispatchers.IO) { dictionaryLoader.reloadPersonal() }
-                orchestrator.reloadTouches()
-                orchestrator.requestSuggestions()
-            }
         }
     }
 
@@ -836,11 +800,6 @@ class BorderKeysService :
         theme = newTheme
         lightTheme = newLightTheme
         val wasForcingDebugRing = preferences.debugForceRadialRing
-        val offensiveSwitchFlipped =
-            preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
-        val wordLimitChanged =
-            preferences.learnedWordLimit != newPreferences.learnedWordLimit
-        val fadeChanged = preferences.unlearnHalfLifeDays != newPreferences.unlearnHalfLifeDays
         val swipeModelFlipped =
             preferences.experimentalSwipeModelEnabled !=
                 newPreferences.experimentalSwipeModelEnabled
@@ -856,12 +815,6 @@ class BorderKeysService :
             applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
         }
         particleEffects = newParticleEffects
-        if (unlocked && (offensiveSwitchFlipped || wordLimitChanged || fadeChanged)) {
-            scope.launch(Dispatchers.IO) {
-                dictionaryLoader.reloadPersonal()
-                withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
-            }
-        }
         val resolvedTheme = ThemeMode.resolve(
             newTheme, newLightTheme, newPreferences, this@BorderKeysService,
         )
@@ -1068,11 +1021,6 @@ class BorderKeysService :
             contentMimeTypes = info?.contentMimeTypes?.toList().orEmpty(),
         )
         engine.setKnownWordReach(KeyboardPreferences.rareWordsMinLogProb(preferences.rareWords))
-        engine.setLanguageLock(
-            KeyboardPreferences.languageLockEvidence(preferences.languageLock),
-            KeyboardPreferences.languageLockStrict(preferences.languageLock),
-        )
-        engine.setPreferredLanguage(preferences.preferredLanguageTag)
         if (!remembersLanguage(preferences)) {
             engine.resetLanguageEvidence()
         }
@@ -1224,6 +1172,9 @@ class BorderKeysService :
         runCatching { unregisterReceiver(wallpaperChangedReceiver) }
         unlockRegistration?.invoke()
         unregisterClipboardListener()
+        if (unlocked) {
+            DataGraph.dictionary.detach(personalModel)
+        }
         // Runs while the engine is still alive.
         super.onDestroy()
         SwipeModelLoad.set(SwipeModelLoad.State.Off)
@@ -1612,8 +1563,8 @@ class BorderKeysService :
         view?.setRadialMenuVisible(false)
     }
 
-    override fun onGestureCandidates(candidates: List<Candidate>, language: String?) =
-        orchestrator.onGestureCandidates(candidates, language)
+    override fun onGestureCandidates(candidates: List<Candidate>, answerPack: String?) =
+        orchestrator.onGestureCandidates(candidates, answerPack)
 
     override fun onKeyRepeat(code: Int) = orchestrator.onKeyRepeat(code)
 
@@ -2177,7 +2128,7 @@ class BorderKeysService :
      * line per term, in the catalogue's words, or the one line saying the word is not offered.
      */
     private fun explainWord(query: String, word: String) {
-        engine.explain(query, word) { explanation ->
+        engine.explain(query, word, orchestrator.language) { explanation ->
             val view = host ?: return@explain
             val lines = if (explanation == null) {
                 listOf(strings.getString(Keys.STRIP_NOT_OFFERED, word))
@@ -2225,15 +2176,10 @@ class BorderKeysService :
         }
         scope.launch {
             val dictionary = DataGraph.dictionary
-            dictionaryLoader.reloadPersonal {
-                withContext(Dispatchers.Main) {
-                    val waiting = orchestrator.forgetUnsaved(word)
-                    val forgotten = dictionary.forgetEveryCase(word)
-                    if (!forgotten && !waiting && blockWhenNotPersonal) {
-                        dictionary.block(word.lowercase())
-                        dictionaryLoader.refreshBlockedWords(dictionary)
-                    }
-                }
+            val waiting = orchestrator.forgetUnsaved(word)
+            val forgotten = dictionary.forgetEveryCase(word)
+            if (!forgotten && !waiting && blockWhenNotPersonal) {
+                dictionary.block(word.lowercase())
             }
             orchestrator.requestSuggestions()
         }
@@ -2247,10 +2193,10 @@ class BorderKeysService :
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
-        language: String?,
+        answerPack: String?,
     ) = orchestrator.onSuggestions(
         candidates, knownWord, knownWordExact, knownWordIsName, query, possessive, corrections,
-        language,
+        answerPack,
     )
 
     // The words each event has shown an effect for, for this run only.
@@ -2273,26 +2219,21 @@ class BorderKeysService :
         host?.effects?.playWord(word, style, setting.colour.takeIf { it != 0 })
     }
 
-    /** Writes [batch]; returns the pairs and triples the store gave up under its budget. */
-    private suspend fun persistLearning(batch: LearningBatch): PhraseRecorder.Dropped {
-        val dropped = batch.writeTo(DataGraph.dictionary)
-        DataGraph.dictionary.applyTouches(batch.touches, batch.touchHalfLifeMillis)
-        maybeDecayPersonalDictionary()
-        return dropped
-    }
+    /** Runs one clean-up at a time ([maybeDecayPersonalDictionary]). */
+    private val cleanUpLock = Mutex()
 
     /**
      * Runs [DictionaryRepository.decayStaleEntries], then [DictionaryRepository.purgeUnlearnable]
-     * with the engine's verdicts, at most once per [KeyboardPreferences.cleanUpIntervalDays]; the
-     * engine drops what the purge deleted.
+     * with the engine's verdicts, at most once per [KeyboardPreferences.cleanUpIntervalDays]; each
+     * reaches the personal model as an edit.
      */
-    private suspend fun maybeDecayPersonalDictionary() {
+    private suspend fun maybeDecayPersonalDictionary() = cleanUpLock.withLock {
         val prefs = getSharedPreferences(DECAY_PREFS, MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastSweep = prefs.getLong(DECAY_LAST_SWEEP_AT, 0L)
         val settings = DataGraph.themes.preferences.first()
         if (!PersonalWordDecay.sweepDue(lastSweep, now, settings.cleanUpIntervalDays)) {
-            return
+            return@withLock
         }
         DataGraph.dictionary.decayStaleEntries(
             settings.learnedWordLimit,
@@ -2300,10 +2241,9 @@ class BorderKeysService :
             PersonalWordDecay.unconfirmedLifeMillis(settings.unconfirmedLifeDays),
             now,
         )
-        val purged = DataGraph.dictionary.purgeUnlearnable { words ->
+        DataGraph.dictionary.purgeUnlearnable { words ->
             suspendCancellableCoroutine { verdicts -> engine.learnableWords(words) { verdicts.resume(it) } }
         }
-        engine.dropLinks(purged.pairs, purged.triples)
         prefs.edit().putLong(DECAY_LAST_SWEEP_AT, now).apply()
     }
 
@@ -3350,9 +3290,6 @@ class BorderKeysService :
 
         /** The label drawn for a flick that has none of its own. */
         const val FLICK_PLACEHOLDER = "\u2022"
-
-        /** How long the last learning flush, at shutdown, waits for the database. */
-        const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
 
         /** Quick actions that do not change the field and refresh no suggestions. */
         val NO_REFRESH_QUICK_ACTIONS = setOf(

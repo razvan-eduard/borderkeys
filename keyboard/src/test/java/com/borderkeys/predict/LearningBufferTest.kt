@@ -4,11 +4,9 @@
 package com.borderkeys.predict
 
 import com.borderkeys.data.WordShape
-import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.LearnedTrigram
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.personal.LinkWrites
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,13 +14,13 @@ import org.junit.Test
 
 class LearningBufferTest {
 
-    /** A pair use the engine recorded at [at], with nothing dropped after it. */
-    private fun pair(previous: String, word: String, at: Long = 0L) =
-        PairStep(LearnedBigram("en", previous, word, 1, at))
+    /** The row of a pair a commit at [at] left at [count] uses. */
+    private fun pair(previous: String, word: String, at: Long = 0L, count: Int = 1) =
+        UserBigram("en", previous, word, count, at, 0L, 0L)
 
-    /** A triple use the engine recorded at [at], with nothing dropped after it. */
+    /** The row of a triple a commit at [at] left at one use. */
     private fun triple(previous2: String, previous1: String, word: String, at: Long = 0L) =
-        TripleStep(LearnedTrigram("en", previous2, previous1, word, 1, at))
+        UserTrigram("en", previous2, previous1, word, 1, at, 0L, 0L)
 
     @Test
     fun `repeated words accumulate into one update`() {
@@ -83,32 +81,23 @@ class LearningBufferTest {
     fun `a full table of pairs, or of triples, makes the buffer due with no word waiting`() {
         val most = 4
         val pairs = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
-        repeat(most) { index -> pairs.recordSteps(listOf(pair("w$index", "next")), emptyList(), 0L) }
+        repeat(most) { index -> pairs.recordLinks(LinkWrites(pairs = listOf(pair("w$index", "next"))), 0L) }
         assertEquals("no word waits", 0, pairs.size)
         assertTrue(pairs.isDue(0L))
         val triples = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
-        repeat(most) { index -> triples.recordSteps(emptyList(), listOf(triple("v$index", "word", "next")), 0L) }
+        repeat(most) { index -> triples.recordLinks(LinkWrites(triples = listOf(triple("v$index", "word", "next"))), 0L) }
         assertEquals("no word waits", 0, triples.size)
         assertTrue(triples.isDue(0L))
     }
 
     @Test
-    fun `past its bound a table lets its oldest use go and keeps the engine's drops in front`() {
-        val most = 2
-        val firstDrop = UserBigram("en", "the", "dog", 1, 0L, 0L, 0L)
-        val secondDrop = UserBigram("en", "the", "fox", 1, 0L, 0L, 0L)
-        val first = pair("the", "cat").copy(dropped = listOf(firstDrop))
-        val second = pair("the", "cow").copy(dropped = listOf(secondDrop))
-        val three = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
-        three.recordSteps(listOf(first, second, pair("the", "owl")), emptyList(), 0L)
-        assertEquals(listOf(PairStep(null, listOf(firstDrop)), second, pair("the", "owl")), three.drainPairs())
-        val four = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = most)
-        four.recordSteps(listOf(first, second, pair("the", "owl")), emptyList(), 0L)
-        four.recordSteps(listOf(pair("the", "bat")), emptyList(), 0L)
-        assertEquals(
-            listOf(PairStep(null, listOf(firstDrop, secondDrop)), pair("the", "owl"), pair("the", "bat")),
-            four.drainPairs(),
-        )
+    fun `the rows of a link commits changed gather at the latest, a link given up and written again written`() {
+        val buffer = LearningBuffer(debounceMillis = Long.MAX_VALUE, maxEntries = 2)
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("the", "cat"), pair("the", "dog"))), 0L)
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("the", "cat", count = 2)), gonePairs = listOf(pair("the", "dog"))), 0L)
+        assertTrue("a link to write and one to give up fill the buffer", buffer.isDue(0L))
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("the", "dog", count = 3))), 0L)
+        assertEquals(LinkWrites(pairs = listOf(pair("the", "cat", count = 2), pair("the", "dog", count = 3))), buffer.drainLinks())
     }
 
     @Test
@@ -116,7 +105,7 @@ class LearningBufferTest {
         val debounce = 4_000L
         val at = 1_000L
         val buffer = LearningBuffer(debounceMillis = debounce)
-        buffer.recordSteps(listOf(pair("the", "cat", at)), emptyList(), at)
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("the", "cat", at))), at)
         assertFalse(buffer.isDue(at + debounce - 1))
         assertTrue(buffer.isDue(at + debounce))
     }
@@ -196,14 +185,14 @@ class LearningBufferTest {
     }
 
     @Test
-    fun `each pair use is buffered on its own and drained in order`() {
+    fun `the link rows drain apart from the words, and draining empties them`() {
         val buffer = LearningBuffer()
-        val uses = listOf(pair("vreau", "sa", 0L), pair("sa", "ma", 0L), pair("vreau", "sa", 10L))
-        buffer.recordSteps(uses, emptyList(), 0L)
+        val rows = LinkWrites(pairs = listOf(pair("vreau", "sa", 0L), pair("sa", "ma", 0L)))
+        buffer.recordLinks(rows, 0L)
 
-        assertEquals(uses, buffer.drainPairs())
+        assertEquals(rows, buffer.drainLinks())
         assertTrue(buffer.drain().isEmpty())
-        assertTrue(buffer.drainPairs().isEmpty())
+        assertTrue(buffer.drainLinks().isEmpty)
     }
 
     @Test
@@ -226,8 +215,14 @@ class LearningBufferTest {
         val buffer = LearningBuffer()
         buffer.enabled = false
         assertFalse(buffer.acceptsPair("vreau", "sa"))
-        buffer.recordSteps(listOf(pair("vreau", "sa")), emptyList(), 0L)
-        assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    @Test
+    fun `the link rows of a commit made before the buffer was disabled are kept`() {
+        val buffer = LearningBuffer()
+        buffer.enabled = false
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("vreau", "sa"))), 0L)
+        assertEquals(listOf("sa"), buffer.drainLinks().pairs.map { it.word })
     }
 
     @Test
@@ -241,9 +236,9 @@ class LearningBufferTest {
     @Test
     fun discardingDropsThePairsToo() {
         val buffer = LearningBuffer()
-        buffer.recordSteps(listOf(pair("vreau", "sa")), emptyList(), 0L)
+        buffer.recordLinks(LinkWrites(pairs = listOf(pair("vreau", "sa"))), 0L)
         buffer.discard()
-        assertTrue(buffer.drainPairs().isEmpty())
+        assertTrue(buffer.drainLinks().isEmpty)
     }
 
     @Test
@@ -262,21 +257,22 @@ class LearningBufferTest {
         assertFalse(buffer.record(tooLong, "ro-RO", 1_000))
     }
 
-    /** Both facts about a commit reach the database with the count. */
+    /** Both facts about a commit reach the database with the count; each choice is counted. */
     @Test
-    fun `a deliberate capital and an assertion travel with the count`() {
+    fun `a deliberate capital and the choices travel with the count`() {
         val buffer = LearningBuffer()
         buffer.record("emanuel", "ro-RO", 1_000)
         buffer.record("emanuel", "ro-RO", 1_500, deliberateCapital = true)
         buffer.record("emanuel", "ro-RO", 2_000, asserted = true)
+        buffer.record("emanuel", "ro-RO", 2_500, asserted = true)
         buffer.record("plain", "ro-RO", 2_000)
 
         val drained = buffer.drain().associateBy { it.word }
-        assertEquals(3, drained.getValue("emanuel").delta)
+        assertEquals(4, drained.getValue("emanuel").delta)
         assertTrue(drained.getValue("emanuel").deliberateCapital)
-        assertTrue(drained.getValue("emanuel").asserted)
+        assertEquals(2, drained.getValue("emanuel").asserted)
         assertFalse(drained.getValue("plain").deliberateCapital)
-        assertFalse(drained.getValue("plain").asserted)
+        assertEquals(0, drained.getValue("plain").asserted)
     }
 
     @Test
@@ -285,21 +281,22 @@ class LearningBufferTest {
         buffer.record("This", "en-US", 1_000)
         buffer.record("this", "en-US", 2_000)
         buffer.record("make", "en-US", 3_000)
-        val dropped = UserBigram("en", "make", "that", 1, 0L, 0L, 0L)
-        buffer.recordSteps(
-            listOf(pair("make", "this").copy(dropped = listOf(dropped)), pair("go", "home")),
-            listOf(triple("we", "make", "this")),
+        val dropped = pair("make", "that")
+        buffer.recordLinks(
+            LinkWrites(
+                pairs = listOf(pair("make", "this"), pair("go", "home")),
+                triples = listOf(triple("we", "make", "this")),
+                gonePairs = listOf(dropped),
+            ),
             3_000,
         )
 
         assertTrue(buffer.forget("THIS"))
         assertEquals(listOf("make"), buffer.drain().map { it.word })
-        assertEquals(
-            "the engine's drop stays",
-            listOf(PairStep(null, listOf(dropped)), pair("go", "home")),
-            buffer.drainPairs(),
-        )
-        assertTrue(buffer.drainTriples().isEmpty())
+        val left = buffer.drainLinks()
+        assertEquals("the link given up stays", listOf(dropped), left.gonePairs)
+        assertEquals(listOf(pair("go", "home")), left.pairs)
+        assertTrue(left.triples.isEmpty())
         assertFalse("nothing left of it to drop", buffer.forget("this"))
     }
 }

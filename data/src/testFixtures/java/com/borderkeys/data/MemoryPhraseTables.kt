@@ -12,11 +12,11 @@ import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserTripleContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 
 /** Rows keyed as Room keys them, indexed by context and counted by language. */
 private class IndexedRows<T>(private val keyOf: (T) -> List<String>, private val contextOf: (T) -> List<String>) {
     val rows = LinkedHashMap<List<String>, T>()
+    val changes = Changes()
     private val byContext = HashMap<List<String>, LinkedHashSet<List<String>>>()
     private val byLanguage = HashMap<String, Int>()
 
@@ -26,6 +26,7 @@ private class IndexedRows<T>(private val keyOf: (T) -> List<String>, private val
             byContext.getOrPut(contextOf(row)) { LinkedHashSet() } += key
             byLanguage[key[0]] = (byLanguage[key[0]] ?: 0) + 1
         }
+        changes.changed()
     }
 
     fun remove(row: T) {
@@ -34,6 +35,7 @@ private class IndexedRows<T>(private val keyOf: (T) -> List<String>, private val
             byContext[contextOf(row)]?.remove(key)
             byLanguage[key[0]] = (byLanguage[key[0]] ?: 1) - 1
         }
+        changes.changed()
     }
 
     fun inContext(context: List<String>): List<T> = byContext[context].orEmpty().mapNotNull { rows[it] }
@@ -44,6 +46,7 @@ private class IndexedRows<T>(private val keyOf: (T) -> List<String>, private val
         rows.clear()
         byContext.clear()
         byLanguage.clear()
+        changes.changed()
     }
 }
 
@@ -63,12 +66,6 @@ class MemoryPairs : UserBigramDao {
     override suspend fun involving(word: String) =
         table.rows.values.filter { it.previousWord == word || it.word == word }
     override suspend fun upsert(pair: UserBigram) = table.put(pair)
-    override suspend fun raiseMarks(language: String, previousWord: String, word: String, asserted: Int, added: Int) {
-        val held = table.rows.values.firstOrNull {
-            it.language == language && it.previousWord == previousWord && it.word == word
-        } ?: return
-        table.put(held.copy(asserted = maxOf(held.asserted, asserted), added = maxOf(held.added, added)))
-    }
     override suspend fun delete(pairs: List<UserBigram>) = pairs.forEach(table::remove)
     override suspend fun decayStale(cutoff: Long, now: Long) {
         table.rows.values.filter { it.lastUsedAt < cutoff && it.count > PersonalWordDecay.STALE_FLOOR }
@@ -79,8 +76,8 @@ class MemoryPairs : UserBigramDao {
             }
     }
     override suspend fun deleteAll() = table.clear()
-    override fun observeAll(): Flow<List<UserBigram>> = flowOf(table.rows.values.toList())
-    override fun observeCount(): Flow<Int> = flowOf(table.rows.size)
+    override fun observeAll(): Flow<List<UserBigram>> = table.changes.observe { table.rows.values.toList() }
+    override fun observeCount(): Flow<Int> = table.changes.observe { table.rows.size }
     override suspend fun count() = table.rows.size
     override suspend fun context(language: String, previousWord: String) = contexts[listOf(language, previousWord)]
     override suspend fun contextsIn(language: String) = contexts.values.filter { it.language == language }
@@ -123,20 +120,6 @@ class MemoryTriples : UserTrigramDao {
     override suspend fun usedAtMost(uses: Int) = table.rows.values.filter { it.count <= uses && it.asserted == 0 }
     override suspend fun involving(word: String) =
         table.rows.values.filter { it.previousWord2 == word || it.previousWord1 == word || it.word == word }
-    override suspend fun raiseMarks(
-        language: String,
-        previousWord2: String,
-        previousWord1: String,
-        word: String,
-        asserted: Int,
-        added: Int,
-    ) {
-        val held = table.rows.values.firstOrNull {
-            it.language == language && it.previousWord2 == previousWord2 && it.previousWord1 == previousWord1 &&
-                it.word == word
-        } ?: return
-        table.put(held.copy(asserted = maxOf(held.asserted, asserted), added = maxOf(held.added, added)))
-    }
     override suspend fun containingPair(language: String, first: String, second: String) =
         table.rows.values.filter {
             it.language == language &&
@@ -153,8 +136,8 @@ class MemoryTriples : UserTrigramDao {
             }
     }
     override suspend fun deleteAll() = table.clear()
-    override fun observeAll(): Flow<List<UserTrigram>> = flowOf(table.rows.values.toList())
-    override fun observeCount(): Flow<Int> = flowOf(table.rows.size)
+    override fun observeAll(): Flow<List<UserTrigram>> = table.changes.observe { table.rows.values.toList() }
+    override fun observeCount(): Flow<Int> = table.changes.observe { table.rows.size }
     override suspend fun count() = table.rows.size
     override suspend fun context(language: String, previousWord2: String, previousWord1: String) =
         contexts[listOf(language, previousWord2, previousWord1)]

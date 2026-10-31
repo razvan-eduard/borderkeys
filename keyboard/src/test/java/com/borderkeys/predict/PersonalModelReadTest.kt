@@ -5,13 +5,12 @@ package com.borderkeys.predict
 
 import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.InMemoryDictionary
-import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.SharedNativeTextRunner
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
+import com.borderkeys.data.personal.LinkWrites
+import com.borderkeys.data.personal.linkUses
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.OffensiveWords
 import com.borderkeys.typing.LearningBatch
@@ -48,10 +47,12 @@ class PersonalModelReadTest {
     fun `a learning batch writes its words, pairs and triples, each where it belongs`() = runTest {
         val batch = LearningBatch(
             updates = listOf(word("cat", 1)),
-            pairs = listOf(PairStep(LearnedBigram(LANGUAGE, "the", "cat", 1, AT))),
-            triples = listOf(TripleStep(LearnedTrigram(LANGUAGE, "on", "the", "cat", 1, AT))),
+            links = repository.linkUses(
+                pairUses = listOf(LearnedBigram(LANGUAGE, "the", "cat", 1, AT)),
+                tripleUses = listOf(LearnedTrigram(LANGUAGE, "on", "the", "cat", 1, AT)),
+            ),
         )
-        assertEquals(PhraseRecorder.Dropped(), batch.writeTo(repository))
+        batch.writeTo(repository)
         val rows = repository.personalRows(LIMIT)
         assertEquals(listOf("cat"), rows.words.map { it.word })
         assertEquals(listOf("the cat"), rows.pairs.map { "${it.previousWord} ${it.word}" })
@@ -60,7 +61,7 @@ class PersonalModelReadTest {
 
     @Test
     fun `the model read holds the words used most up to the setting's limit, offensive ones left out`() = runTest {
-        repository.applyLearning(listOf(word("most", 3), word("damn", 2), word("rare", 1)), emptyList(), emptyList())
+        repository.applyLearning(listOf(word("most", 3), word("damn", 2), word("rare", 1)), LinkWrites())
         val settings = KeyboardPreferences(learnedWordLimit = 2, blockOffensiveWords = true)
         val model = PersonalModelLoad.read(repository, settings, OffensiveWords.parse("damn\n"), AT)
         assertEquals(listOf("most"), model.words.map { it.word })

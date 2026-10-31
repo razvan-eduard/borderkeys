@@ -6,8 +6,9 @@
 Each case is a frequent word with one letter hit one key over or one inner letter left out,
 where the result is not a word itself but is a proper prefix of a word ranked past RARE_FROM in
 the list. The intended word is the frequent one; the rare word the typed letters begin is named
-in a comment above each row. Emitted as `mangled<TAB>intended`, read by `suggest_eval
---autocorrect` and by the bare `suggest_eval`.
+in a comment above each row. Emitted as `mangled<TAB>intended`, read by `PipelineCorpusTest`,
+which types each case through the app's commit, and by `suggest_eval --autocorrect`, which ranks
+it on the strip.
 
     python3 tools/make_rareprefix_corpus.py dictionaries/en_US.tsv > out.tsv
 """

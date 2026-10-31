@@ -42,6 +42,7 @@ class WordCommitTest {
         verbatim: Boolean = false,
         fromGesture: Boolean = false,
         runningText: Boolean = true,
+        putBack: Boolean = false,
         inflection: Boolean = false,
         settings: WordCommit.Settings = settings(),
     ) = WordCommit.decide(
@@ -50,6 +51,7 @@ class WordCommitTest {
         verbatim = verbatim,
         fromGesture = fromGesture,
         runningText = runningText,
+        putBack = putBack,
         shortcuts = shortcuts,
         contractions = contractions,
         possessive = possessive,
@@ -98,6 +100,17 @@ class WordCommitTest {
             assertNull(typed, outcome.text)
             assertEquals(WordCommit.REASON_VERBATIM, outcome.reason)
         }
+    }
+
+    @Test
+    fun `a word put back in this field is left as typed by every rule but the user's own shortcut`() {
+        val shortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))
+        for (typed in listOf("dont", "i", "lauras", "teh")) {
+            val outcome = decide(typed, suggestion = "the", possessive = "Laura's", shortcuts = shortcuts, putBack = true)
+            assertNull(typed, outcome.text)
+            assertEquals(WordCommit.REASON_PUT_BACK, outcome.reason)
+        }
+        assertEquals("on my way", decide("omw", shortcuts = shortcuts, putBack = true).text)
     }
 
     @Test

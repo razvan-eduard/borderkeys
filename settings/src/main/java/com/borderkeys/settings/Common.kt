@@ -323,11 +323,11 @@ fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffe
 }
 
 /**
- * Of [saved], the entries that count as learned, as the keyboard counts them: [select] under the
- * stored preferences, at the time the screen opened.
+ * What of [saved] counts as learned, as the keyboard counts it: [select] under the stored
+ * preferences, at the time the screen opened.
  */
 @Composable
-fun <T> rememberLearned(saved: List<T>, select: (List<T>, KeyboardPreferences, Long) -> List<T>): List<T> {
+fun <T, R> rememberLearned(saved: List<T>, select: (List<T>, KeyboardPreferences, Long) -> R): R {
     val themes = remember { DataGraph.themes }
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })

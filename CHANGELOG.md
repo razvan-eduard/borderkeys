@@ -50,6 +50,24 @@ attestations and the full commit lists are on the
   word you began with shift, and a word swiped with shift on while Capitalise names is off are
   remembered as a name, as a word typed with shift is. A caps lock the field turns on counts for
   none of them.
+- The word read from where your taps landed takes the strip's second place also when the strip
+  already lists it further down.
+- A word counts as chosen on purpose only when you choose it: a suggestion picked over the one the
+  strip leads with, the typed word kept with its chip, or a word of the swipe ring below its top
+  one. Taking the outlined correction, the ring's top word or its timeout, or putting a correction
+  back with backspace counts the word without choosing it, and each choice now counts. Picking a
+  phrase chooses the phrase, and it stays however many others follow its first word.
+- A correction you put back with backspace is not made again to that word in the same field; in
+  the next one it is, until you have written the word often enough for it to be learned.
+- A word you learn is filed under the language you typed it in. The Learned words page groups
+  words by language and shows each in the spelling you added by hand, else the one you use most.
+- A word you only ever wrote in a language whose pack is off is not suggested until that pack is
+  on again.
+- Turning learning off from the quick action keeps what you typed before it, and an edit on the
+  Learned pages shows on the strip at once.
+- A restore merges the backup with what the keyboard holds, keeping the larger count of each
+  word, and says what it left out; a blocked word is not brought back.
+- Words picked on the strip before this update count as learned, not as chosen on purpose.
 - Fixed: the first word after you turned caps lock on, written in capitals throughout such as
   "NASA", was taken for a name; a word in capitals throughout is now learned as written.
 - Fixed: with Capitalise names off, a swiped word ignored shift and caps lock, and a swiped name
@@ -69,11 +87,14 @@ attestations and the full commit lists are on the
 - Fixed: a phrase appeared only after at least four uses whatever "How soon a word or phrase is
   learned" asked, and from five uses up as soon as a single word; a phrase now takes twice the
   uses set for a word, at every setting.
-- Fixed: a word you chose on purpose, picked from the strip or put back after a correction,
-  could be deleted by the clean-up as a word used once, and could drop out of the keyboard's
+- Fixed: a word you chose on purpose could be deleted by the clean-up as a word used once, and could drop out of the keyboard's
   memory after long unused; it is kept now.
 - Fixed: a change on the Personal dictionary screens, or a correction put back, could lose the
   last few seconds of learning until the keyboard next reloaded it.
+- Fixed: a word typed in full, or a correction, could drop off the strip when many longer words
+  began with the letters typed; the longer words shown are still the best of them.
+- Fixed: a word blocked on the Learned words page could come back from uses typed just before
+  the block.
 
 ## v0.11.0 — 2026-10-06
 

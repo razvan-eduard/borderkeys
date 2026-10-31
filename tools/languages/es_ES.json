@@ -18,7 +18,20 @@
   ],
   "capitals": "spa_news_2020_1M",
   "heldout": "spa_news_2023_1M",
+  "heldout_split": {
+    "dev": 5,
+    "personal": 630,
+    "case": 365
+  },
   "persona": "José",
+  "treebank": {
+    "repository": "UD_Spanish-GSD",
+    "release": "r2.18",
+    "files": [
+      "es_gsd-ud-dev.conllu",
+      "es_gsd-ud-train.conllu"
+    ]
+  },
   "sha256": {
     "spa_news_2020_1M.tar.gz": "89fb1319f53b341466c065152467cb1bd3789a3ed9aa143807b1952503ef1d50",
     "spa_news_2021_1M.tar.gz": "eb16987f15d1109279bac2e280065100c3d660e71f23d50623f6bb84eff0f1b4",

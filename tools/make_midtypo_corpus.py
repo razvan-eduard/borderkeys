@@ -5,7 +5,8 @@
 
 Each case transposes two adjacent middle letters and drops the last character, so reaching the
 intended word needs one edit and one completed character together. Emitted as
-`mangled<TAB>intended`, read by `suggest_eval --autocorrect`.
+`mangled<TAB>intended`, read by `PipelineCorpusTest`, which types each case through the app's
+commit, and by `suggest_eval --autocorrect`, which ranks it on the strip.
 
 Cases whose mangled form is itself a dictionary word are skipped.
 

@@ -16,16 +16,20 @@ import java.io.File
 class UnlockedPathsTest {
 
     /** Members of `DataGraph` readable before the unlock. */
-    private val lockedSafe = setOf("install", "isUserUnlocked", "lockedAppearance", "LOCKED_APPEARANCE_FILE")
+    private val lockedSafe = setOf(
+        "install", "isUserUnlocked", "lockedAppearance", "LOCKED_APPEARANCE_FILE", "personalWorker",
+    )
 
     /** Members reached only after the unlock, by file. */
     private val unlockedOnly = mapOf(
         "BorderKeysService.kt" to setOf(
             // Started by startUnlocked, or from what it starts.
             "loadDictionaries", "startUnlocked", "observeSettings", "observeLanguagePacks",
-            "observeDictionaryEdits", "restoreLanguageEvidence",
+            "restoreLanguageEvidence",
+            // Attached to the personal dictionary by startUnlocked.
+            "personalModel",
             // Reached through the learning flow, whose gate follows FieldPolicy.userUnlocked.
-            "learningStore", "persistLearning", "maybeDecayPersonalDictionary",
+            "learningStore", "maybeDecayPersonalDictionary",
             // Reached from the clipboard panel, opened by offerClipboardHistory, or from the
             // clipboard listener, registered by registerClipboardListener.
             "onClipPinToggled", "onClipDeleted", "refreshClipboardPanel", "onClipboardPicked",
@@ -35,7 +39,7 @@ class UnlockedPathsTest {
             // Behind the field policy's clipboard gate, which follows FieldPolicy.userUnlocked.
             "offerClipboardHistory", "rememberScreenshot",
         ),
-        "DictionaryLoader.kt" to setOf("load", "reloadPersonal"),
+        "DictionaryLoader.kt" to setOf("load"),
     )
 
     @Test

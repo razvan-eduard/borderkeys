@@ -14,6 +14,7 @@ internal class PredictionRequestQueue {
     private var pendingComposing: String = ""
     private var pendingPrevious1: String? = null
     private var pendingPrevious2: String? = null
+    private var pendingLanguage: String = ""
     private var pendingTapXs: FloatArray? = null
     private var pendingTapYs: FloatArray? = null
 
@@ -25,6 +26,10 @@ internal class PredictionRequestQueue {
     var currentPrevious1: String? = null
         private set
     var currentPrevious2: String? = null
+        private set
+
+    /** The language whose learned pairs and triples [currentComposing]'s request reads. */
+    var currentLanguage: String = ""
         private set
 
     /** Where each code point of [currentComposing] was tapped, or null for no taps. */
@@ -41,14 +46,16 @@ internal class PredictionRequestQueue {
         private set
 
     /**
-     * Records a request, with where each code point of [composing] was tapped, or null for no
-     * taps. Returns true when no worker is scheduled or running.
+     * Records a request, the learned pairs and triples read in [language]'s store, with where each
+     * code point of [composing] was tapped, or null for no taps. Returns true when no worker is
+     * scheduled or running.
      */
     @Synchronized
     fun submit(
         composing: String,
         previous1: String?,
         previous2: String?,
+        language: String,
         tapXs: FloatArray? = null,
         tapYs: FloatArray? = null,
     ): Boolean {
@@ -59,6 +66,7 @@ internal class PredictionRequestQueue {
         pendingComposing = composing
         pendingPrevious1 = previous1
         pendingPrevious2 = previous2
+        pendingLanguage = language
         pendingTapXs = tapXs
         pendingTapYs = tapYs
 
@@ -80,6 +88,7 @@ internal class PredictionRequestQueue {
         currentComposing = pendingComposing
         currentPrevious1 = pendingPrevious1
         currentPrevious2 = pendingPrevious2
+        currentLanguage = pendingLanguage
         currentTapXs = pendingTapXs
         currentTapYs = pendingTapYs
         currentGeneration = generations.issue()
@@ -101,6 +110,7 @@ internal class PredictionRequestQueue {
         currentComposing = ""
         currentPrevious1 = null
         currentPrevious2 = null
+        currentLanguage = ""
         currentTapXs = null
         currentTapYs = null
     }

@@ -19,7 +19,20 @@
   ],
   "capitals": "eng_news_2020_1M",
   "heldout": "eng_news_2023_1M",
+  "heldout_split": {
+    "dev": 5,
+    "personal": 675,
+    "case": 320
+  },
   "persona": "Friday",
+  "treebank": {
+    "repository": "UD_English-EWT",
+    "release": "r2.18",
+    "files": [
+      "en_ewt-ud-dev.conllu",
+      "en_ewt-ud-train.conllu"
+    ]
+  },
   "sha256": {
     "eng_news_2020_1M.tar.gz": "be782eb82690415241d623fd2448dfd3fc68102ac1ce971107cb130420abbb41",
     "eng_news_2023_1M.tar.gz": "c8a5a5e72897aa5e367b0319c1884831c02aaf29bf81342de31ca1b1cc8f3e4c",

@@ -18,5 +18,9 @@
   "overlay": {},
   "single_letter_words": "аиосу",
   "expected_beyond_ascii": [],
-  "reachability_budget": 96
+  "reachability_budget": 96,
+  "sha256": {
+    "mkd_newscrawl_2011_300K.tar.gz": "660a6306833c54b945918b3d1a5e7734a40bc3f59c390953c14868e2ddd6c554",
+    "mkd_wikipedia_2021_300K.tar.gz": "f3ea4f2b111eb40f385862e89473ab8789230ca65e202287bd021cfa51255a34"
+  }
 }

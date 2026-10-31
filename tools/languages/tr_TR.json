@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Turkish-BOUN",
+    "release": "r2.18",
     "files": [
       "tr_boun-ud-train.conllu",
       "tr_boun-ud-dev.conllu",
@@ -29,5 +30,10 @@
   },
   "single_letter_words": "o",
   "expected_beyond_ascii": [],
-  "reachability_budget": 283
+  "reachability_budget": 283,
+  "sha256": {
+    "tur_news_2024_1M.tar.gz": "7f4ba999f97ae0637c9ba1d49e09e317cd3e5c0700779b2ed1479f3d83319910",
+    "tur_newscrawl_2018_1M.tar.gz": "4c26eca9c84a26e330947c449030f26a4f6575a0574c8e4123055bf0be0ae320",
+    "tur_wikipedia_2021_1M.tar.gz": "aff1124d41b5922c79afb6a87e630a8195ce99a479698d3fa203907d2db4dfa9"
+  }
 }

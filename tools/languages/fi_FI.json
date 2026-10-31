@@ -10,6 +10,7 @@
   "hunspell": [],
   "treebank": {
     "repository": "UD_Finnish-TDT",
+    "release": "r2.18",
     "files": [
       "fi_tdt-ud-train.conllu",
       "fi_tdt-ud-dev.conllu",
@@ -22,5 +23,10 @@
   },
   "single_letter_words": "",
   "expected_beyond_ascii": [],
-  "reachability_budget": 202
+  "reachability_budget": 202,
+  "sha256": {
+    "fin_news_2022_1M.tar.gz": "72154a4472cc828a237c708f8b5c213baa33e10cc1b37fbd274be3f9d4e3d9bd",
+    "fin_newscrawl_2017_1M.tar.gz": "fd02288161fb932a5fa5da7db495af90b6c5ff2a508c50d706f65ea92ebc1383",
+    "fin_wikipedia_2021_1M.tar.gz": "bbbe377af65589e85be29e47f153d32ee8900929693a8c25443cb757a95643bd"
+  }
 }

@@ -3,30 +3,24 @@
 
 package com.borderkeys.data.backup
 
-import androidx.room.withTransaction
 import com.borderkeys.data.BorderKeysDatabase
 import com.borderkeys.data.ClipboardRepository
 import com.borderkeys.data.DictionaryRepository
-import com.borderkeys.data.PhraseKey
-import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.LearnedTrigram
-import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.entity.BlockedWord
-import com.borderkeys.data.entity.UserPairContext
-import com.borderkeys.data.entity.UserTripleContext
+import com.borderkeys.data.DictionaryRows
 import com.borderkeys.data.theme.ThemeRepository
 import kotlinx.coroutines.flow.first
 
 /**
  * Gathering what a keyboard knows, and putting it back, in parts chosen one at a time. Importing
- * adds where it can (a dictionary merges by summing counts); settings, theme, particle effects and
- * size and position are each replaced whole.
+ * adds where it can (a dictionary merges by the larger of each count and stamp,
+ * [DictionaryRepository.restore]); settings, theme, particle effects and size and position are
+ * each replaced whole.
  */
 class BackupRepository(
     private val database: BorderKeysDatabase,
     private val themes: ThemeRepository,
     private val dictionary: DictionaryRepository,
-    /** The language of a restored link that names none and whose words name none either. */
+    /** The language of a link a file before format 4 restores naming none, whose words name none either. */
     private val fallbackLanguage: () -> String,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
@@ -83,79 +77,8 @@ class BackupRepository(
             emptyList()
         }
 
-        // Every word.
-        val words = if (parts.dictionary) {
-            database.userWordDao().topWords(Int.MAX_VALUE).map {
-                BackupWord(
-                    word = it.word,
-                    locale = it.locale,
-                    count = it.count,
-                    lastUsedAt = it.lastUsedAt,
-                    deliberateCapitals = it.deliberateCapitals,
-                    asserted = it.asserted,
-                    added = it.added,
-                )
-            }
-        } else {
-            emptyList()
-        }
-        val bigrams = if (parts.dictionary) {
-            database.userBigramDao().all().map {
-                BackupBigram(
-                    previous = it.previousWord,
-                    word = it.word,
-                    count = it.count,
-                    language = it.language,
-                    lastUsedAt = it.lastUsedAt,
-                    contextSeen = it.contextSeen,
-                    languageSeen = it.languageSeen,
-                    asserted = it.asserted,
-                    added = it.added,
-                )
-            }
-        } else {
-            emptyList()
-        }
-        val trigrams = if (parts.dictionary) {
-            database.userTrigramDao().all().map {
-                BackupTrigram(
-                    previous2 = it.previousWord2,
-                    previous1 = it.previousWord1,
-                    word = it.word,
-                    count = it.count,
-                    language = it.language,
-                    lastUsedAt = it.lastUsedAt,
-                    contextSeen = it.contextSeen,
-                    languageSeen = it.languageSeen,
-                    asserted = it.asserted,
-                    added = it.added,
-                )
-            }
-        } else {
-            emptyList()
-        }
-        // Each context's uses and each language's clocks, with the pairs and triples.
-        val pairContexts = if (parts.dictionary) {
-            database.userBigramDao().allContexts().map {
-                BackupPairContext(it.language, it.previousWord, it.total, it.seen, it.lastUsedAt)
-            }
-        } else {
-            emptyList()
-        }
-        val tripleContexts = if (parts.dictionary) {
-            database.userTrigramDao().allContexts().map {
-                BackupTripleContext(it.language, it.previousWord2, it.previousWord1, it.total, it.seen, it.lastUsedAt)
-            }
-        } else {
-            emptyList()
-        }
-        val phraseClocks = if (parts.dictionary) {
-            database.userPhraseClockDao().all().map { BackupPhraseClock(it.language, it.pairs, it.triples) }
-        } else {
-            emptyList()
-        }
-        // Blocked words travel with the dictionary.
-        val blocked = if (parts.dictionary) database.blockedWordDao().allWords() else emptyList()
+        // The personal dictionary, read after every write asked for before it; blocked words travel with it.
+        val dictionaryRows = if (parts.dictionary) dictionary.contents() else DictionaryRows()
 
         val clips = if (parts.clipboard) {
             database.clipboardDao().observeLive(0L).first()
@@ -180,19 +103,41 @@ class BackupRepository(
             particleEffects = particleEffects,
             sizeAndPosition = sizeAndPosition,
             packs = packs,
-            words = words,
-            bigrams = bigrams,
-            trigrams = trigrams,
-            pairContexts = pairContexts,
-            tripleContexts = tripleContexts,
-            phraseClocks = phraseClocks,
-            blocked = blocked,
+            words = dictionaryRows.words.map {
+                BackupWord(it.word, it.language, it.count, it.lastUsedAt, it.deliberateCapitals, it.asserted, it.added)
+            },
+            bigrams = dictionaryRows.pairs.map {
+                BackupBigram(
+                    it.previousWord, it.word, it.count, it.language, it.lastUsedAt, it.contextSeen, it.asserted,
+                    it.added,
+                )
+            },
+            trigrams = dictionaryRows.triples.map {
+                BackupTrigram(
+                    it.previousWord2, it.previousWord1, it.word, it.count, it.language, it.lastUsedAt, it.contextSeen,
+                    it.asserted, it.added,
+                )
+            },
+            pairContexts = dictionaryRows.pairContexts.map {
+                BackupPairContext(it.language, it.previousWord, it.total, it.seen, it.lastUsedAt)
+            },
+            tripleContexts = dictionaryRows.tripleContexts.map {
+                BackupTripleContext(it.language, it.previousWord2, it.previousWord1, it.total, it.seen, it.lastUsedAt)
+            },
+            corrections = dictionaryRows.corrections.map {
+                BackupCorrection(it.language, it.key, it.previousWord, it.word, it.count, it.lastUsedAt)
+            },
+            blocked = dictionaryRows.blocked,
             clips = clips,
             models = models,
         )
     }
 
-    /** What an import did. */
+    /**
+     * What an import did: the parts written, how many of each kind of entry were restored, and how
+     * many were left out, refused for a block on this device ([leftOutBlocked]) or not readable
+     * ([leftOutUnreadable]).
+     */
     data class Applied(
         val settings: Boolean = false,
         val theme: Boolean = false,
@@ -201,7 +146,10 @@ class BackupRepository(
         val words: Int = 0,
         val pairs: Int = 0,
         val triples: Int = 0,
+        val corrections: Int = 0,
         val blocked: Int = 0,
+        val leftOutBlocked: Int = 0,
+        val leftOutUnreadable: Int = 0,
         val languages: Int = 0,
         val clips: Int = 0,
         val assistModels: Int = 0,
@@ -279,83 +227,17 @@ class BackupRepository(
         }
 
         if (parts.dictionary) {
-            val stamp = now()
-            // One transaction across every table the dictionary writes.
-            database.withTransaction {
-                // A file without a word's or a link's last use reads it as used now.
-                fun usedAt(written: Long) = if (written > 0L) written else stamp
-                database.userWordDao().incrementAll(
-                    payload.words.map {
-                        LearnedWord(
-                            word = it.word,
-                            locale = it.locale,
-                            delta = it.count,
-                            lastUsedAt = usedAt(it.lastUsedAt),
-                        )
-                    },
-                )
-                for (word in payload.words) {
-                    if (word.deliberateCapitals > 0) {
-                        database.userWordDao().raiseDeliberateCapitals(word.word, word.deliberateCapitals)
-                    }
-                    if (word.asserted > 0) {
-                        database.userWordDao().raiseAsserted(word.word, word.asserted)
-                    }
-                    if (word.added > 0) {
-                        database.userWordDao().raiseAdded(word.word, word.added)
-                    }
-                }
-                // A file without languages: each link takes the one its word was learned under, else
-                // the one most words were, else the fallback.
-                val languageOf = PhraseKey.languageOfWord(
-                    payload.words.associate { it.word to it.locale }, fallbackLanguage(),
-                )
-                // The contexts' carried uses; the stamps and the clocks are not read, a merge
-                // stamps at this device's tick.
-                dictionary.importPhrases(
-                    payload.bigrams.filter { it.count > 0 }.map {
-                        LearnedBigram(
-                            language = it.language.ifEmpty { languageOf(it.word) },
-                            previousWord = PhraseKey.word(it.previous),
-                            word = PhraseKey.word(it.word),
-                            delta = it.count,
-                            lastUsedAt = usedAt(it.lastUsedAt),
-                            asserted = it.asserted,
-                            added = it.added,
-                        )
-                    },
-                    payload.trigrams.filter { it.count > 0 }.map {
-                        LearnedTrigram(
-                            language = it.language.ifEmpty { languageOf(it.word) },
-                            previousWord2 = PhraseKey.word(it.previous2),
-                            previousWord1 = PhraseKey.word(it.previous1),
-                            word = PhraseKey.word(it.word),
-                            delta = it.count,
-                            lastUsedAt = usedAt(it.lastUsedAt),
-                            asserted = it.asserted,
-                            added = it.added,
-                        )
-                    },
-                    payload.pairContexts.map {
-                        UserPairContext(it.language, PhraseKey.word(it.previous), it.total, it.lastUsedAt, it.seen)
-                    },
-                    payload.tripleContexts.map {
-                        UserTripleContext(
-                            it.language, PhraseKey.word(it.previous2), PhraseKey.word(it.previous1), it.total,
-                            it.lastUsedAt, it.seen,
-                        )
-                    },
-                )
-                for (word in payload.blocked) {
-                    database.blockedWordDao().insert(BlockedWord(word))
-                }
-            }
-            dictionary.edited()
+            // Every entry read and checked before any is written, under the file's format's rules.
+            val read = BackupDictionary.read(payload, fallbackLanguage(), now())
+            val restored = dictionary.restore(read.rows)
             applied = applied.copy(
-                words = payload.words.size,
-                pairs = payload.bigrams.size,
-                triples = payload.trigrams.size,
-                blocked = payload.blocked.size,
+                words = restored.words.size,
+                pairs = restored.pairs.size,
+                triples = restored.triples.size,
+                corrections = restored.corrections.size,
+                blocked = restored.blocked.size,
+                leftOutBlocked = read.rows.entries - restored.entries,
+                leftOutUnreadable = read.unreadable,
             )
         }
 
@@ -401,7 +283,8 @@ class BackupRepository(
         particleEffects = payload.particleEffects != null,
         sizeAndPosition = payload.sizeAndPosition != null,
         dictionary = payload.words.isNotEmpty() || payload.bigrams.isNotEmpty() ||
-            payload.trigrams.isNotEmpty() || payload.blocked.isNotEmpty(),
+            payload.trigrams.isNotEmpty() || payload.pairContexts.isNotEmpty() ||
+            payload.tripleContexts.isNotEmpty() || payload.corrections.isNotEmpty() || payload.blocked.isNotEmpty(),
         languages = payload.packs.isNotEmpty(),
         clipboard = payload.clips.isNotEmpty(),
     )

@@ -3,6 +3,7 @@
 
 package com.borderkeys.typing
 
+import com.borderkeys.data.PhraseKey
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.LanguageSwitchCorrector
@@ -11,7 +12,8 @@ import com.borderkeys.typing.TypingOrchestrator.Companion.FIELD_HISTORY_CHARS
 
 /**
  * The end of a word: what a delimiter writes in place of it ([WordCommit]), the correction left
- * pending until the next key, and the corrections a change of language leaves wrong.
+ * pending until the next key, the words put back with backspace in this field, and the
+ * corrections a change of language leaves wrong.
  */
 class CommitFlow(
     /** The field being typed into, or null when none is bound. */
@@ -23,6 +25,9 @@ class CommitFlow(
     var contractions: Map<String, String> = emptyMap()
 
     private var pendingCorrection: PendingCorrection? = null
+
+    /** The words a correction was put back from with backspace in this field, as [PhraseKey.word] keys them. */
+    private val putBack = HashSet<String>()
 
     /** Finds the words that look wrong once the conversation's language has changed. */
     private val languageSwitchCorrector = LanguageSwitchCorrector()
@@ -37,11 +42,13 @@ class CommitFlow(
     )
 
     /**
-     * Each field starts at the strictness the settings ask for, with no corrections for a change of
-     * language to take back, under the language the engine detects as it opens.
+     * Each field starts at the strictness the settings ask for, with no word put back and no
+     * corrections for a change of language to take back, under the language the engine detects as
+     * it opens.
      */
     override fun onFieldStarted(field: FieldSession) {
         engine.setCorrectionStrictness(settings.correctionStrictness)
+        putBack.clear()
         languageSwitchCorrector.reset()
         if (settings.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             return
@@ -58,7 +65,8 @@ class CommitFlow(
 
     /**
      * What the key [endedBy] would write in place of [typed]; see [WordCommit]. [fromGesture] and
-     * [runningText] are the word's, [answer] the engine's last answer. Reads no editor.
+     * [runningText] are the word's, [answer] the engine's last answer; a word put back with
+     * backspace in this field stays as typed. Reads no editor.
      */
     internal fun decide(
         typed: String,
@@ -72,6 +80,7 @@ class CommitFlow(
         verbatim = session.policy.verbatim,
         fromGesture = fromGesture,
         runningText = runningText,
+        putBack = putBack.isNotEmpty() && PhraseKey.word(typed) in putBack,
         shortcuts = settings.textShortcuts,
         contractions = contractions,
         possessive = answer.possessive,
@@ -134,9 +143,9 @@ class CommitFlow(
 
     /**
      * Takes the pending correction, and replaces it and its delimiter with what was typed, in one
-     * batch edit. It stands instead when [viaBackspace] and
-     * [KeyboardPreferences.revertCorrectionOnBackspace] is off, or when the text before the caret
-     * changed. Returns null when nothing was pending.
+     * batch edit; with [viaBackspace], the typed word is put back for the rest of the field. It
+     * stands instead when [viaBackspace] and [KeyboardPreferences.revertCorrectionOnBackspace] is
+     * off, or when the text before the caret changed. Returns null when nothing was pending.
      */
     fun revert(editor: FieldEditor, viaBackspace: Boolean): Revert? {
         val pending = takePending() ?: return null
@@ -154,6 +163,9 @@ class CommitFlow(
         editor.deleteSurroundingText(committed.length, 0)
         editor.commitText(pending.typed + pending.delimiter, 1)
         editor.endBatchEdit()
+        if (viaBackspace) {
+            putBack += PhraseKey.word(pending.typed)
+        }
         return Revert(pending, reverted = true, learnCorrected = false)
     }
 

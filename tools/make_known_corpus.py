@@ -4,7 +4,8 @@
 """Builds a corpus of correctly spelled pack words across the frequency range, to be left alone.
 
 Fifty words from each of four frequency bands, none a name. Every line is `word<TAB>word`, the
-corpus idiom for "leave it alone", read by `suggest_eval --autocorrect`.
+corpus idiom for "leave it alone", read by `PipelineCorpusTest`, which types each case through
+the app's commit, and by `suggest_eval --autocorrect`, which ranks it on the strip.
 
     python3 tools/make_known_corpus.py dictionaries/en_US.tsv > out.tsv
 """

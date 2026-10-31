@@ -109,7 +109,10 @@ bool loadAndQuery(const std::string& bytes, const char* scratchPath, bool* loade
                              nullptr, 0, nullptr, 0, out, 8);
     }
 
-    engine.learn("abc", 3, "the", 3, nullptr, 0);
+    // A commit in the pack's language, then a request reading its context's slice.
+    WorkingCopyFixture copy(engine);
+    copy.commit("abc", 3, "the", 3, nullptr, 0, false, false, "x", 1);
+    copy.suggest("a", 1, "the", 3, nullptr, 0, out, 8, "x", 1);
     engine.destroy();
     return true;
 }

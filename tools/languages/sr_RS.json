@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Serbian-SET",
+    "release": "r2.18",
     "files": [
       "sr_set-ud-train.conllu",
       "sr_set-ud-dev.conllu",
@@ -21,5 +22,9 @@
   "overlay": {},
   "single_letter_words": "аиоусј",
   "expected_beyond_ascii": [],
-  "reachability_budget": 181
+  "reachability_budget": 181,
+  "sha256": {
+    "srp_wikipedia_2016_1M.tar.gz": "f22c8ec3b5de9b8afee5883978b58060ab7d2a66653e367299ede2a0613db8c3",
+    "srp_wikipedia_2021_1M.tar.gz": "870f0e430815caab6b5ed2e4fc99f14886e97b5551235679c17b437a4598b867"
+  }
 }

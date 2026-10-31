@@ -1,0 +1,7 @@
+# A corpus with sentence lines, for the sentence-rows check: each row carries its sentence and
+# genre.
+# sentence news s1
+keys border test
+a b
+# sentence wiki s2
+-test keys

@@ -30,6 +30,7 @@ import com.borderkeys.data.backup.BackupFile
 import com.borderkeys.data.backup.BackupPayload
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.BackupPartSwitches
 import com.borderkeys.settings.BackupReviewChecklist
 import com.borderkeys.settings.Explanation
@@ -180,14 +181,28 @@ fun BackupScreen(modifier: Modifier = Modifier) {
             onConfirm = {
                 pendingImport = null
                 scope.launch {
-                    withContext(Dispatchers.IO) { backups.apply(importing, reviewSelection) }
-                    notice = strings[Keys.BACKUP_IMPORTED]
+                    val applied = withContext(Dispatchers.IO) { backups.apply(importing, reviewSelection) }
+                    notice = importedNotice(strings[Keys.BACKUP_IMPORTED], applied, strings)
                 }
             },
             onDismiss = { pendingImport = null },
         )
     }
 }
+
+/**
+ * [done], what an import says once it is written, then a line for each kind of entry [applied]
+ * left out: those blocked on this device, and those that could not be read.
+ */
+internal fun importedNotice(done: String, applied: BackupRepository.Applied, strings: LanguageManager): String =
+    listOfNotNull(
+        done,
+        applied.leftOutBlocked.takeIf { it > 0 }?.let { strings.getString(Keys.BACKUP_LEFT_OUT_BLOCKED, it) },
+        applied.leftOutUnreadable.takeIf { it > 0 }?.let { strings.getString(Keys.BACKUP_LEFT_OUT_UNREADABLE, it) },
+    ).joinToString(NOTICE_LINE_BREAK)
+
+/** Between the lines of an import's notice. */
+private const val NOTICE_LINE_BREAK = "\n"
 
 /**
  * What a read file carries, ticked so it can be narrowed before anything is written. [detected]

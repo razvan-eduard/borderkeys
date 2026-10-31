@@ -3,10 +3,6 @@
 
 package com.borderkeys.data
 
-import com.borderkeys.data.dao.LearnedBigram
-import com.borderkeys.data.dao.LearnedTrigram
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.dao.UserBigramDao
 import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.entity.UserBigram
@@ -44,8 +40,7 @@ internal data class ContextRow(
 
 /**
  * Uses of a pair or triple to record: its language, the words before its last, its last word,
- * how many, when; [asserted] and [added] are what the record adds to its marks, or what an
- * import lifts them to.
+ * how many, when; [asserted] and [added] are what the record adds to its marks.
  */
 internal data class LinkUpdate(
     val language: String,
@@ -86,24 +81,8 @@ internal fun ContextRow.toTripleContext(): UserTripleContext {
     return UserTripleContext(language, previousWord2, previousWord1, total, lastUsedAt, seen)
 }
 
-internal fun LearnedBigram.update() =
-    LinkUpdate(language, listOf(previousWord), word, delta, lastUsedAt, asserted, added)
-
-internal fun LearnedTrigram.update() =
-    LinkUpdate(language, listOf(previousWord2, previousWord1), word, delta, lastUsedAt, asserted, added)
-
-/** A use the engine recorded, or none, and the links it dropped right after, either kind. */
-internal class LinkStep(val use: LinkUpdate?, val dropped: List<LinkRow>)
-
-internal fun PairStep.step() = LinkStep(use?.update(), dropped.map { it.row() })
-
-internal fun TripleStep.step() = LinkStep(use?.update(), dropped.map { it.row() })
-
 /** One kind's tables, pairs or triples, read and written as rows. */
 internal interface LinkTable {
-
-    /** What one context of this kind keeps. */
-    val limits: PhraseBudget.Limits
 
     /** This kind's clock in [clock]. */
     fun clockIn(clock: UserPhraseClock): Long
@@ -119,9 +98,6 @@ internal interface LinkTable {
     suspend fun inContext(language: String, context: List<String>): List<LinkRow>
 
     suspend fun upsert(link: LinkRow)
-
-    /** Lifts [link]'s marks to at least [asserted] and [added]. */
-    suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int)
 
     suspend fun delete(links: List<LinkRow>)
 
@@ -143,8 +119,6 @@ internal interface LinkTable {
 
 /** The pair tables. */
 internal class PairTable(private val dao: UserBigramDao) : LinkTable {
-    override val limits = PhraseBudget.PAIRS
-
     override fun clockIn(clock: UserPhraseClock) = clock.pairs
 
     override fun withClock(clock: UserPhraseClock, tick: Long) = clock.copy(pairs = tick)
@@ -158,9 +132,6 @@ internal class PairTable(private val dao: UserBigramDao) : LinkTable {
         dao.inContext(language, context.single()).map { it.row() }
 
     override suspend fun upsert(link: LinkRow) = dao.upsert(link.toBigram())
-
-    override suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int) =
-        dao.raiseMarks(link.language, link.context.single(), link.word, asserted, added)
 
     override suspend fun delete(links: List<LinkRow>) = dao.delete(links.map { it.toBigram() })
 
@@ -179,8 +150,6 @@ internal class PairTable(private val dao: UserBigramDao) : LinkTable {
 
 /** The triple tables. */
 internal class TripleTable(private val dao: UserTrigramDao) : LinkTable {
-    override val limits = PhraseBudget.TRIPLES
-
     override fun clockIn(clock: UserPhraseClock) = clock.triples
 
     override fun withClock(clock: UserPhraseClock, tick: Long) = clock.copy(triples = tick)
@@ -198,11 +167,6 @@ internal class TripleTable(private val dao: UserTrigramDao) : LinkTable {
     }
 
     override suspend fun upsert(link: LinkRow) = dao.upsert(link.toTrigram())
-
-    override suspend fun raiseMarks(link: LinkRow, asserted: Int, added: Int) {
-        val (previousWord2, previousWord1) = link.context
-        dao.raiseMarks(link.language, previousWord2, previousWord1, link.word, asserted, added)
-    }
 
     override suspend fun delete(links: List<LinkRow>) = dao.delete(links.map { it.toTrigram() })
 

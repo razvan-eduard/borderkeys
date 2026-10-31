@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.WordShape
+import com.borderkeys.data.personal.LinkWrites
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.theme.KeyFlick
@@ -46,8 +47,11 @@ class TypingOrchestrator(
     store: LearningStore,
     private val clock: TypingClock,
 ) {
+    /** The language lock and preference each field starts with, and the language being written. */
+    private val languageFlow = LanguageFlow(engine, host)
+
     /** What is learned from typing, and the gate on it. */
-    private val learningFlow = LearningFlow(engine, host, store, clock)
+    private val learningFlow = LearningFlow(engine, host, store, clock) { languageFlow.language }
 
     /** Shift, caps lock and auto-shift, and the casing they give words. */
     private val shiftFlow = ShiftFlow(currentEditor, host, clock)
@@ -62,7 +66,7 @@ class TypingOrchestrator(
     private val commitFlow = CommitFlow(currentEditor, engine)
 
     /** What the strip asks the engine, the answer a delimiter applies, and the strip's row. */
-    private val suggestionFlow = SuggestionFlow(engine, host, clock)
+    private val suggestionFlow = SuggestionFlow(engine, host, clock) { languageFlow.language }
 
     /** A swipe between its decode and its word, and the words its ring offers. */
     private val swipeFlow = SwipeFlow()
@@ -72,8 +76,8 @@ class TypingOrchestrator(
 
     /** The flows, in the order each hears of a field and of the settings. */
     private val flows: List<TypingFlow> = listOf(
-        terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow, suggestionFlow, swipeFlow,
-        accentFlow,
+        languageFlow, terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow,
+        suggestionFlow, swipeFlow, accentFlow,
     )
 
     var preferences = KeyboardPreferences()
@@ -82,6 +86,12 @@ class TypingOrchestrator(
     /** The field being typed into: what it is and what it allows. */
     var session = FieldSession.NONE
         private set
+
+    /**
+     * The language being written, a primary language subtag: every request reads its learned pairs
+     * and triples, and every commit is learned under it ([LanguageFlow]).
+     */
+    val language: String get() = languageFlow.language
 
     /** The tags of the packs the engine consults, heaviest first. */
     var languageTags: List<String>
@@ -303,6 +313,18 @@ class TypingOrchestrator(
 
     /** Writes the learning not yet saved and waits for the write; see [LearningFlow.flushNow]. */
     suspend fun flushLearningNow() = learningFlow.flushNow()
+
+    /** The personal model is about to be read again; see [LearningFlow.linksStale]. */
+    suspend fun personalModelStale() = learningFlow.linksStale()
+
+    /** The personal model was read again; see [LearningFlow.linksFresh]. */
+    fun personalModelFresh() = learningFlow.linksFresh()
+
+    /** Writes the link rows an edit changed in the personal model; see [LearningFlow.writeEdit]. */
+    suspend fun writeEdit(writes: LinkWrites) = learningFlow.writeEdit(writes)
+
+    /** Drops the taps not yet saved. */
+    fun forgetUnsavedTaps() = learningFlow.forgetTaps()
 
     /** Learns nothing until the learning gate is next set, at a field start or a settings change. */
     fun stopLearning() {
@@ -966,6 +988,7 @@ class TypingOrchestrator(
         host.onSwipeLifted(xs, ys, timestamps, count)
         engine.decodeGesture(
             xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2,
+            languageFlow.language,
         )
     }
 
@@ -984,6 +1007,7 @@ class TypingOrchestrator(
         }
         engine.decodeGesturePreview(
             xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2,
+            languageFlow.language,
         )
     }
 
@@ -1023,9 +1047,9 @@ class TypingOrchestrator(
      * A decoded swipe that did not pause: the first candidate composes at once and all of them go
      * to the strip. With [KeyboardPreferences.radialLiftKeepsOpen] on, a ring opens for a tap,
      * unless the decode was decisive and [KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY] is set.
-     * The pairs and triples the swiped word makes go under [language], the one the decode read.
+     * [answerPack] is the tag of the pack the decode leaned on, which names the language.
      */
-    fun onGestureCandidates(candidates: List<Candidate>, language: String? = null) {
+    fun onGestureCandidates(candidates: List<Candidate>, answerPack: String? = null) {
         host.onSwipeAnswered()
         if (candidates.isEmpty()) {
             host.clearStrip()
@@ -1035,7 +1059,7 @@ class TypingOrchestrator(
         if (currentEditor() == null) {
             return
         }
-        language?.let(learningFlow::answeredIn)
+        languageFlow.answered(answerPack)
         val cased = caseSwipedWords(candidates)
         val best = cased.first().text
         if (session.terminalField) {
@@ -1076,7 +1100,7 @@ class TypingOrchestrator(
             return
         }
         closeRing((selection as? RingUi.Selection.Word)?.index)
-        resolveRingSelection(selection)
+        resolveRingSelection(selection, timedOut = false)
     }
 
     /** The touch stream was interrupted while the ring was open: the swipe is discarded. */
@@ -1093,7 +1117,7 @@ class TypingOrchestrator(
         when (selection) {
             is RingUi.Selection.Word -> {
                 closeRing(selection.index)
-                resolveRingSelection(selection)
+                resolveRingSelection(selection, timedOut = false)
             }
             RingUi.Selection.Cancel -> {
                 closeRing()
@@ -1107,7 +1131,7 @@ class TypingOrchestrator(
     fun onRingTimedOut() {
         val selection = ring.selection()
         closeRing((selection as? RingUi.Selection.Word)?.index)
-        resolveRingSelection(selection)
+        resolveRingSelection(selection, timedOut = true)
     }
 
     /** Closes the swipe's ring, when one is open, and forgets the pause's guess with it. */
@@ -1125,12 +1149,16 @@ class TypingOrchestrator(
 
     /**
      * A wedge applies its word and Cancel discards the swipe; with neither,
-     * [KeyboardPreferences.radialTimeoutDefault] applies the top word or cancels.
+     * [KeyboardPreferences.radialTimeoutDefault] applies the top word or cancels. A wedge below the
+     * top one is a choice unless the ring [timedOut]; the top word is the keyboard's own offer.
      */
-    private fun resolveRingSelection(selection: RingUi.Selection) {
+    private fun resolveRingSelection(selection: RingUi.Selection, timedOut: Boolean) {
         when (selection) {
             is RingUi.Selection.Word -> {
-                onPick(selection.index, selection.word)
+                pick(
+                    selection.index, selection.word,
+                    chosen = !timedOut && selection.index != SwipeFlow.TRUSTED_WEDGE,
+                )
                 host.playEffect(EffectEvent.SwipeAccepted, selection.word)
             }
             RingUi.Selection.Cancel -> cancelSwipedWord()
@@ -1139,7 +1167,7 @@ class TypingOrchestrator(
                 if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
                     cancelSwipedWord()
                 } else if (word != null) {
-                    onPick(0, word)
+                    pick(SwipeFlow.TRUSTED_WEDGE, word, chosen = false)
                     host.playEffect(EffectEvent.SwipeAccepted, word)
                 } else {
                     cancelSwipedWord()
@@ -1379,11 +1407,11 @@ class TypingOrchestrator(
             return false
         }
         wordContext = wordContext.copy(previous1 = pending.typed)
-        // The typed word is learned as asserted; the rejected correction is forgotten from the
-        // personal dictionary, never blocked.
+        // The typed word is learned, a choice when the typed chip took it back; the rejected
+        // correction is forgotten from the personal dictionary, never blocked.
         learningFlow.record(
             pending.typed, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital, asserted = true, taps = pending.taps,
+            pending.deliberateCapital, asserted = !viaBackspace, taps = pending.taps,
         )
         host.forgetWord(pending.corrected, blockWhenNotPersonal = false)
         host.playEffect(EffectEvent.CorrectionReverted, pending.typed)
@@ -1556,8 +1584,31 @@ class TypingOrchestrator(
         return selected
     }
 
-    /** A word picked from the strip or the ring, [index] being its slot. */
-    fun onPick(index: Int, word: String) {
+    /** A word picked from slot [index] of the strip. */
+    fun onPick(index: Int, word: String) = pick(index, word, chosen = isStripChoice(index))
+
+    /**
+     * Whether a pick from slot [index] of the strip is a choice rather than the word the strip
+     * leads with: the outlined correction; with none, the letters typed, which the typed chip
+     * holds; with nothing typed either, the first prediction, at [LEADING_SLOT] or right behind
+     * the typed chip that puts a correction back.
+     */
+    private fun isStripChoice(index: Int): Boolean {
+        val typed = host.stripTypedIndex() ?: TypingHost.NO_SLOT
+        val applied = host.stripAppliedIndex() ?: TypingHost.NO_SLOT
+        return when {
+            applied != TypingHost.NO_SLOT -> index != applied
+            lastQuery.isNotEmpty() -> true
+            typed != TypingHost.NO_SLOT -> index != typed + 1
+            else -> index != LEADING_SLOT
+        }
+    }
+
+    /**
+     * A word picked from the strip or the ring, [index] being its slot; [chosen] is whether the
+     * pick is a choice.
+     */
+    private fun pick(index: Int, word: String, chosen: Boolean) {
         val editor = currentEditor() ?: return
         dismissRing()
         if (session.terminalField) {
@@ -1642,14 +1693,19 @@ class TypingOrchestrator(
         shiftFlow.spendOneShot()
         shiftFlow.clearHeld()
 
-        // Each word of the pick is learned as asserted.
+        // A choice asserts the word picked. A phrase's pick asserts the pairs and the triples
+        // inside it, and over typed letters, when a choice, its first word.
         val words = word.split(' ').filter { it.isNotEmpty() }
+        val phrase = words.size > 1
         var previous = contextWord
         var grandPrevious = grandContextWord
         for ((index, part) in words.withIndex()) {
             // The letters typed before the pick line up with the first word's.
             learningFlow.record(
-                part, previous, grandPrevious, deliberateCapital = index == 0 && userCapital, asserted = true,
+                part, previous, grandPrevious, deliberateCapital = index == 0 && userCapital,
+                asserted = chosen && (!phrase || (index == 0 && replacesWord)),
+                assertsPair = phrase && index > 0,
+                assertsTriple = phrase && index > 1,
                 taps = if (index == 0) typedTaps else null, completion = true,
             )
             grandPrevious = previous
@@ -1720,7 +1776,8 @@ class TypingOrchestrator(
 
     /**
      * The engine's answer about [query]: kept for the delimiter, then cased and arranged on the
-     * strip, and its [language] learned under. An answer about an older query is dropped.
+     * strip; [answerPack], the tag of the pack it leaned on, names the language. An answer about
+     * an older query is dropped.
      */
     fun onSuggestions(
         candidates: List<Candidate>,
@@ -1730,12 +1787,12 @@ class TypingOrchestrator(
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
-        language: String? = null,
+        answerPack: String? = null,
     ) {
         if (!suggestionFlow.accept(query)) {
             return
         }
-        language?.let(learningFlow::answeredIn)
+        languageFlow.answered(answerPack)
         if (composing.isNotEmpty()) {
             host.setEditorEmpty(false)
         }
@@ -2019,5 +2076,8 @@ class TypingOrchestrator(
 
         /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
         const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
+
+        /** The strip slot an unmarked strip leads with: its first. */
+        const val LEADING_SLOT = 0
     }
 }

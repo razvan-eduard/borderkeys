@@ -6,7 +6,8 @@ package com.borderkeys.data
 import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.dao.PairStep
+import com.borderkeys.data.personal.LinkWrites
+import com.borderkeys.data.personal.linkUses
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,9 +42,8 @@ class SingleUseSweepSqlTest {
     /** Writes [word] once at [AT], chosen on purpose when [asserted], with a pair ending in it. */
     private suspend fun writeOnce(word: String, asserted: Boolean) {
         repository.applyLearning(
-            listOf(LearnedWord(word, LANGUAGE, 1, AT, asserted = asserted)),
-            listOf(PairStep(LearnedBigram(LANGUAGE, "hi", word, 1, AT))),
-            emptyList(),
+            listOf(LearnedWord(word, LANGUAGE, 1, AT, asserted = if (asserted) 1 else 0)),
+            repository.linkUses(pairUses = listOf(LearnedBigram(LANGUAGE, "hi", word, 1, AT))),
         )
     }
 
@@ -70,11 +70,7 @@ class SingleUseSweepSqlTest {
 
     @Test
     fun `past the cap, a word added by hand stays with its phrase, a word learned once goes`() = runTest {
-        repository.applyLearning(
-            listOf(LearnedWord("big", LANGUAGE, 5, AT), LearnedWord("once", LANGUAGE, 1, AT)),
-            emptyList(),
-            emptyList(),
-        )
+        repository.applyLearning(listOf(LearnedWord("big", LANGUAGE, 5, AT), LearnedWord("once", LANGUAGE, 1, AT)), LinkWrites())
         repository.addPhrase(listOf("hi", "nadia"), LANGUAGE, AT, unblock = false)
         repository.decayStaleEntries(keep = 1, HALF_LIFE, unconfirmedLifeMillis = null, now = AT)
         val rows = repository.personalRows(LIMIT)

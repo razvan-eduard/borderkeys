@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Norwegian-Bokmaal",
+    "release": "r2.18",
     "files": [
       "no_bokmaal-ud-train.conllu",
       "no_bokmaal-ud-dev.conllu",
@@ -27,5 +28,10 @@
   "expected_beyond_ascii": [
     230
   ],
-  "reachability_budget": 173
+  "reachability_budget": 173,
+  "sha256": {
+    "nob_news_2013_1M.tar.gz": "be21508e8478e18a8ed013b99a86a302c9ff8908e34e6daa3f2c1631c010fbc2",
+    "nob_newscrawl_2019_1M.tar.gz": "008af58fb89247030d0926158a3317f38c32ce35268ae8b583755da7ff303f1a",
+    "nob_wikipedia_2014_1M.tar.gz": "607ddfd0d24112874780be9ae997b8d8045113f28eb65d681519eebd51233255"
+  }
 }

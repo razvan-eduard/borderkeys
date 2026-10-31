@@ -152,4 +152,28 @@ class DatabaseMigrationTest {
                 }
             }
     }
+
+    @Test
+    fun version13KeepsEachWordUnplacedWithOnlyItsAddsByHandAsChoices() {
+        helper.createDatabase(DATABASE, 13).use { db ->
+            db.execSQL(
+                "INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals, asserted, added) " +
+                    "VALUES ('Nadia', 'en-US', 5, 1000, 2, 3, 0), ('Kelpa', 'en-US', 2, 1200, 1, 2, 1)",
+            )
+        }
+        helper.runMigrationsAndValidate(DATABASE, 14, true, BorderKeysDatabase.MIGRATION_13_14)
+            .use { db ->
+                db.query("SELECT word, language, count, lastUsedAt, deliberateCapitals, asserted, added FROM user_words ORDER BY word").use {
+                    it.moveToFirst()
+                    assertEquals(listOf("Kelpa", "", "2", "1200", "1", "1", "1"), (0..6).map(it::getString))
+                    it.moveToNext()
+                    assertEquals(listOf("Nadia", "", "5", "1000", "2", "0", "0"), (0..6).map(it::getString))
+                    assertTrue(it.isLast)
+                }
+                db.query("SELECT COUNT(*) FROM user_corrections").use {
+                    it.moveToFirst()
+                    assertEquals(0, it.getInt(0))
+                }
+            }
+    }
 }

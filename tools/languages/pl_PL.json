@@ -31,5 +31,10 @@
   },
   "single_letter_words": "aiouwz",
   "expected_beyond_ascii": [],
-  "reachability_budget": 248
+  "reachability_budget": 248,
+  "sha256": {
+    "pol_news_2024_1M.tar.gz": "60f79d00b23afbeb48e9350937cb9c748b73d9a9ff6e7a06ea5197adca58762d",
+    "pol_newscrawl_2021_1M.tar.gz": "90612f59922d6c42eeed6a797b88b8f79736af3e4279e6de38ca763340af2e6f",
+    "pol_wikipedia_2021_1M.tar.gz": "2dc5ece8c6eb6257ca9a6f591dc4aac7b6945d1d7054c35ff0330bd1da8ae92d"
+  }
 }

@@ -139,8 +139,9 @@ Worth stating plainly, because "the keyboard learns from you" is the sentence pe
 be suspicious of.
 
 **It holds counts of words, pairs and triples. There is no model being fine-tuned and no gradient
-anywhere.** Every word committed raises its count. A word chosen on purpose — tapped on the
-strip, or put back after a correction — raises a second count. A word no dictionary holds is
+anywhere.** Every word committed raises its count. A word chosen on purpose — picked on the
+strip over the word it leads with, put back with the typed chip, or picked from the swipe ring
+below its top word — raises a second count. A word no dictionary holds is
 offered, and left alone by autocorrect, only once it has been chosen or written three times. See
 [`architecture.md`](architecture.md#the-learning-path).
 
@@ -176,13 +177,15 @@ typed once years ago does not hold a place against one typed daily. The words th
 the *Words kept* setting, 20,000 by default: past it, the words used least are deleted, and their
 phrases with the last of their cases. A word typed only once and never chosen on purpose is
 deleted after the days unused that *How long a word used once is kept* sets, 30 by default, 10 or
-90, or never with it Off, and its phrases with the last of its cases; a word chosen on purpose,
-picked from the strip or put back after a correction, is kept and never fades below one use. The
+90, or never with it Off, and its phrases with the last of its cases; a word chosen on purpose
+is kept and never fades below one use. The
 clean-up that fades and deletes runs daily, weekly or monthly, weekly by default.
 
-Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
-Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a
-search's matches can be deleted together; the heatmap is drawn on the keyboard preview, and
+Everything learned is visible and deletable on the Personal dictionary and heatmap screen. A
+learned word is kept per language it was written in, and listed under it; a word learned before
+the keyboard kept its language is kept and listed with none. The Learned words and Learned phrases
+pages list every word and phrase, each with a Delete, and a search's matches can be deleted
+together; the heatmap is drawn on the keyboard preview, and
 switching it off deletes it. A word added by hand on the Learned words page is stored as a
 learned word chosen once, with a count of how often it was added, which a backup carries; the
 page lists the words added by hand apart from the words learned by use. A phrase added by hand
@@ -214,7 +217,8 @@ protected against the file being copied elsewhere, which is the realistic threat
 `:app` and `:assist` open the database independently, in separate processes, so the
 read-check-generate-write of the passphrase runs behind a `FileLock` on a marker file.
 
-A backup file that carries the dictionary or the clipboard is written only under a passphrase:
+A backup file that carries the dictionary, its blocked words with it, or the clipboard is
+written only under a passphrase:
 AES-256-GCM with a key from PBKDF2-HMAC-SHA256 at 600,000 rounds, a fresh salt and nonce for
 every file, and the file's header authenticated together with its contents (`BackupFile`). A file
 written at the earlier 210,000 rounds still opens; one declaring more than 5,000,000 rounds is

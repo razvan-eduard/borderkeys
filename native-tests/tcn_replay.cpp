@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -12,10 +13,15 @@
 #include <vector>
 
 #include "engine.hpp"
-#include "gesture/tcn_decoder.hpp"
+#include "replay_corpora.hpp"
+#include "test_support.hpp"
 
 // The binary tools/tcn_replay.py drives: gesture_replay.cpp's layout and corpus formats and its
-// `word<TAB>rank` output, with a TcnDecoder constructed directly.
+// `word<TAB>rank<TAB>top` output, each gesture decoded as the keyboard decodes a swipe with
+// nothing before it: Engine::decodeGesture with the weights loaded and the neural decoder on, the
+// context resolved to a sentence start, and a gesture the neural decoder finds nothing for sent to
+// the geometric one. Prints to stderr the mean milliseconds per decode and how many gestures the
+// geometric decoder answered.
 //
 //   tcn_replay <pack.bkd> <weights.bkw> <layout> <gestures.csv>
 //
@@ -24,6 +30,13 @@
 namespace {
 
 using namespace borderkeys;
+using borderkeys_eval::Gesture;
+using borderkeys_eval::Layout;
+using borderkeys_eval::loadGestures;
+using borderkeys_eval::loadLayout;
+
+// The script the replay's one model is loaded and selected under: the Latin layouts'.
+constexpr int kReplayScript = Engine::kLatinSwipeScript;
 
 /** Whether `text` is `word` once apostrophes and hyphens are set aside in both. */
 bool sameWordMarksAside(const char* text, uint32_t length, const std::string& word) {
@@ -44,106 +57,6 @@ bool sameWordMarksAside(const char* text, uint32_t length, const std::string& wo
         ++at;
     }
     return at == word.size();
-}
-
-struct Layout {
-    int32_t codes[64] = {};
-    float xs[64] = {};
-    float ys[64] = {};
-    int count = 0;
-    float keyWidth = 0.f;
-    float keyHeight = 0.f;
-};
-
-/** The code point [text] starts with, as UTF-8; the first byte when it is not valid UTF-8. */
-int32_t firstCodePoint(const char* text) {
-    const auto* bytes = reinterpret_cast<const unsigned char*>(text);
-    const unsigned char lead = bytes[0];
-    int extra = 0;
-    int32_t value = lead;
-    if ((lead & 0xE0u) == 0xC0u) {
-        extra = 1;
-        value = lead & 0x1Fu;
-    } else if ((lead & 0xF0u) == 0xE0u) {
-        extra = 2;
-        value = lead & 0x0Fu;
-    } else if ((lead & 0xF8u) == 0xF0u) {
-        extra = 3;
-        value = lead & 0x07u;
-    }
-    for (int i = 1; i <= extra; ++i) {
-        if ((bytes[i] & 0xC0u) != 0x80u) {
-            return lead;
-        }
-        value = (value << 6) | (bytes[i] & 0x3Fu);
-    }
-    return value;
-}
-
-bool loadLayout(const char* path, Layout* layout) {
-    std::FILE* const file = std::fopen(path, "r");
-    if (file == nullptr) {
-        return false;
-    }
-    char line[256];
-    while (std::fgets(line, sizeof(line), file) != nullptr) {
-        if (line[0] == '#' || line[0] == '\n') {
-            continue;
-        }
-        char code[16];
-        float a = 0.f;
-        float b = 0.f;
-        if (layout->keyWidth == 0.f && std::sscanf(line, "%f %f", &a, &b) == 2) {
-            layout->keyWidth = a;
-            layout->keyHeight = b;
-            continue;
-        }
-        if (std::sscanf(line, "%15s %f %f", code, &a, &b) == 3 && layout->count < 64) {
-            layout->codes[layout->count] = firstCodePoint(code);
-            layout->xs[layout->count] = a;
-            layout->ys[layout->count] = b;
-            ++layout->count;
-        }
-    }
-    std::fclose(file);
-    return layout->count > 0 && layout->keyWidth > 0.f;
-}
-
-struct Gesture {
-    std::string id;
-    std::string word;
-    std::vector<float> xs;
-    std::vector<float> ys;
-    std::vector<int64_t> times;
-};
-
-bool loadGestures(const char* path, std::vector<Gesture>* gestures) {
-    std::FILE* const file = std::fopen(path, "r");
-    if (file == nullptr) {
-        return false;
-    }
-    char line[512];
-    while (std::fgets(line, sizeof(line), file) != nullptr) {
-        if (line[0] == '#' || std::strncmp(line, "id,", 3) == 0) {
-            continue;
-        }
-        char id[64];
-        char word[128];
-        float x = 0.f;
-        float y = 0.f;
-        long long t = 0;
-        if (std::sscanf(line, "%63[^,],%127[^,],%f,%f,%lld", id, word, &x, &y, &t) != 5) {
-            continue;
-        }
-        if (gestures->empty() || gestures->back().id != id) {
-            gestures->push_back(Gesture{id, word, {}, {}, {}});
-        }
-        gestures->back().xs.push_back(x);
-        gestures->back().ys.push_back(y);
-        gestures->back().times.push_back(t);
-    }
-    std::fclose(file);
-    return !gestures->empty();
 }
 
 bool readWholeFile(const char* path, std::vector<uint8_t>* out) {
@@ -212,27 +125,29 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "could not read the weights: %s\n", argv[2]);
         return 2;
     }
-    TcnDecoder decoder(engine);
-    decoder.setLayout(engine.geometry());
-    if (!decoder.loadWeights(weightBytes.data(), weightBytes.size())) {
+    if (!engine.loadSwipeWeights(kReplayScript, weightBytes.data(), weightBytes.size())) {
         std::fprintf(stderr, "the weights file was refused: %s\n", argv[2]);
         return 2;
     }
+    engine.selectSwipeScript(kReplayScript);
+    engine.setSwipeModelEnabled(true);
 
     Candidate out[Engine::kMaxCandidates];
-    int64_t encoderMicros = 0;
-    int64_t searchMicros = 0;
+    std::chrono::steady_clock::duration decoding{};
     int decoded = 0;
+    int geometric = 0;
     for (const Gesture& gesture : gestures) {
         int rank = -1;
+        std::string top = borderkeys_test::kNoWord;
         if (gesture.xs.size() >= 2) {
-            const int found = decoder.decode(gesture.xs.data(), gesture.ys.data(),
-                                             gesture.times.data(),
-                                             static_cast<int>(gesture.xs.size()), out,
-                                             Engine::kMaxCandidates);
-            encoderMicros += decoder.lastEncoderMicros();
-            searchMicros += decoder.lastSearchMicros();
+            const auto started = std::chrono::steady_clock::now();
+            const int found = engine.decodeGesture(
+                gesture.xs.data(), gesture.ys.data(), gesture.times.data(),
+                static_cast<int>(gesture.xs.size()), nullptr, 0, nullptr, 0, out,
+                Engine::kMaxCandidates);
+            decoding += std::chrono::steady_clock::now() - started;
             ++decoded;
+            geometric += engine.lastDecodeUsedNeural() ? 0 : 1;
             for (int i = 0; i < found; ++i) {
                 uint32_t length = 0;
                 const char* const text = engine.candidateText(out[i], &length);
@@ -241,12 +156,14 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+            top = borderkeys_test::topWord(engine, out, found);
         }
-        std::printf("%s\t%d\n", gesture.word.c_str(), rank);
+        std::printf("%s\t%d\t%s\n", gesture.word.c_str(), rank, top.c_str());
     }
     if (decoded > 0) {
-        std::fprintf(stderr, "decoded %d: encoder %.2f ms, search %.2f ms per gesture\n", decoded,
-                     encoderMicros / 1000.0 / decoded, searchMicros / 1000.0 / decoded);
+        const double millis = std::chrono::duration<double, std::milli>(decoding).count();
+        std::fprintf(stderr, "decoded %d: %.2f ms per gesture; %d answered by the geometric decoder\n",
+                     decoded, millis / decoded, geometric);
     }
     engine.destroy();
     return 0;

@@ -19,21 +19,30 @@ Corpus (`native-tests/data/*.csv`), one touch sample per line:
 
 Gestures are grouped by `id` and must appear contiguously.
 
+A replay binary prints one `word<TAB>rank<TAB>top` line per gesture, in corpus order: the rank of
+the word meant among the candidates, -1 for a miss, and the candidate ranked first. `--rows`
+writes them as a rows file for scripts/compare_readings.py.
+
 Usage
 -----
     ./gesture_replay.py --synthesise --layout native-tests/data/qwerty_1080.layout \\
-        --words the,there,keyboard --out native-tests/data/gestures.csv
+        --words the,there,keyboard --out native-tests/data/gestures.csv [--fold]
     ./gesture_replay.py --binary native-tests/build/gesture_replay \\
-        --pack keyboard/src/main/assets/dict/en_US.bkd
+        --pack keyboard/src/main/assets/dict/en_US.bkd [--rows rows.tsv]
     ./gesture_replay.py --check-regression
+    ./gesture_replay.py --selftest
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import subprocess
 import sys
+import tempfile
+import unicodedata
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
@@ -47,7 +56,7 @@ LAYOUT_HEADER_COLUMNS = 2
 LAYOUT_KEY_COLUMNS = 3
 # A gesture corpus row: 'id,word,x,y,t'.
 GESTURE_COLUMNS = 5
-# A replay binary's line up to the rank, 'word<TAB>rank', before the top word a miss adds.
+# A replay binary's line up to the rank, 'word<TAB>rank', before the top word.
 REPLAY_RANK_COLUMNS = 2
 
 
@@ -149,6 +158,22 @@ def synthesise(layout: Layout, word: str, jitter: float, seed: int) -> list[tupl
     return samples
 
 
+# The marks a swipe passes over without a key of its own.
+UNKEYED_MARKS = "'-"
+
+
+def swiped_letters(word: str, layout: Layout) -> str:
+    """The letters a swipe of [word] passes over on [layout]: each as written when the layout has
+    its key, else in lower case without its accents; apostrophes and hyphens left out."""
+    letters = []
+    for character in word:
+        if character in layout.keys:
+            letters.append(character)
+        elif character not in UNKEYED_MARKS:
+            letters.append(unicodedata.normalize("NFD", character.lower())[0])
+    return "".join(letters)
+
+
 def write_corpus(path: Path, gestures: list[Gesture]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -163,50 +188,95 @@ def write_corpus(path: Path, gestures: list[Gesture]) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
-    """Runs the native harness and parses its verdict per gesture.
+class Replayed:
+    """One gesture's line from a replay binary: the word meant, its zero-based rank among the
+    candidates or -1 for a miss, and the candidate ranked first, `-` for none."""
 
-    The binary is expected to print one `word<TAB>rank<TAB>top` line per gesture, where rank is
-    the zero-based position of the expected word among the candidates, or -1 for a miss, and top
-    is the candidate it ranked first.
-    """
-    result = subprocess.run(
-        [str(binary), str(pack), str(layout), str(corpus)],
-        capture_output=True, text=True, check=False,
-    )
+    def __init__(self, word: str, rank: int, top: str):
+        self.word = word
+        self.rank = rank
+        self.top = top
+
+
+# The measures of a swipe rows file, and how many candidates the second one reads.
+ROWS_MEASURES = ("first", "top-three")
+TOP_THREE = 3
+# How many misses a replay's figures list.
+MISSES_LISTED = 20
+# A rows file's place for a word the candidates do not hold.
+ABSENT = "absent"
+
+
+def verdicts(rank: int) -> tuple[bool, bool]:
+    """Whether the word at [rank] (-1 for a miss) came first, and whether among the first
+    TOP_THREE."""
+    return rank == 0, 0 <= rank < TOP_THREE
+
+
+def run_replay(command: list[str]) -> list[Replayed]:
+    """Runs a replay binary and reads its `word<TAB>rank[<TAB>top]` line per gesture, in corpus
+    order."""
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         sys.stderr.write(result.stdout)
         sys.stderr.write(result.stderr)
-        raise SystemExit(f"{binary} exited {result.returncode}")
-
-    total = top1 = top3 = 0
-    misses: list[str] = []
+        raise SystemExit(f"{command[0]} exited {result.returncode}")
+    sys.stderr.write(result.stderr)
+    replayed: list[Replayed] = []
     for line in result.stdout.splitlines():
-        if "\t" not in line:
-            continue
         fields = line.split("\t")
         if len(fields) < REPLAY_RANK_COLUMNS:
             continue
-        word = fields[0]
         try:
             rank = int(fields[1].strip())
         except ValueError:
             continue
-        total += 1
-        if rank == 0:
-            top1 += 1
-        if 0 <= rank < 3:
-            top3 += 1
-        else:
-            misses.append(f"{word}->{fields[2]}" if len(fields) > REPLAY_RANK_COLUMNS else word)
-    if total == 0:
-        raise SystemExit(f"{binary} reported no gestures")
+        replayed.append(Replayed(fields[0], rank, fields[2] if len(fields) > REPLAY_RANK_COLUMNS else "-"))
+    if not replayed:
+        raise SystemExit(f"{command[0]} reported no gestures")
+    return replayed
+
+
+def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> list[Replayed]:
+    """The native harness's line per gesture."""
+    return run_replay([str(binary), str(pack), str(layout), str(corpus)])
+
+
+def figures(replayed: list[Replayed]) -> dict:
+    """Top-1 and top-3 in percent over [replayed], and the first misses as `word->top`."""
+    firsts = [verdicts(line.rank) for line in replayed]
     return {
-        "gestures": total,
-        "top1": round(100.0 * top1 / total, 2),
-        "top3": round(100.0 * top3 / total, 2),
-        "misses": misses[:20],
+        "gestures": len(replayed),
+        "top1": round(100.0 * sum(first for first, _ in firsts) / len(replayed), 2),
+        "top3": round(100.0 * sum(three for _, three in firsts) / len(replayed), 2),
+        "misses": [f"{line.word}->{line.top}" for line in replayed if not verdicts(line.rank)[1]][:MISSES_LISTED],
     }
+
+
+def write_rows(path: Path, gestures: list[Gesture], replayed: list[Replayed]) -> None:
+    """[replayed] as a rows file, in the format native-tests/rows_file.hpp describes: per gesture
+    its verdicts, its id and word as the key, then the word meant's place among the candidates,
+    from 1 (ABSENT for a miss), and the top candidate. The lines are the corpus's gestures in
+    order, so their count and words must agree."""
+    if [gesture.word for gesture in gestures] != [line.word for line in replayed]:
+        raise SystemExit(f"the replay answered {len(replayed)} gestures, not the corpus's {len(gestures)} in order")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"# measures: {' '.join(ROWS_MEASURES)}\n")
+        for gesture, line in zip(gestures, replayed):
+            cells = ["1" if verdict else "0" for verdict in verdicts(line.rank)]
+            place = str(line.rank + 1) if line.rank >= 0 else ABSENT
+            handle.write("\t".join(cells + [f"{gesture.identifier} {gesture.word}", place, line.top]) + "\n")
+
+
+def nothing_measured(message: str, check_regression: bool) -> int:
+    """Reports [message]: under --check-regression an error and a failure, since nothing was
+    compared; otherwise a notice."""
+    if check_regression:
+        print(f"::error::{message}")
+        return 1
+    print(f"::notice::{message}")
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -220,13 +290,22 @@ def main(argv: list[str]) -> int:
                         help="generate a corpus instead of replaying one")
     parser.add_argument("--words", help="comma separated, for --synthesise")
     parser.add_argument("--jitter", type=float, default=14.0)
+    parser.add_argument("--fold", action="store_true",
+                        help="for --synthesise, swipe a letter the layout lacks over the key of its lower-case, "
+                             "unaccented form, and pass over apostrophes and hyphens")
     parser.add_argument("--out", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--record-baseline", action="store_true",
                         help="write the measured accuracy to docs/gesture-accuracy.json")
     parser.add_argument("--check-regression", action="store_true",
                         help="fail if accuracy fell below the recorded baseline")
+    parser.add_argument("--rows", type=Path, help="also write each gesture's verdicts as a rows file here")
+    parser.add_argument("--selftest", action="store_true",
+                        help="prove the regression check fails whenever it has nothing to compare")
     arguments = parser.parse_args(argv)
 
+    if arguments.selftest:
+        selftest()
+        return 0
     if arguments.synthesise:
         layout = Layout.load(arguments.layout)
         words = [w.strip() for w in (arguments.words or "").split(",") if w.strip()]
@@ -235,7 +314,8 @@ def main(argv: list[str]) -> int:
         gestures: list[Gesture] = []
         for index, word in enumerate(words):
             gesture = Gesture(f"g{index:04d}", word)
-            gesture.samples = synthesise(layout, word, arguments.jitter, 0x5EED + index * 7919)
+            letters = swiped_letters(word, layout) if arguments.fold else word
+            gesture.samples = synthesise(layout, letters, arguments.jitter, 0x5EED + index * 7919)
             if not gesture.samples:
                 sys.stderr.write(f"skipped {word!r}: a letter is not on this layout\n")
                 continue
@@ -246,20 +326,23 @@ def main(argv: list[str]) -> int:
         return 0
 
     if not arguments.corpus.is_file():
-        print(f"::notice::{arguments.corpus} does not exist yet — nothing to replay")
-        return 0
+        return nothing_measured(f"{arguments.corpus} does not exist yet — nothing to replay",
+                                arguments.check_regression)
     gestures = load_corpus(arguments.corpus)
     print(f"corpus: {len(gestures)} gestures, "
           f"{sum(len(g.samples) for g in gestures)} samples, from {arguments.corpus}")
 
     if not arguments.binary.is_file():
-        # The native harness is built by native-tests/; a missing one is reported.
-        print(f"::notice::{arguments.binary} not built — accuracy not measured, nothing compared")
-        return 0
+        # The native harness is built by native-tests/.
+        return nothing_measured(f"{arguments.binary} not built — accuracy not measured, nothing compared",
+                                arguments.check_regression)
     if arguments.pack is None:
         raise SystemExit("--pack is required to replay")
 
-    measured = replay(arguments.binary, arguments.pack, arguments.layout, arguments.corpus)
+    replayed = replay(arguments.binary, arguments.pack, arguments.layout, arguments.corpus)
+    if arguments.rows is not None:
+        write_rows(arguments.rows, gestures, replayed)
+    measured = figures(replayed)
     print(f"top-1 {measured['top1']}%  top-3 {measured['top3']}%  "
           f"over {measured['gestures']} gestures")
     if measured["misses"]:
@@ -278,8 +361,7 @@ def main(argv: list[str]) -> int:
 
     if arguments.check_regression:
         if not BASELINE.is_file():
-            print(f"::notice::{BASELINE} does not exist — nothing to compare against")
-            return 0
+            return nothing_measured(f"{BASELINE} does not exist — nothing to compare against", True)
         baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
         # A tolerance, not equality, for rounding differences between platforms.
         tolerance = 0.5
@@ -291,6 +373,82 @@ def main(argv: list[str]) -> int:
             return 1
         print(f"no regression against {baseline['top1']}% / {baseline['top3']}%")
     return 0
+
+
+# --------------------------------------------------------------------------------------
+# Selftest
+# --------------------------------------------------------------------------------------
+
+# The selftest's corpus, one sample per gesture, and the lines its replay answers for it: ranks
+# 0, 0, 2, 3 and a miss, so top-1 40% and top-3 60%.
+SELFTEST_CORPUS = "id,word,x,y,t\ng0,a,0,0,0\ng1,b,0,0,0\ng2,c,0,0,0\ng3,d,0,0,0\ng4,e,0,0,0\n"
+SELFTEST_REPLAYED = [Replayed("a", 0, "a"), Replayed("b", 0, "b"), Replayed("c", 2, "x"),
+                     Replayed("d", 3, "w"), Replayed("e", -1, "y")]
+
+# The rows file a replay of the selftest's corpus writes.
+SELFTEST_ROWS = ("# measures: first top-three\n"
+                 "1\t1\tg0 a\t1\ta\n"
+                 "1\t1\tg1 b\t1\tb\n"
+                 "0\t1\tg2 c\t3\tx\n"
+                 "0\t0\tg3 d\t4\tw\n"
+                 "0\t0\tg4 e\tabsent\ty\n")
+
+
+def run_gate_selftest(module, cases: list[tuple[str, list[str], dict | None, int]]) -> None:
+    """Runs [module]'s main on each of [cases], `(name, arguments, baseline, status)`, with its
+    replay answering SELFTEST_REPLAYED. `{corpus}`, `{absent}`, `{present}` and `{rows}` in the
+    arguments are SELFTEST_CORPUS, a missing file, an existing one and a file not yet written;
+    [baseline], when given, is written as the module's BASELINE, which is otherwise missing. A
+    case that names `{rows}` must write SELFTEST_ROWS there."""
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        paths = {"corpus": root / "corpus.csv", "absent": root / "absent", "present": Path(sys.executable),
+                 "rows": root / "rows.tsv"}
+        paths["corpus"].write_text(SELFTEST_CORPUS, encoding="utf-8")
+        module.replay = lambda *_: list(SELFTEST_REPLAYED)
+        module.BASELINE = root / "baseline.json"
+        for name, arguments, baseline, status in cases:
+            module.BASELINE.unlink(missing_ok=True)
+            paths["rows"].unlink(missing_ok=True)
+            if baseline is not None:
+                module.BASELINE.write_text(json.dumps(baseline), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                got = module.main([argument.format(**paths) for argument in arguments])
+            assert got == status, f"{name}: exit {got}, expected {status}"
+            if "{rows}" in arguments:
+                written = paths["rows"].read_text(encoding="utf-8") if paths["rows"].is_file() else None
+                assert written == SELFTEST_ROWS, f"{name}: wrote {written!r}, expected {SELFTEST_ROWS!r}"
+
+
+def selftest() -> None:
+    replayable = ["--check-regression", "--corpus", "{corpus}", "--binary", "{present}", "--pack", "{present}"]
+    run_gate_selftest(sys.modules[__name__], [
+        ("a missing corpus fails the check", ["--check-regression", "--corpus", "{absent}"], None, 1),
+        ("a missing corpus is a notice without the check", ["--corpus", "{absent}"], None, 0),
+        ("a missing binary fails the check",
+         ["--check-regression", "--corpus", "{corpus}", "--binary", "{absent}"], None, 1),
+        ("a missing baseline fails the check", replayable, None, 1),
+        ("the baseline's own figures pass", replayable, {"top1": 40.0, "top3": 60.0}, 0),
+        ("a top-1 below the baseline fails", replayable, {"top1": 41.0, "top3": 60.0}, 1),
+        ("each gesture is a row, its verdicts from its rank",
+         ["--corpus", "{corpus}", "--binary", "{present}", "--pack", "{present}", "--rows", "{rows}"], None, 0),
+    ])
+    with tempfile.TemporaryDirectory() as directory:
+        written = {}
+        for name, options in (("folded", ["--fold"]), ("plain", [])):
+            out = Path(directory) / f"{name}.csv"
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                main(["--synthesise", "--words", "Și-a,sia", "--out", str(out), *options])
+            written[name] = load_corpus(out)
+        folded, plain = written["folded"], written["plain"]
+        assert [gesture.word for gesture in folded] == ["Și-a", "sia"], "--fold keeps each word as written"
+        through_sia = [(float(f"{x:.1f}"), float(f"{y:.1f}"), t)
+                       for x, y, t in synthesise(Layout.load(DEFAULT_LAYOUT), "sia", 14.0, 0x5EED)]
+        assert folded[0].samples == through_sia, \
+            "--fold swipes a capital, an accented letter and a hyphen over the keys of s, i and a"
+        assert [gesture.word for gesture in plain] == ["sia"], "without --fold a letter off the layout is skipped"
+    print("selftest ok: the regression check fails on a fall and whenever it has nothing to compare, "
+          "each gesture is a row, and --fold swipes a word over its letters' plain keys")
 
 
 if __name__ == "__main__":

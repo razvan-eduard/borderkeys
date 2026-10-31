@@ -8,34 +8,33 @@
 
 namespace borderkeys {
 
-PersonalScore::PersonalScore(const UserModel& model, uint32_t learnAfterUses)
-    : model_(model), learnAfterUses_(learnAfterUses) {}
+PersonalScore::PersonalScore(const WordTable& words, const ContextSlice& slice,
+                             uint32_t learnAfterUses)
+    : words_(words), slice_(slice), learnAfterUses_(learnAfterUses) {}
 
 bool PersonalScore::established(uint32_t entry) const {
-    if (model_.asserted(entry) > 0u) {
+    if (words_.asserted(entry) > 0u) {
         return true;
     }
-    return learned(model_.entryCount(entry));
+    return learned(words_.entryCount(entry));
 }
 
-void PersonalScore::resolve(int32_t store, int32_t context1, int32_t context2) {
-    store_ = store;
-    context1_ = context1;
-    context2_ = context2;
+void PersonalScore::resolve(const ContextSlice::Key& key) {
+    context_ = enabled_ && slice_.matches(key);
     largestBonus_ = 0.0f;
-    if (context1_ < 0) {
+    if (!context_) {
         return;
     }
     // The largest bonus: the first link's, chosen on purpose or else the most used, after one
     // word and after two.
-    UserModel::Successor top{};
-    if (model_.successors(store_, context1_, &top, 1) == 1) {
-        largestBonus_ = bonusFor(top.count, top.asserted, model_.successorTotal(store_, context1_));
+    if (slice_.pairCount() > 0) {
+        const ContextSlice::Link& top = slice_.pair(0);
+        largestBonus_ = bonusFor(top.count, top.asserted, slice_.pairTotal());
     }
-    if (context2_ >= 0 && model_.trigramSuccessors(store_, context2_, context1_, &top, 1) == 1) {
-        largestBonus_ = std::max(largestBonus_,
-                                 bonusFor(top.count, top.asserted,
-                                          model_.trigramTotal(store_, context2_, context1_)));
+    if (hasTriples() && slice_.tripleCount() > 0) {
+        const ContextSlice::Link& top = slice_.triple(0);
+        largestBonus_ =
+            std::max(largestBonus_, bonusFor(top.count, top.asserted, slice_.tripleTotal()));
     }
 }
 
@@ -48,10 +47,10 @@ float PersonalScore::wordBoostForCount(uint32_t count) {
 }
 
 int32_t PersonalScore::entryFor(const char* text, uint32_t length) const {
-    if (!enabled_ || model_.size() == 0 || text == nullptr || length == 0) {
+    if (!enabled_ || words_.size() == 0 || text == nullptr || length == 0) {
         return -1;
     }
-    return model_.entryIndexFor(text, length);
+    return words_.entryIndexFor(text, length);
 }
 
 float PersonalScore::shareBonus(uint32_t count, uint32_t total) {
@@ -67,26 +66,24 @@ float PersonalScore::bonusFor(uint32_t count, uint32_t asserted, uint32_t total)
 }
 
 float PersonalScore::contextBonus(uint32_t entry) const {
-    if (context1_ < 0) {
+    if (!context_) {
         return 0.0f;
     }
     const auto next = static_cast<int32_t>(entry);
-    if (context2_ >= 0) {
+    if (hasTriples()) {
         uint32_t tripleAsserted = 0u;
-        const uint32_t triple =
-            model_.trigramCount(store_, context2_, context1_, next, &tripleAsserted);
+        const uint32_t triple = slice_.tripleCountOf(next, &tripleAsserted);
         if (linkLearned(triple, tripleAsserted)) {
-            return bonusFor(triple, tripleAsserted,
-                            model_.trigramTotal(store_, context2_, context1_));
+            return bonusFor(triple, tripleAsserted, slice_.tripleTotal());
         }
     }
     uint32_t pairAsserted = 0u;
-    const uint32_t pair = model_.bigramCount(store_, context1_, next, &pairAsserted);
-    return bonusFor(pair, pairAsserted, model_.successorTotal(store_, context1_));
+    const uint32_t pair = slice_.pairCountOf(next, &pairAsserted);
+    return bonusFor(pair, pairAsserted, slice_.pairTotal());
 }
 
 float PersonalScore::wordBoost(uint32_t entry) const {
-    return model_.added(entry) > 0u ? kMaxUserBoost : wordBoostForCount(model_.entryCount(entry));
+    return words_.added(entry) > 0u ? kMaxUserBoost : wordBoostForCount(words_.entryCount(entry));
 }
 
 float PersonalScore::scoreForEntry(uint32_t entry) const {

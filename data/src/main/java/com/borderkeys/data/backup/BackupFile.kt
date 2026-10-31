@@ -7,8 +7,11 @@ import com.borderkeys.data.theme.KeyboardPlacement
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNames
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -39,7 +42,8 @@ data class BackupPayload(
     val trigrams: List<BackupTrigram> = emptyList(),
     val pairContexts: List<BackupPairContext> = emptyList(),
     val tripleContexts: List<BackupTripleContext> = emptyList(),
-    val phraseClocks: List<BackupPhraseClock> = emptyList(),
+    /** The learned corrections, from format 4 on. */
+    val corrections: List<BackupCorrection> = emptyList(),
     val blocked: List<String> = emptyList(),
     val clips: List<BackupClip> = emptyList(),
     /**
@@ -47,12 +51,15 @@ data class BackupPayload(
      * a model the device already has.
      */
     val models: List<BackupModel> = emptyList(),
+    /** The format the file was written in, read from its envelope ([BackupFile.read]); not written itself. */
+    @Transient
+    val format: Int = BackupFile.FORMAT,
 ) {
-    /** Whether this carries the dictionary or the clipboard, which ask for encryption. */
+    /** Whether this carries the dictionary, the blocked words or the clipboard, which ask for encryption. */
     val isSensitive: Boolean
         get() = words.isNotEmpty() || bigrams.isNotEmpty() || trigrams.isNotEmpty() ||
-            pairContexts.isNotEmpty() || tripleContexts.isNotEmpty() || phraseClocks.isNotEmpty() ||
-            clips.isNotEmpty()
+            pairContexts.isNotEmpty() || tripleContexts.isNotEmpty() || corrections.isNotEmpty() ||
+            blocked.isNotEmpty() || clips.isNotEmpty()
 }
 
 @Serializable
@@ -69,14 +76,20 @@ data class BackupSizeAndPosition(val portrait: KeyboardPlacement, val landscape:
 data class BackupPack(val tag: String, val enabled: Boolean, val weight: Float)
 
 /**
- * One learned word. [lastUsedAt], [deliberateCapitals], [asserted] and [added] default to 0; a
- * file without them reads, and a restore stamps such a word as used now. See
+ * One learned word in one language. [lastUsedAt], [deliberateCapitals], [asserted] and [added]
+ * default to 0; a file without them reads, and a restore stamps such a word as used now. See
  * `UserWord.deliberateCapitals`, `UserWord.asserted` and `UserWord.added`.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class BackupWord(
     val word: String,
-    val locale: String,
+    /**
+     * `UserWord.language` from format 4 on; before, under the name `locale`, the tag of the subtype
+     * the word was last typed on.
+     */
+    @JsonNames(LEGACY_LANGUAGE)
+    val language: String,
     val count: Int,
     val lastUsedAt: Long = 0L,
     val deliberateCapitals: Int = 0,
@@ -87,8 +100,8 @@ data class BackupWord(
 /**
  * One learned pair. [language] is the primary language subtag it was written in; a file without
  * it reads as unknown, and a restore takes the language its word was learned under.
- * [lastUsedAt], [contextSeen] and [languageSeen] are the link's stamps
- * ([com.borderkeys.data.entity.UserBigram]); a file without them reads them as 0, unknown.
+ * [lastUsedAt] and [contextSeen] are the link's stamps ([com.borderkeys.data.entity.UserBigram]);
+ * a file without them reads them as 0, unknown.
  */
 @Serializable
 data class BackupBigram(
@@ -98,7 +111,6 @@ data class BackupBigram(
     val language: String = "",
     val lastUsedAt: Long = 0L,
     val contextSeen: Long = 0L,
-    val languageSeen: Long = 0L,
     /** How often the pair was chosen on purpose and added by hand; a file without them reads 0. */
     val asserted: Int = 0,
     val added: Int = 0,
@@ -114,7 +126,6 @@ data class BackupTrigram(
     val language: String = "",
     val lastUsedAt: Long = 0L,
     val contextSeen: Long = 0L,
-    val languageSeen: Long = 0L,
     /** See [BackupBigram.asserted]. */
     val asserted: Int = 0,
     val added: Int = 0,
@@ -141,9 +152,16 @@ data class BackupTripleContext(
     val lastUsedAt: Long,
 )
 
-/** A language's two commit clocks ([com.borderkeys.data.entity.UserPhraseClock]). */
+/** One learned correction ([com.borderkeys.data.entity.UserCorrection]). */
 @Serializable
-data class BackupPhraseClock(val language: String, val pairs: Long, val triples: Long)
+data class BackupCorrection(
+    val language: String,
+    val key: String,
+    val previous: String,
+    val word: String,
+    val count: Int,
+    val lastUsedAt: Long,
+)
 
 @Serializable
 data class BackupClip(
@@ -156,6 +174,9 @@ data class BackupClip(
 
 @Serializable
 data class BackupModel(val fileName: String, val sha256: String, val active: Boolean)
+
+/** The name [BackupWord.language] had before format 4. */
+private const val LEGACY_LANGUAGE = "locale"
 
 /** The envelope on disk: what this is, and how to read the rest of it. */
 @Serializable
@@ -176,6 +197,7 @@ object BackupFile {
     /** Why an import stopped, in the terms a person could be told. */
     enum class Failure { NOT_A_BACKUP, WRONG_PASSPHRASE, NEEDS_PASSPHRASE, DAMAGED }
 
+    /** What [read] gave: the payload, its [BackupPayload.format] the file's, or why it gave none. */
     class Result private constructor(val payload: BackupPayload?, val failure: Failure?) {
         companion object {
             fun of(payload: BackupPayload) = Result(payload, null)
@@ -183,7 +205,10 @@ object BackupFile {
         }
     }
 
-    const val FORMAT = 3
+    const val FORMAT = 4
+
+    /** The first format whose words carry the language they were learned in, and the corrections. */
+    const val LANGUAGE_FORMAT = 4
 
     /** The first format whose header is authenticated with the ciphertext. */
     private const val HEADER_BOUND_FORMAT = 2
@@ -289,7 +314,7 @@ object BackupFile {
         val payload = runCatching {
             json.decodeFromString(BackupPayload.serializer(), String(plain))
         }.getOrNull() ?: return Result.failed(Failure.DAMAGED)
-        return Result.of(payload)
+        return Result.of(payload.copy(format = envelope.format))
     }
 
     /** Whether a file will want a passphrase, so the screen can ask before it reads. */

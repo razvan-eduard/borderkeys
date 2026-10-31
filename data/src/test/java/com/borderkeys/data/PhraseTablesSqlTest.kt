@@ -71,8 +71,8 @@ class PhraseTablesSqlTest {
         triples.decayStaleContexts(cutoff = LATER, now = now)
 
         val halved = uses / PersonalWordDecay.HALVING
-        assertEquals(halved, words.find("cat")!!.count)
-        assertEquals("a word used since stays", uses, words.find("dog")!!.count)
+        assertEquals(halved, words.rows("cat").single().count)
+        assertEquals("a word used since stays", uses, words.rows("dog").single().count)
         assertEquals(halved, pairs.all().single().count)
         val pairContext = pairs.context(LANGUAGE, "the")!!
         assertEquals(halved.toLong(), pairContext.total)

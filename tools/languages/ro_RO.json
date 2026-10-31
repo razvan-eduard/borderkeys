@@ -19,7 +19,20 @@
   ],
   "capitals": "ron_news_2020_1M",
   "heldout": "ron_news_2019_1M",
+  "heldout_split": {
+    "dev": 5,
+    "personal": 575,
+    "case": 420
+  },
   "persona": "Mihai",
+  "treebank": {
+    "repository": "UD_Romanian-RRT",
+    "release": "r2.18",
+    "files": [
+      "ro_rrt-ud-dev.conllu",
+      "ro_rrt-ud-train.conllu"
+    ]
+  },
   "sha256": {
     "ron_news_2019_1M.tar.gz": "16bb62ef9e508ab8f078b7d1775af1dce3a1e00a11e8432661f25199da37862a",
     "ron_news_2020_1M.tar.gz": "6daa196d4c175ed447f227140618732edf7ca5889f56e53c290916ffaabd8d0d",

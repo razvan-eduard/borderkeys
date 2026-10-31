@@ -99,7 +99,11 @@ Per keystroke, p95, mid-range device:
 | prediction request                             | ≤ 8 ms, off the UI thread, never blocking |
 | full swipe decode, finger up → candidates      | ≤ 30 ms   |
 
-A change that regresses these is a bug even if every test passes.
+A change that regresses these is a bug even if every test passes. On the host,
+`scripts/timing.sh` reads the engine's share of the prediction request and of the swipe decode at
+p95, call by call, on an optimised build, and holds a change to the build before it
+([`docs/testing.md`](docs/testing.md), "Engine timing"); on a phone, the debug stats panel reads
+the p95 of the search, the strip and the decode.
 
 ## Before opening a pull request
 

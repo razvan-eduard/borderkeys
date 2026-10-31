@@ -43,23 +43,6 @@ interface UserTrigramDao {
     @Query("SELECT * FROM user_trigrams WHERE count <= :uses AND asserted = 0")
     suspend fun usedAtMost(uses: Int): List<UserTrigram>
 
-    /** Lifts a triple's chosen and added counts to at least [asserted] and [added], for a restore. */
-    @Query(
-        """
-        UPDATE user_trigrams SET asserted = MAX(asserted, :asserted), added = MAX(added, :added)
-        WHERE language = :language AND previousWord2 = :previousWord2 AND previousWord1 = :previousWord1
-          AND word = :word
-        """,
-    )
-    suspend fun raiseMarks(
-        language: String,
-        previousWord2: String,
-        previousWord1: String,
-        word: String,
-        asserted: Int,
-        added: Int,
-    )
-
     /** The triples that run through the pair [first] [second] in [language], on either side. */
     @Query(
         """
@@ -145,7 +128,7 @@ interface UserTrigramDao {
     suspend fun deleteEmptyContexts()
 }
 
-/** One pending triple update, as accumulated in memory between flushes; its words in lower case. */
+/** [LearnedBigram], for a triple. */
 data class LearnedTrigram(
     /** The primary language subtag the triple was written in. */
     val language: String,
@@ -158,6 +141,3 @@ data class LearnedTrigram(
     val asserted: Int = 0,
     val added: Int = 0,
 )
-
-/** [PairStep], for the triples. */
-data class TripleStep(val use: LearnedTrigram?, val dropped: List<UserTrigram> = emptyList())

@@ -219,7 +219,7 @@ SPDX-FileCopyrightText = "2024 Katri Leino, Markku Laine, Mikko Kurimo, Antti Ou
 SPDX-License-Identifier = "CC-BY-4.0"
 
 # Words and the word before each, sampled by tools/make_case_corpus.py from the Wortschatz Leipzig
-# 2020 news sentences; docs/licensing.md, the test data table.
+# held-out news sentences; docs/licensing.md, the test data table.
 [[annotations]]
 path = "native-tests/data/autocorrect_case_*.tsv"
 precedence = "override"
@@ -227,7 +227,7 @@ SPDX-FileCopyrightText = "Wortschatz Leipzig, Universität Leipzig"
 SPDX-License-Identifier = "CC-BY-4.0"
 
 # A persona's sentences and words typed after them, from tools/make_personal_corpus.py on the
-# Wortschatz Leipzig 2020 news sentences; docs/licensing.md, the test data table.
+# Wortschatz Leipzig held-out news sentences; docs/licensing.md, the test data table.
 [[annotations]]
 path = ["native-tests/data/personal_history_*.txt", "native-tests/data/personal_rows_*.tsv"]
 precedence = "override"

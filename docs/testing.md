@@ -28,8 +28,10 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**1,358 test functions across 163 files.** No device and no emulator. Most run as plain JUnit;
-the views, the database and the pipeline tests that write the personal dictionary run under
+**1,489 test functions across 182 files.** No device and no emulator. Most run as plain JUnit,
+the rig, the join and the bridge tests among them, with the personal dictionary on tables in
+memory; the views, the tests on Room and its migrations, each in-memory table's check against
+Room, the test of the enabled input methods and the settings pages' Compose UI tests run under
 Robolectric.
 
 That is possible because the logic is deliberately kept out of the Android classes. The policy
@@ -46,7 +48,15 @@ through interfaces:
 | `PrivateMode` | Every input type the platform defines |
 | `LanguageSwitchCorrector` | Which flags resolve to which replacements, and where the caret lands |
 | `RunningText`, `Contractions`, `SentenceCase`, `TextShortcuts`, `HabitSpace` | Pure text transforms |
-| `LearningBuffer` | Debounce and eviction, with a clock passed in |
+| `LearningBuffer` | Debounce and eviction, with a clock passed in; the link rows of the commits gathered at each one's latest, a commit's rows kept once the buffer is disabled |
+| `CommitLanguage` | The language a commit is learned under and a request reads: the answer's pack's, else the subtype's |
+| `PersonalSpelling` | A word's case forms as one entry: their counts summed, and the spelling served, the one added by hand, else the most used, else the last used |
+| `PersonalLookup` | A word added by hand as one chosen use added by hand, counted in the language it is added in; a word's rows loaded in their own languages, a spelling's rows one form, only the uses in no language known placed, a deleted row's uses taken out of its own language; a word's links forgotten in every language, their uses out of the contexts they followed, the contexts it is part of and those left with no link gone; a word counted in each language it is committed in, its uses in no language known counting in every one, the engine handed its highest count in one; a disabled language's words kept in the lookup, their counts in the word table zero until its pack is back, every language counting with no pack active; the links a commit records: the pair when its two words are learnable, the triple when all three are, the sentence start never asked about, no link to a word not held or after itself; each use's count, observation, clock and stamps; a load's case forms as one link and its contexts raised, never lowered; the offer order; a language's own links; the budget, never the link just recorded nor one chosen on purpose; one spelling per link, marks kept; a store at its cap keeping every link and total until a commit takes it past; a context the budget leaves with no link gone, its next use starting it again; the slice a request is handed, its key, order, totals, observations and hops |
+| `LinkWrites`, `LinkFlushTest`, `PhraseRecorder`, `DictionaryRepositoryForgetTest`, `DictionaryAddTest` | The rows a flush writes: later rows replacing earlier ones by key, a word forgotten taking its links and their contexts with it; the budget run once, at the commit, the flush writing what the lookup kept and deleting what it gave up, a phrase added by hand and a restore giving up nothing, the clean-up pruning a language a restore left past its cap; a link the tables hold chosen keeping its place and its marks; a restore keeping each link's larger count, later stamps and marks and each context's largest total and observations, never below its links', stamped at the language's clock without moving it, the same rows twice changing nothing; a forget of a word, its block and Forget everything taking its learned corrections; a block forgetting the word in every case and language, the spelling given blocked |
+| `PersonalModelWritesTest`, `BackupRepository` | Every write of the personal dictionary in a random order through the rig, commits, commits still on their way, flushes, new fields, adds by hand of words and phrases, blocks, unblocks, forgets of words, of a phrase, of every phrase and of everything, the heatmap forgotten, a restore, the trim, the clean-up after a half-life and its purge: the dictionary then loads the lookup the rig holds, every word with uses as the word table is handed it and every pair and triple with its context's total and observations; a restore written as a reload; a backup carrying every word in its language with its counts, stamp and marks, every link, context, correction and block, gathered after every write sent before it; a restore keeping the larger of each count and the later of each stamp, the same file twice changing nothing, a stamp past now read as now, an entry it cannot read left out and counted wherever it stands, a word blocked here refused in any case with its links and corrections, a file's block blocking and forgetting here; a format 2 file as the released version wrote it and a format 3 file restored under their own rules, every word unplaced and chosen only as added by hand; a file holding only corrections or context totals offered as a dictionary |
+| `PersonalEntries`, `LearnedWordsLogic`, `LearnedWordsPageTest` | What the Learned pages list: a word under each language it was written in, its count there with its uses in no language known, those listed on their own, its case forms counted together under the spelling served; the groups, the languages counted first, then those off, then no language known; under Robolectric, the page's headings, the note under a language that is off, each row's count or its add by hand, Delete on its row; an import's notice of what it left out |
+| `OrderedWorker` | The personal dictionary's reads and writes in the order sent, each to its end; a batch whole; a forget after a queued batch staying forgotten; a read after the writes before it; the teardown that drains, then stops its thread; on a thread stepped by hand and on the production one |
+| `PredictionEngine` | On threads stepped by hand: its shutdown, the verdicts still queued answered once, the prediction thread stopped; a commit before the personal model's first load learning nothing; a swipe, its preview and an explanation reading the store each names |
 | `PredictionRequestQueue`, `NewestWins` | The one-deep queue, and only the newest request's answer used |
 | `KeyboardGeometry` | Hit-testing arithmetic |
 | `KeyboardPreferences` | Every setting's clamp and default |
@@ -72,15 +82,29 @@ shipping Kotlin -- `WordCommit` with the apostrophe maps of the languages opened
 possessive, the capital a language always writes, and every guard in `AutoCorrection` --
 against the packs the application ships, and it types each case through `TypingOrchestrator`,
 so a case's word ends as it would on a phone. Nothing in it is a model of the pipeline; it *is*
-the pipeline, with the touch surface left out.
+the pipeline, with the touch surface left out. It types through the
+[typing rig](#the-typing-flow--typingscenariotest), whose personal dictionary's tables are held in
+memory (`MemoryDictionary`, each table checked against Room by `MemoryTablesMatchRoomTest`), and
+every rig on one engine shares the keyboard's own working copy (`EngineWorkingCopy`), loaded with
+no personal model as the service loads an empty personal dictionary at its start. A learned
+history goes the keyboard's whole way: each word committed through `LearningFlow`, the lookup
+counting it and recording its links, the buffer flushed into the tables, then read back as the
+service reads them (`PersonalModelLoad.read`) and loaded as it loads them (`EngineWorkingCopy.load`).
 
 | Payload | What it pins |
 |---|---|
-| `pipeline_cases.tsv` | 49 cases, `typed <TAB> committed <TAB> reason` |
+| `pipeline_cases.tsv` | 53 cases, `typed <TAB> committed <TAB> reason` |
 | `pipeline_cases_ro.tsv` | 13 Romanian cases, against the pack most reports come from |
 | `PipelineCorpusTest` | Every autocorrect corpus, with a floor per corpus -- see [the whole path](#the-whole-path--pipelinecorpustest) |
+| `TwoLanguageCorpusTest` | The Romanian and English corpora with both languages on, each word typed after a sentence in either, with a floor per corpus and lead |
+| `CorrectionDevReadingsTest` | The correction DEV rows through the whole path, at a start and after their two words, Romanian's and English's after the other language, the personal DEV rows after the TEST history; skipped without `-Pborderkeys.dev`. A fixture always runs: a slip committed as the word meant and a word left alone read right, first and in the top three -- see [dev readings](#dev-readings--where-constants-are-chosen) |
 | `PersonalCorpusTest` | A persona's history learned, then words typed after their context, with a floor per learned context and kind -- see [a learned history](#a-learned-history--personalcorpustest) |
-| `LanguageSwitchPipelineTest` | The backward correction, end to end over two packs |
+| `SwipePersonalCorpusTest` | The same history learned, then the rows' words swiped after their context; a learned successor the empty model leaves behind first once the history is loaded -- see [swiped after a learned history](#swiped-after-a-learned-history--swipepersonalcorpustest) |
+| `LanguageSwitchPipelineTest` | The backward correction, end to end over two packs; the pack each answer leans on, and the store each request names: a suggestion, a swipe's decode, an explanation, an answer as one pack |
+| `WordTableBridgeTest` | The personal words across the bridge: each put under the id the engine gave it reaches the strip as the lookup spells it; a word's case forms counted together, and one with no uses left adding nothing; a word loaded as chosen offered at once, one added by hand before one used as often; which words an active pack knows; a load placing each word's uses in no language known in the active packs that spell it, else its links' languages, else in none |
+| `LookupLinksMatchEngineLearningTest` | The lookup's words, pairs and triples against what the engine is handed, after a load with one store past its cap and random commits in two languages, words the load did not hold among them: every word the engine's table entry under the same id; every context's links, read back from the slice a request there hands the engine, in the order the engine offers them, with their counts, choices and observations and the context's total and observations |
+| `ContextSliceBridgeTest` | A slice's arrays across the bridge and back, its stamps included, one whose arrays hold fewer than its header counts refused and longer ones read up to the counts; a commit made since the last request in a context handed at the next one there; a commit under the language no tag names learned there and read by a request there alone |
+| `PhraseBudgetPipelineTest` | The budget at each commit: what the lookup keeps the store holds and the engine is handed, the newest kept; chosen marks, loaded and committed, reaching the engine and kept from the budget; a committed phrase's rows in lower case under its language |
 
 The **reason** is asserted beside the outcome because an outcome on its own can be right by
 accident: a guard can stop working while another covers for it. The reason is the rewrite that
@@ -119,15 +143,27 @@ cmake --build native-tests/build --target borderkeys   # the host JNI bridge
 
 `TypingRig` builds the real `TypingOrchestrator` with everything around it replaced by
 something a test can hold: an in-memory field with a composing region, a selection and batch
-edits (`FakeFieldEditor`); the engine on the host JNI bridge and the shipped packs, its answers
-queued until the rig delivers them (`QueuedEngine`), so the order of events is the test's and
-never a thread's; a recording host and ring (`FakeTypingHost`, `FakeRingUi`); an in-memory store;
-and a clock the test moves. After each key the rig delivers what reaches the input method before
-the next one — the field's selection reports, the engine's answers, the runnables that fell due —
-and checks that the word's taps are still in step with its text.
+edits (`FakeFieldEditor`); the engine on the host JNI bridge and the shipped packs, its calls
+queued until the rig serves them (`QueuedEngine`), so the order of events is the test's and
+never a thread's, its personal model the keyboard's own working copy (`EngineWorkingCopy`: the
+lookup, the word table it fills, the slice it hands each request); a recording host and ring
+(`FakeTypingHost`, `FakeRingUi`); the keyboard's own store (`DictionaryLearningStore`) on the
+personal dictionary's repository over tables in memory (`MemoryDictionary`), its ordered worker on
+a thread the rig steps by hand (`SteppedExecutor`); the production host of the personal model
+attached to that repository (`KeyboardPersonalModel`), so an edit the test makes through it
+reaches the lookup as a page's does, and a reload reads the tables and loads them as the service
+does (`PersonalModelReload`); and a clock the test moves. After each key the rig delivers what
+reaches the input method before the next one — the field's selection reports, the engine's
+answers, the runnables that fell due, the personal dictionary's reads and writes — and checks that
+the word's taps are still in step with its text.
 
-**177 scenarios**, each a whole keystroke sequence asserting the field's text and caret and, where
-it matters, what was learned: a word typed and ended by every kind of key, a correction and the
+**213 scenarios**, each a whole keystroke sequence asserting the field's text and caret and, where
+it matters, what was learned: an edit on the pages reaching the strip without a reload and a
+forget reading the personal model again, the uses waiting going with it and the other link rows
+waiting written, the clean-up's halving reaching the model, the offensive filter switched off
+reading it again, no word typed while Disabled reaching a pair or triple, a phrase added by hand while a commit of its pair is on
+its way keeping both uses, Disabled writing what the field gathered and Enabled learning on from
+it, a word typed and ended by every kind of key, a correction and the
 backspace that takes it back, typing after a caret move into committed text, undo and redo,
 shift and caps lock, the spaces the keyboard adds and takes away, French spacing, a text
 shortcut, a terminal, a password field typed verbatim, swipes — real paths decoded by the host
@@ -137,8 +173,28 @@ is kept.
 
 ### Native — `ctest --test-dir native-tests/build`
 
-Two registered tests:
+Eight registered tests:
 
+- **`timing_eval_calls`** — `timing_eval` with the test pack on `data/start_rows_runs.txt`, learned
+  as the history too, the taps of `data/touch_rows_taps.tsv` and the first gesture of
+  `data/gestures.csv` with the shipped weights: one line per call, its workload, language, model and kind against
+  `data/timing_calls_expected.tsv`, each time a number, and both neural calls answered by the
+  neural decoder. The timer's shape, not its numbers.
+- **`tcn_replay_rows`** — `tcn_replay.py --rows` over `data/gestures.csv` with the test pack and
+  the shipped weights: a row per gesture keyed by its id and word, and `the` first once its
+  context resolves to a sentence start, against `data/tcn_rows_expected.tsv`.
+- **`touch_eval_rows`** — `touch_eval --rows` on the taps of `data/touch_rows_taps.tsv`, nothing
+  trained: the measures line, then per slipped word and setting its verdicts, key and reading,
+  against `data/touch_rows_expected.tsv`; the word typed as meant is no row.
+- **`suggest_eval_autocorrect_rows`** — `suggest_eval --autocorrect --rows` on
+  `data/strip_rows_corpus.tsv` with the test pack: the measures line naming the strip's
+  first place and top three, then per row its verdicts, its key and the word expected with its
+  place, against `data/strip_rows_expected.tsv`.
+- **`suggest_eval_start_rows`** — `suggest_eval --start-rows` asks each run's first word at each
+  depth its letters allow; the keys of the rows it writes against `data/start_rows_keys.txt`.
+- **`suggest_eval_sentence_rows`** — a corpus with sentence lines writes each row's sentence and
+  genre after its key, on the context and the start rows, against `data/sentence_rows_fields.txt`;
+  the same runs without the lines write the same rows without the fields.
 - **`engine`** (`borderkeys_tests`) — the engine, the touch model, folding, the pack format, the
   gesture decoders, and the assistant's answer cleanup. Source: `test_engine.cpp`,
   `test_fold.cpp`, `test_format.cpp`, `test_gesture.cpp`, `test_tcn.cpp`,
@@ -146,6 +202,11 @@ Two registered tests:
   key geometry's distance, `thede` tapped towards the r becoming `there`, and a learned pattern
   making the same tap dearer to read as a neighbour.
 - **`pack_corpus`** — the pack loader against a committed corpus of deliberately damaged files.
+
+The engine tests hand the engine its personal model as the keyboard does: `WorkingCopyFixture`
+(`test_support.hpp`) puts the words into the word table, keeps the pairs and triples by their
+words' ids, and hands the engine the slice of each request's context before the request; what a
+commit records, and the budget, are the lookup's and tested in Kotlin (`PersonalLookup`).
 
 A note on running them: **build every target before `ctest`.** `cmake --build … --target
 suggest_eval` leaves `borderkeys_tests` stale, and `ctest` will then report a pass against an
@@ -213,7 +274,11 @@ adb -s emulator-5554 shell am instrument -w -r -e class com.borderkeys.ImeSmokeT
 
 The suite leaves the pack it installed and the preferences it set in place.
 
-`DatabaseMigrationTest` checks each database migration against the schemas Room exports into
+`UpgradeMigrationTest`, in the JVM suite under Robolectric, builds a database at each version a
+build has opened, from the released 9 on, holding what that version wrote, and migrates it to the
+current one through every migration, validated against its exported schema: every word kept
+unplaced with its uses and chosen only as added by hand, the links and their contexts as they
+were, the new tables empty. `DatabaseMigrationTest` checks each database migration against the schemas Room exports into
 `data/schemas`, which the instrumented build carries as assets: a database built at version 7
 with a learned word in it is migrated to 8, validated against the version-8 schema, and still
 holds the word, beside an empty `key_touches` table for the heatmap. It runs the same way, with
@@ -253,6 +318,14 @@ packager.
 - **Kotlin imports are in order and used.** `check_imports.py` reports an import out of ktlint's
   order or one the file never uses, over every tracked Kotlin file, build scripts included;
   `--selftest` proves its rules on synthetic snippets.
+- **Every list can store what the score defines.** `check_pack_definitions.py` reads each
+  language's `.tsv`, `.ngrams`, `.known` and manifest, and fails when a counted n-gram's word is
+  listed only under another spelling, a context's stored successors add up to more than its
+  count, or the manifest records no `sentence_starts` for the start pairs to be divided by;
+  `--selftest` proves its rules on synthetic lists.
+- **Every tool runs on the build's oldest Python.** `check_python_floor.py` reads each file under
+  `tools/` and `scripts/` as Python 3.9's grammar and reports a union annotation (`str | None`) in
+  a file that does not defer its annotations; `--selftest` proves its rules on synthetic snippets.
 - **Dictionary compiler round trip.** `build_dict.py --selftest` proves the Python still agrees
   with `bkd_format.hpp`, which is the authority on the format.
 - **Encoder parity, `test_tcn.cpp`.** `native-tests/data/tcn_golden.bin` carries `model.py`'s
@@ -311,6 +384,30 @@ a corpus entry rather than having to be re-derived.
 These say how **good** the answers are, which is a number that moves rather than a line that
 passes. `borderkeys_tests` says whether the engine is correct; these say whether it is any use.
 
+### What measures each use of the language model
+
+Every use of the next-word score, the path it is asked on, and what reads it. Asked "at a start"
+means with nothing before the word, which the engine reads as a sentence start. A change to the
+score is judged on every row of this table; a blank is a use nothing measures there.
+
+| use | asked | DEV (`dev_readings.sh`) | TEST (`corpus_readings.sh`) | CI | JVM |
+|---|---|---|---|---|---|
+| next word after a word | in context | context rows, depth 0 | context rows | context floors | `PipelineTest` successors |
+| next word at a start | at a start | start rows | start rows | | |
+| completion, 1-3 letters | in context and at a start | context and start rows | context and start rows | context floors | |
+| completion, 4 letters or more | | | | | |
+| autocorrect and the strip's typed word | at a start | Kotlin `corrections_<language>` rows | Kotlin rows (the commit), native rows (the strip's ranks) | strip floors (English) | `PipelineCorpusTest`, `PipelineTest` |
+| autocorrect in context | in context | Kotlin `corrections_*_in_context` rows | Kotlin `*_in_context` rows | | `PipelineCorpusTest` (English, case) |
+| two languages | at a start | Kotlin `corrections_ro_after_en`, `corrections_en_after_ro` rows | Kotlin `two_*` rows | | `TwoLanguageCorpusTest` |
+| personal words | in context | Kotlin `personal_dev_*` rows (en, es, ro), provisional: from the personal part | personal rows (en, es, ro) | | `PersonalCorpusTest` |
+| swipe, Shark2 | at a start | | `swipe/shark2_*` rows | `gesture_replay` | `SwipeTwinsTest` |
+| swipe, TCN | at a start | | `swipe/tcn_*` rows | `tcn_replay` | `SwipeTwinsTest` (plus) |
+| swipe after a learned history, both decoders | in context | | Kotlin `swipe_personal_*` rows | | `SwipePersonalCorpusTest` |
+| tap decoder | at a start | | `taps/touch_*` rows (the strip), Kotlin `taps_*` rows (the commit) | `touch_eval` floors | `TapCorpusTest` |
+
+`compare_readings.py` judges a TEST file only against the same file in the accepted results, and
+the small files of one family together, so a use spread thinly over many small corpora can fall.
+
 ### Swipe accuracy — the one that gates
 
 ```
@@ -326,7 +423,16 @@ python3 tools/tcn_replay.py --binary native-tests/build/tcn_replay \
 Both tiers, against 500 recorded traces sampled with a fixed seed from FUTO's held-out split
 (`tools/swipe_model/futo_to_corpus.py`) and the **shipped English pack**. Compared against
 `docs/gesture-accuracy.json` and `docs/gesture-accuracy-tcn.json`, so a decoder regression fails
-in CI rather than being noticed on a device weeks later.
+in CI rather than being noticed on a device weeks later. A check with nothing to compare (no
+corpus, no binary, no weights or no baseline) fails as well; `--selftest` proves each case.
+
+Each gesture is decoded as the keyboard decodes a swipe with nothing before it, through
+`Engine::decodeGesture`, so the context is a sentence start. `tcn_replay` loads the weights and
+turns the neural decoder on, and a gesture it finds nothing for goes to the geometric decoder, as
+on the keyboard; it prints how many did. `--rows <file>` writes a rows file beside the figures: per
+gesture, whether the word meant is first and among the first three, keyed by the gesture's id and
+word, then its place among the candidates and the decoder's first word. `corpus_readings.sh` writes them
+for both decoders on these traces and on the synthesised `gestures.csv`.
 
 | tier | top-1 | top-3 |
 |---|---|---|
@@ -402,7 +508,11 @@ layout, from the layout and the pack. The neural tier takes the layout's key cen
 (`TcnCtcDecoder::setLayout`) and runs on a Latin layout with the Latin weights and on a layout in
 another script with that script's own weights (`SwipeModels.modelFor`); a script without its own
 weights decodes geometrically. The measurement below covers only the Latin layouts the
-collection holds.
+collection holds. The script models in `keyboard/src/plus/assets/swipe/` are local files, kept
+out of the repository, so this is a local reading: `tools/script_swipe_eval.py --shipped
+--build-packs` measures both decoders on each layout with a model, and `--check-regression` checks
+each against its `docs/gesture-accuracy-tcn-<layout>.json`, failing when it finds no model to
+check. No script model is in the repository, so CI does not run it.
 
 ```
 tools/swipe_model/.venv/bin/python3 tools/swipe_model/futo_layout_corpus.py azerty \
@@ -431,6 +541,48 @@ is the weakest pair for both tiers, and the least clean: the collection's QWERTZ
 English and German mixed, and filtering them by the English pack keeps the English rows plus
 every German word that is an English word too, swiped by someone writing German. Not gated,
 because the corpora are built from a 312 MB download; the qwerty row is the gate above.
+
+### Engine timing, p50 and p95 — not gated
+
+`scripts/timing.sh` times each call the engine answers for a keystroke or a swipe, one call at a
+time, on an optimised host build: `native-tests/timing_eval`, built RelWithDebInfo into
+`native-tests/build-timing`, where `native-tests/CMakeLists.txt` gives that type the shipped
+library's flags, `-O2 -g -DNDEBUG`. Per language, the workloads are:
+
+- **typed**: each row `suggest_eval --context` asks of the held-out text (`context_runs.hpp`), the
+  word after the two words before it, with nothing typed and with one, two and three letters
+  typed;
+- **taps**, in English: each word of the centred tap corpus typed with a slip into a string no
+  dictionary spells, with its taps on the default touch patterns, so the tap decoder runs;
+- **swipe**, in English: FUTO's recorded swipes through the geometric decoder, then through the
+  neural one with the Latin model, switched on as the keyboard switches it on;
+- each again after the persona's history (en, ro, es) is committed word by word through
+  `WorkingCopyFixture`, the test copy of the keyboard's lookup, its slice of a context handed to
+  the engine before the first call that names that context, as the keyboard hands it; the
+  hand-over, `Engine::pushSlice`, is timed as a call of its own, `push`.
+
+Only the engine call is inside the timed span: the pack load, the history, the reading and the
+writing are outside it. Two builds, each a `timing_eval` binary or a source tree it builds, read
+the same inputs, this tree's, in five alternated runs, the first of the two swapped every other
+run, one language at a time. `scripts/timing_summary.py` groups the calls by workload, language,
+model and letters typed or decoder, and gives each group its p50 and p95 by nearest rank over
+every run's calls, each run's beside them, and its verdict: held when the later build's p95, the
+median of its runs', is at most the earlier one's plus the earlier one's range across its runs;
+the runs must hold the same calls, or the summary says NOT COMPARABLE. The verdict is one-sided
+and as wide as the earlier build's spread: a noisy earlier build holds a slower later one, so
+each verdict line prints both builds' ranges, and the tree timed against itself reads each
+group's spread and how often a build is called SLOWER than itself. `--one` times one build and
+gives its p50 and p95 alone.
+
+```bash
+scripts/timing.sh /tmp/timing <before tree or binary> <after tree or binary>
+scripts/timing.sh /tmp/timing --one .
+```
+
+A busy machine moves the tail more than most changes do, so a reading is taken with nothing else
+running; `builds.txt` records each binary and the load when the runs started. `--limit N` times
+the first calls of each workload alone, for a look at the harness itself. The phone's own p50 and
+p95 are on the debug stats panel, below.
 
 ### Swipe latency and memory on a device — not gated
 
@@ -479,10 +631,13 @@ The same figures can be read on a phone without a cable: the settings applicatio
 stats" line, just above its "Try it here" field, opens a panel with the keystroke-to-strip and
 native search latencies, the swipe decode and lift-to-text figures labelled with the decoder in
 use, the swipe path, duration and sample figures, the pack load time, the typing speed and the
-process memory, each as last, mean and maximum with a count, re-read twice a second, with a
-Reset for the next run. A figure with a baseline carries a green, amber or red dot judged on
-its mean and a line saying what it is, whether any setting changes it and where the baseline
-lies; a figure that is only a fact about the typing carries neither. Share hands the whole
+process memory, each as last, mean, median, 95th percentile and maximum with a count, re-read
+twice a second, with a Reset for the next run. The two percentiles come from a fixed histogram
+per figure, each bucket a sixteenth of a doubling wide, read by nearest rank as the largest value
+of the bucket holding it, so at most one bucket's width above it. A figure with a baseline
+carries a green, amber or red dot judged on its mean and a line saying what it is, whether any
+setting changes it and where the baseline lies; a figure that is only a fact about the typing
+carries neither. Share hands the whole
 panel to the system share sheet as plain text, headed by the build, the device and the moment. The keyboard
 records them in every build; the panel is where they are shown.
 
@@ -491,9 +646,12 @@ mean over five swipes, lift to text 139.8 ms, which is what led to those changes
 
 ### Where the neural decode's time goes
 
-`tcn_replay` prints, per gesture, the milliseconds spent in the encoder and in the word search
-over the tries, on this machine's release build (`cmake -S native-tests -B native-tests/build-release
--DCMAKE_BUILD_TYPE=Release`), over the 30 gestures of `native-tests/data/gestures.csv`:
+`tcn_replay` prints the mean milliseconds of a whole decode through `Engine::decodeGesture`, per
+gesture. The table splits the encoder from the word search over the tries; `TcnDecoder` keeps
+both timers, but the engine hands out neither, so `tcn_replay` no longer prints the split. It was
+read on this machine's release build (`cmake -S native-tests -B native-tests/build-release
+-DCMAKE_BUILD_TYPE=Release`), over the 30 gestures of `native-tests/data/gestures.csv`, with the
+decoder called directly:
 
 | | encoder | search |
 |---|---|---|
@@ -579,7 +737,7 @@ stays out -- `happy birthday` is not among the pairs the packs hold.
 ```
 python3 tools/make_tap_corpus.py --profile thumbs --taps 60000 --seed 1 > thumbs.tsv
 native-tests/build/touch_eval <dict dir> en-US native-tests/data/qwerty_1080.layout thumbs.tsv \
-    --train-taps 20000 --test-from-taps 40000 --test-words 4000 [--floor P]
+    --train-taps 20000 --test-from-taps 40000 --test-words 4000 [--floor P] [--rows <file>]
 ./gradlew :keyboard:testCoreDebugUnitTest --tests '*TapCorpusTest' -Pborderkeys.taps=<dir of the six .tsv>
 ```
 
@@ -593,6 +751,16 @@ pattern" column, the taps priced with nothing learned, which is what a keyboard 
 Heatmap switch off reads. `TapCorpusTest` types the same test words through the whole keyboard
 (`Pipeline.commitTapped`, `TypingRig.tap`), with Learning off, once at their taps and once with
 no positions, and holds autocorrect's right word with the taps per profile.
+
+Their rows judge two things. `touch_eval --rows` writes the strip: per slipped word and setting
+(no taps, the default patterns, each learned weight and minimum), whether the word meant is the
+strip's first word and among its first three, keyed by the word's place among the corpus's words,
+the setting, the typed string and the word meant, then its place on the strip and the strip's first
+word; what `bestCorrection()` commits stays in its report and CI's floor. `TapCorpusTest` writes
+the commit, the app's own: with `-Pborderkeys.readings`, per slipped word, whether the word meant
+was committed at its taps (`right`) and with no positions (`right-untapped`), keyed by the word's
+place among the corpus's words, the typed string and the word meant, then each typing's commit and
+its reason. The place keeps apart the same slip typed twice at other taps.
 
 `make_tap_corpus.py` types words drawn by frequency from `dictionaries/en_US.tsv` on a 1080-pixel
 QWERTY, one tap per letter: the key's centre moved by a profile's offset for that key, plus
@@ -654,21 +822,150 @@ half-lives of 7 to 180 days stay within 0.6 points of each other, and 30 days ke
 letters above the minimum for someone typing 500 taps a day. The taps are Gaussian, which suits
 the default pattern; real taps may reward learning more.
 
-### Readings — the check for a change meant to change nothing
+### Readings — every corpus, row by row
 
 ```
 scripts/corpus_readings.sh /tmp/readings-before      # on the commit before
 scripts/corpus_readings.sh /tmp/readings-after       # on the change
-diff -r -x SUMMARY.txt /tmp/readings-before /tmp/readings-after
+python3 scripts/compare_readings.py /tmp/readings-before /tmp/readings-after
 ```
 
 Writes every corpus's reading, case by case: `native/`, `suggest_eval`'s output for every
-corpus with a shipped pack, and `kotlin/`, one line per case from `PipelineCorpusTest` and
-`PipelineTest` (`-Pborderkeys.readings`): typed, committed, reason, and the engine's ranking
-with its scores. A change that restructures without meaning to change behaviour must read
-identical, to the digit; every step of the typing orchestrator did. `--centre-taps` writes the
-native readings with every letter tapped at its key's centre, which must read as they do with no
-taps at all, since the default touch pattern prices a centre tap as the key geometry does.
+corpus with a shipped pack, where the strip ranks each row's word expected; `context/` and `reachable/`, the context model on each language's
+held-out text and every word of each shipped pack's list; `swipe/`, both swipe decoders on FUTO's
+recorded traces and on `gestures.csv` (`shark2_<traces>.tsv`, `tcn_<traces>.tsv`, the neural one
+with the Latin model); `taps/`, `touch_eval` on the six tap corpora it writes where CI writes them
+(`touch_<profile>.tsv`); and `kotlin/`, one line per case from `PipelineCorpusTest`,
+`TwoLanguageCorpusTest` (`two_<corpus>_after_<language>.tsv`), `PersonalCorpusTest` and
+`PipelineTest` (`-Pborderkeys.readings`): typed, committed, reason, and the engine's ranking with
+its scores, with `TapCorpusTest`'s commits (`taps_<profile>.tsv`) and
+`SwipePersonalCorpusTest`'s swipes after a history (`swipe_personal_<language>_<model>_<decoder>.tsv`,
+from the traces it synthesises into `native-tests/build/swipes`). `--fast` writes `context/` and
+`reachable/` alone, for the work between two full runs. `--centre-taps` writes the native
+readings with every letter tapped at its key's centre, which must read as they do with no taps
+at all, since the default touch pattern prices a centre tap as the key geometry does.
+`--sheet NAME --ledger FILE` records the reading as a design sheet's one TEST read once the
+builds pass (`judge_arms.py ledger`), and stops before reading anything when the ledger already
+holds one,
+unless `--second-test-read` gives the words that allow another; they are recorded beside it.
+
+Each corpus is a rows file: a first line `# measures: <name> ...`, a second line
+`# fields: sentence genre` when the corpus names its sentences, then for every row one verdict
+per measure (1 or 0), its key (what was typed, with its context), its fields and its reading,
+tab-separated, in corpus order. Each writer decides its own verdicts: the pipeline tests' `right`
+is the outcome their tally counts, `suggest_eval`'s are named in its usage. A place in a reading
+counts from 1, and a word not offered reads `absent` (`-` in the context rows).
+
+`compare_readings.py` pairs the files by path, and a rows file on one side only, or one without
+its measures line, makes the two runs not comparable. It judges the change on each corpus and
+measure:
+the rows fixed (0 to 1) and lost (1 to 0); the net, (fixed − lost) / rows, bounded at 95% by
+resampling whole sentences (each row on its own when no side names its sentence); and the churn,
+the lost share of the changed (previous word, target) pairs, bounded by Wilson's interval
+against the change's budget (`--budget small`, one lost for four fixed, or `ranker`, one for
+two). A measure with fewer than 30 changed rows is reported and traced, never judged alone: the
+small files of one family (`native/autocorrect`, `kotlin/personal`, `swipe/shark2`, `taps/touch`) are pooled per measure and
+judged together as one more corpus.
+- **Context rows** are judged on their top three, each language on its own: a fall when the
+  net's lower bound is under the margin (`--margin`, 0.25 points) or the churn's lower bound is
+  over the budget. First place and the readings without context are reported beside it. When
+  the rows carry two genres or more, a genre whose net is negative beyond chance after Holm
+  across every genre falls. The top three pooled over the languages is reported as better beyond
+  chance, or not shown better; neither is a fall.
+- **Every other corpus** falls only beyond chance: its net under the margin, or its churn over
+  the budget, each by Holm across all of them.
+
+The script exits 1 on a fall, and 2 when the two runs cannot be compared: a rows file gone,
+other measures, other keys, another number of rows, or a row in another sentence. A side without
+fields pairs with one that has them, so the accepted results stay comparable when the corpora
+gain sentence lines. A change that restructures without meaning to change behaviour must read
+identical, to the digit; every step of the typing orchestrator did, by `diff -r -x SUMMARY.txt`.
+
+The context text is each language's Universal Dependencies test split (`make_context_corpus.py`),
+each sentence's runs under a line `# sentence <genre> <sent_id>`: the genre is the one an EWT
+`sent_id` opens with, a Parallel UD sentence's news or wiki, otherwise the treebank's name. A
+treebank with no dev split gives the half of each genre's sentences with the smallest
+fingerprints to DEV and keeps the other half here.
+
+`context/<language>.starts.tsv` asks each run's first word with nothing before it, as a sentence
+opens (`suggest_eval --start-rows`), at the same depths, measured by `first` and `top-three`. The
+context corpus's own rows never ask a run's first word.
+
+### Dev readings — where constants are chosen
+
+```
+python3 tools/make_dev_corpus.py native-tests/build/dev --cache ~/.cache/borderkeys/leipzig-pinned
+scripts/dev_readings.sh /tmp/dev-after [--packs DIR] [--eval BIN] [--library DIR]
+python3 scripts/compare_readings.py /tmp/dev-before /tmp/dev-after
+```
+
+The readings above are the test: a constant chosen on them is fitted to what judges it. A
+constant of the language model is chosen on the dev corpora instead, and the test readings are
+read once, after. `make_dev_corpus.py` takes each language's held-out Leipzig file (the manifest's
+`heldout`, admitted by `heldout_overlap.py`), reads its split's dev part ("A learned history"
+below: no sentence a counted corpus also writes, none the personal or case corpora read), keeps
+the 4,000 sentences with the smallest fingerprints, so the choice does not depend on the file's
+order, and splits them into runs as `make_context_corpus.py` splits the test text,
+each in the genre of its Leipzig corpus. After them come the test treebank's DEV sentences: its
+dev split, or the half of its test split the test leaves (`--treebanks` keeps the downloads).
+`dev_readings.sh` reads them as `corpus_readings.sh` reads `context/`, the start rows included,
+into `<language>.tsv` and `<language>.starts.tsv`.
+
+Of the same held-out sentences, `make_dev_corpus.py` writes the correction rows,
+`corrections_<language>.tsv`, as `make_personal_corpus.py` draws its rows ("A learned history"
+below): each ordinary word of the list after its two words, as written and with a slip, omitted,
+extra or mid-word typo that is not a word of the list, 150 words per typo kind; every language's
+dev part reaches 150 of each. The mid-word rows are provisional: like `make_midtypo_corpus.py`,
+the draw keeps a row whose meant word without its last letter is itself a word of the list, though
+its typed letters then read as that shorter word. For a language with a persona, `personal_dev_<language>.tsv` is a
+provisional personal DEV from the persona's personal part, until a second held-out edition gives
+the personal DEV a part of its own: rows drawn the same way from the persona's candidate rows,
+none with a TEST row's word and none with a TEST row's context, typed after the TEST history; en,
+es and ro each reach 150 of each kind. `dev_readings.sh` then runs
+`CorrectionDevReadingsTest` (`-Pborderkeys.dev`), which types them through the whole path, so a
+row's commit is the app's own, into `kotlin/`: each correction row at a start
+(`corrections_<language>.tsv`) and after its two words (`corrections_<language>_in_context.tsv`);
+Romanian's and English's at a start with both languages on, after a sentence in the other one
+(`corrections_ro_after_en.tsv`, `corrections_en_after_ro.tsv`); each personal DEV row after its
+two words with no personal model, the history's words and the whole history
+(`personal_dev_<language>_<model>.tsv`). Each row's measures are `right` (the field kept the word
+meant, case aside), `first` and `top-three` (where the engine's ranking, asked before the word was
+typed, puts it); its key is the context and the letters typed, its reading the kind, the place and
+the reading line. The harness types QWERTY in every language.
+
+`--packs` reads other packs in both readings, `--eval` another `suggest_eval`, and `--library`
+another host library (`-Pborderkeys.packsDir`, `-Pborderkeys.libraryDir`), so an arm reads its own
+engine through the app's commit. It then sets each language's DEV sentences by genre beside its
+TEST sentences, and names a TEST genre DEV lacks (`judge_arms.py genres`); `SUMMARY.txt`, written
+last, holds the context reports' headlines and the Kotlin rows' tallies.
+
+### A design sheet's arms
+
+```
+python3 scripts/judge_arms.py freeze <sheet.json>
+python3 scripts/judge_arms.py judge <sheet.json>
+```
+
+A sheet file names its arm budget, its churn budget and margin, the readings every run is judged
+against, each arm's declared grid, and its runs: the arm, the point on its grid, and the readings
+directory. `judge_arms.py` judges each run by `compare_readings.py`; a run is eligible when
+nothing falls and its pooled top three is better beyond chance, and each arm's best is its
+eligible run with the highest pooled net. It prints EDGE when an arm's best sits on a bound of
+its grid, WITHIN NOISE when the best is not better beyond chance than the arm's next run, or the
+best arm than the next arm, BUDGET SPENT when the sheet has run as many arms as its budget, and
+the best arm's genres.
+
+A sheet is judged only by the tools it was frozen with. `freeze`, once, before the first run,
+records in the sheet the SHA-256 of every tool that writes or reads the rows a run is judged by:
+`compare_readings.py` and `judge_arms.py`; the evaluators, `suggest_eval.cpp`,
+`gesture_replay.cpp`, `tcn_replay.cpp` and `touch_eval.cpp`, with the native tests' headers they
+include, `context_runs.hpp`, `replay_corpora.hpp`, `rows_file.hpp` and `test_support.hpp`; the
+replays' wrappers, `tools/gesture_replay.py` and `tools/tcn_replay.py`; and the correction DEV
+rows' reading, `CorrectionDevReadingsTest`, with `Pipeline`, `PersonalCorpusTest` and
+`TwoLanguageCorpusTest`, which it types them through. The engine's own sources are what the arms
+change, and are not frozen. `judge` and
+`compose` print TOOLS CHANGED and judge nothing when the sheet records none or one differs, and a
+changed tool starts another sheet.
 
 ### Correct words the pack has never heard of
 
@@ -683,7 +980,9 @@ guard — the pack's own words compete for it unopposed. Generated by
 `tools/make_unknown_corpus.py`.
 
 Current baseline: **90.0% left alone** in the engine alone, 200 cases, up from 66.0%; 184 through
-the whole keyboard.
+the whole keyboard. The engine-alone shares here and below were read when `suggest_eval
+--autocorrect` walked autocorrect's list by its own copy of the commit rule; it now reads where
+the strip ranks each row's word, and the commit is read through the whole path alone.
 
 The number that moved it was `kDeleteCost`, raised from 0.85 to 1.6 so that it is no longer the
 mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of
@@ -706,9 +1005,9 @@ reach.
 ```
 
 Every corpus above and below, through the engine, the bridge and `WordCommit`, with a floor
-per corpus that CI enforces. The engine's own numbers and the path's differ wherever a guard
-refuses what the engine offered, or a rewrite claims the word first; where they differ, this
-is the number a user gets.
+per corpus that CI enforces. The engine-alone column differs from the path wherever a guard
+refuses what the engine offered, or a rewrite claims the word first; the path's is the number a
+user gets, and the one reading of the commit.
 
 | corpus | rows | engine alone | whole path |
 |---|---|---|---|
@@ -735,21 +1034,21 @@ is the number a user gets.
 | `autocorrect_plain_es` | 200 | 100.0% | 200 |
 | `autocorrect_twins_it` | 57 | 100.0% | 57 |
 | `autocorrect_plain_it` | 200 | 100.0% | 200 |
-| `autocorrect_case_en` | 300 | — | 297 |
-| `autocorrect_case_de` | 300 | — | 291 |
-| `autocorrect_case_fr` | 300 | — | 292 |
-| `autocorrect_case_es` | 300 | — | 284 |
-| `autocorrect_case_it` | 300 | — | 294 |
-| `autocorrect_case_ro` | 300 | — | 289 |
+| `autocorrect_case_en` | 300 | — | 298 |
+| `autocorrect_case_de` | 300 | — | 289 |
+| `autocorrect_case_fr` | 300 | — | 286 |
+| `autocorrect_case_es` | 300 | — | 291 |
+| `autocorrect_case_it` | 300 | — | 293 |
+| `autocorrect_case_ro` | 300 | — | 294 |
 
 The case corpora are read case-sensitively: a row is right only when the word comes out written
 exactly as expected. Each holds 300 words a pack list has flagged as a name, typed in lower case
-after the word before them in a sentence of the Leipzig 2020 news: the 150 most frequent that it
-writes capitalised inside a sentence, and the 150 it writes in lower case, each with 95%
-confidence (`tools/make_case_corpus.py`). Those sentences are not the ones
-`dictionaries/<tag>.case` was counted from; the English, Romanian and French word lists count
-that same news. No corpus before them could see a capital: the known-words corpus leaves names
-out, and every other comparison ignores case. The real-typo reading a word at a time fell from
+after the word before them in a sentence of the case part of the language's held-out news ("A
+learned history" below): the 150 most frequent that it writes capitalised inside a sentence, and
+the 150 it writes in lower case, each with 95% confidence (`tools/make_case_corpus.py <tag> --out <dir>`).
+No corpus a list or its `.case` evidence is counted from writes those sentences, and neither the
+dev corpora nor the personal corpus reads them. No corpus before them could see a capital: the
+known-words corpus leaves names out, and every other comparison ignores case. The real-typo reading a word at a time fell from
 468 to 467 when the case evidence took 539 English name flags away: "shojlswe" ("shoulder") lost
 the decoder's margin to a word no longer flagged as a name.
 
@@ -831,12 +1130,9 @@ transposes complete ones. Nothing combined them, and the engine could not answer
 at all — `allowCompletion` refused to walk on from an endpoint reached by an edit, so `beleiv`
 committed `belief` and `becuas` reached nothing.
 
-**Measured through `Pipeline`, not `suggest_eval`.** `suggest_eval --autocorrect` walks
-autocorrect's list under the edit ceiling, the name rule and the minimum length, so it reads
-close to the whole path here (45 against 44 of 200; before it modelled the ceiling it reported
-71.5% where a user got 22.0%). It still leaves out the inflection guard and the contraction and
-possessive rewrites, so where the two differ, the harness that runs the real Kotlin is the one
-to believe.
+**Measured through `Pipeline`, not `suggest_eval`.** The commit is the app's rule run by the real
+Kotlin, the inflection guard and the contraction and possessive rewrites included; `suggest_eval
+--autocorrect` reads where the strip ranks the word.
 
 | | corrected | wrong word | left alone | of which ≥ 8 letters |
 |---|---|---|---|---|
@@ -976,53 +1272,89 @@ their word; the generated corpora hold none.
 ### A learned history — `PersonalCorpusTest`
 
 ```
-python3 tools/heldout_overlap.py en_US ro_RO es_ES
-python3 tools/make_personal_corpus.py en_US   # and ro_RO, es_ES; into build/personal-corpus
+python3 tools/heldout_overlap.py en_US ro_RO es_ES   # and each part's sentences
+python3 tools/make_personal_corpus.py en_US --cache ~/.cache/borderkeys/leipzig-pinned
+                                    # and ro_RO, es_ES; into build/personal-corpus
 ```
 
 What a person has written changes what the keyboard offers after it, so this corpus types words
 after a history. Both tools take the held-out file and the corpora a language's lists are counted
 from out of its manifest, `tools/languages/<tag>.json`, every archive checked against its SHA-256
 (`language_manifest.py`). `heldout_overlap.py` admits a language only when its manifest names a
-held-out corpus and its word list's corpora, and no corpus its lists are counted from (`corpora`,
-`known_corpora`, `case_corpora`, `capitals`) is from the held-out file's year; each bundled
-language holds out the most recent news edition from no such year. `make_personal_corpus.py` takes
-a persona from the held-out news (every sentence mentioning the name those sentences write most,
-which must be the manifest's `persona`, less any sentence a counted corpus also writes, Romanian
-respelled as its list is) and splits it by a hash of each sentence. The history side is written as
-its sentences, to be typed; the rows side as candidate rows: each ordinary word of the list after
-its two words of context, as written, and with a slip, omitted, extra or mid-word typo where its
-length suits that corpus and the typo is not a word of the list, each typo drawn from its corpus's
-seed, its kind and the word.
+held-out corpus, its split and its word list's corpora, and no corpus its lists are counted from
+(`corpora`, `known_corpora`, `case_corpora`, `capitals`) is from the held-out file's year; each
+bundled language holds out the most recent news edition from no such year.
 
-The corpus in `native-tests/data` is not this generator's output: its history is the first half of
-a persona from the 2020 news, which the English and Romanian word lists count, as runs of words,
-and its rows are drawn from it by an estimated class.
+The held-out sentences no counted corpus writes are split once by fingerprint, as the manifest's
+`heldout_split` gives each part its share in thousandths: the dev part, the personal part and the
+case part take the fingerprint space in that order from the smallest fingerprint, so the dev
+corpora, this corpus and the case corpora never share a sentence, and a sentence keeps its part
+whatever else the file holds. Each tool reads its own part, each sentence once. Each part is large
+enough for its reader: the dev part holds more than the 4,000 sentences `make_dev_corpus.py`
+keeps, the case part decides at least 150 rows of each kind at `make_case_corpus.py`'s 95% rule
+(the tool prints how many), and the personal part's persona fills the history and the rows. A
+language with no persona has an empty personal part.
+
+`make_personal_corpus.py` takes a persona from the personal part (every sentence mentioning the
+name those sentences write most, which must be the manifest's `persona`, Romanian respelled as its
+list is) and splits it by a hash of each sentence, nine sides in ten to the history. The history
+is written as its sentences' runs of words, one per line; the rows side as candidate rows: each
+ordinary word of the list after its two words of context, as written, and with a slip, omitted,
+extra or mid-word typo where its length suits that corpus and the typo is not a word of the list,
+each typo drawn from its corpus's seed, its kind and the word. The rows are drawn from the
+candidates: for each typo kind in turn, the 150 words with their context that have a typo of that
+kind and were not drawn for an earlier kind, by a hash of the word and its context, each typed as
+written and with that typo. The history and the rows, copied into `native-tests/data`, are the
+corpus this test reads.
 
 The history is learned through `LearningFlow.record`, the call a commit makes, under the language
-the engine answers in. What it buffered is written as a flush writes it (`LearningBatch.writeTo`)
-into the personal dictionary on a database in memory, under Robolectric, and read back and loaded
-as the service loads it at start (`PersonalModelLoad.read`); the periodic clean-up a flush may run
-is not. Each row is typed three ways, the model held as loaded: with no personal model, with the
-history's words alone, and with the whole history. A row's class is what that history taught after
+the engine answers in. What it buffered is written as the keyboard writes it, through the rig's
+store into the personal dictionary on tables in memory, read back as the service reads it at
+start (`PersonalModelLoad.read`) and loaded as it loads it, into the lookup and the engine's word
+table (`EngineWorkingCopy.load`); the periodic clean-up a flush may run is not. Each row is typed
+three ways, the model held as loaded: with no personal model, with the history's words alone, and
+with the whole history. A row's class is what that history taught after
 its context: **meant** (a learned pair or triple ends in the word), **others** (the context learned
 other words), **none**. A **none** row must read the same with and without the pairs and triples,
-in every language.
+in every language. `-Pborderkeys.personalLanguages=en` (or `en,ro`) reads the languages named
+alone.
 
 Floors, rows right with the whole history:
 
 | | en | ro | es |
 |---|---|---|---|
-| meant, as written | 81 / 81 | 106 / 106 | 58 / 58 |
-| meant, typo | 73 / 81 | 93 / 106 | 54 / 58 |
-| others, as written | 289 / 289 | 297 / 297 | 332 / 332 |
-| others, typo | 222 / 289 | 228 / 298 | 264 / 332 |
-| none, as written | 230 / 230 | 191 / 191 | 204 / 205 |
-| none, typo | 170 / 230 | 131 / 196 | 141 / 210 |
+| meant, as written | 61 / 61 | 54 / 54 | 39 / 39 |
+| meant, typo | 59 / 61 | 48 / 54 | 35 / 39 |
+| others, as written | 284 / 284 | 347 / 347 | 389 / 389 |
+| others, typo | 223 / 284 | 255 / 347 | 298 / 389 |
+| none, as written | 255 / 255 | 199 / 199 | 172 / 172 |
+| none, typo | 187 / 255 | 142 / 199 | 112 / 172 |
 
-**meant** is smaller than the 200 words a class is drawn to in that corpus: its classes are
-estimated from raw counts, and the budget gives up links in busy contexts, so the test files those
-rows under **others**.
+The rows are drawn by kind, not by class: each class holds the rows the persona's text gives it.
+
+### Swiped after a learned history — `SwipePersonalCorpusTest`
+
+```
+python3 tools/gesture_replay.py --synthesise --fold --words "<the clean rows' words, in order>" \
+    --out native-tests/build/swipes/swipe_personal_en.csv       # and ro, es
+./gradlew :keyboard:testCoreDebugUnitTest --tests '*SwipePersonalCorpusTest' \
+    -Pborderkeys.swipes="$PWD/native-tests/build/swipes" -Pborderkeys.readings=<dir>
+```
+
+The same history is learned as above, then each clean row's word is swiped after its two words of
+context, through `Pipeline.decodeRecorded`, which hands the engine a swipe's samples and context as
+the keyboard does, in a field holding that context. The traces are synthesised, one per clean row in order: `--fold` swipes a
+capital or an accented letter over its plain key and passes over apostrophes and hyphens, as on
+the harness's QWERTY. Each row is swiped with no personal model and with the whole history, held as
+loaded, by the geometric decoder and then by the Latin model when it loads, each in a pipeline of
+its own, so no geometric row goes through the neural decoder; with
+`-Pborderkeys.readings`, each language, model and decoder is a rows file: whether the word meant,
+case aside, is the decoder's first word and among its first three, keyed by the context and the
+word, then its place among the decoder's words and the decoder's first word. The report counts the
+neural decoder's swipes the geometric one answered, and says when the Latin model did not load. There is no floor: the corpus is a reading, and
+without `-Pborderkeys.swipes` it is skipped. `corpus_readings.sh` writes the traces and runs it.
+A fixture always runs: a learned phrase lifts its last word, which a swipe through the same keys
+reads as a commoner word with no personal model, to first after its context.
 
 ### Accent restoration — the one that was missing
 
@@ -1081,8 +1413,8 @@ Two things this deliberately did not do, both recorded rather than fixed:
   another language.
 
 `--explain <typed> <candidate>` decomposes one candidate's score into its terms — the language
-model, the pack weight, the personal boost, the edit and completion cost — and says what
-autocorrect would do with it. That is the question every scoring change starts with, and the one
+model, the pack weight, the personal boost, the edit and completion cost — and lists
+autocorrect's list and the tap decoder's word. That is the question every scoring change starts with, and the one
 a ranked list cannot answer.
 
 ### Word-list classification
@@ -1138,18 +1470,28 @@ Named rather than left to be discovered:
   the strip's text reaches in a screenshot.
 - **Few dictionary tools have tests of their own**: the `--selftest` runs CI makes of
   `build_dict.py`, `make_case_evidence.py`, `drop_unreachable.py`, `merge_apostrophes.py`,
-  `language_manifest.py` and `make_personal_corpus.py`.
+  `language_manifest.py`, `heldout_overlap.py`, `make_personal_corpus.py`, `make_case_corpus.py`,
+  `make_context_corpus.py` and `make_dev_corpus.py`; and of the judging scripts,
+  `compare_readings.py`, `judge_arms.py`, `timing_summary.py` and `full_gate.py`.
   `make_pack.py`'s name guards, `merge_names.py`'s vetoes and `flag_names.py`'s rule are exercised
   by running them and reading the output, not by assertions.
 - **The assistant** (`:assist`) is covered only by the gates that keep it out of `core`. Its
   behaviour is not tested here; `llama.cpp` carries its own suite.
-- **No performance regression gate.** The visit budgets and the 8 ms target are documented and
-  enforced by construction (a node count rather than a timer, so the answer is deterministic),
-  but nothing fails the build if a change makes the search slower.
+- **No performance gate.** The visit budgets and the 8 ms target are documented and enforced by
+  construction (a node count rather than a timer, so the answer is deterministic), and
+  `scripts/timing.sh` gives each group of engine calls a verdict when it is run by hand on an idle
+  machine, but nothing in CI times the engine, and nothing fails the build if a change makes the
+  search slower.
 
 ---
 
 ## Running it all locally
+
+`scripts/full_gate.py <out dir>` runs every step of CI's verify job here, as CI runs it (the
+pipeline harness and the tap corpus fail rather than skip, every Gradle call offline), passes
+over the two a developer's machine cannot run, and ends with every step and JVM test that
+failed; `--list` names the steps, `--from` and `--to` run a stretch of them. A change is
+chosen only after this gate. The pieces, by hand:
 
 ```bash
 # JVM tests, every module
@@ -1197,9 +1539,12 @@ python3 tools/make_tap_corpus.py --profile thumbs --taps 60000 --seed 1 > thumbs
 native-tests/build/touch_eval <dict dir> en-US native-tests/data/qwerty_1080.layout thumbs.tsv \
     --train-taps 20000 --test-from-taps 40000 --test-words 4000
 
-# Readings, before and after a change meant to change nothing
+# Engine timing, two builds in five alternated runs, on an idle machine
+scripts/timing.sh /tmp/timing <before tree or binary> .
+
+# Readings, before and after a change, row by row
 scripts/corpus_readings.sh /tmp/readings-after
-diff -r -x SUMMARY.txt /tmp/readings-before /tmp/readings-after
+python3 scripts/compare_readings.py /tmp/readings-before /tmp/readings-after
 ```
 
 CI runs on push and pull request to `main`; release only on a `v*` tag. See

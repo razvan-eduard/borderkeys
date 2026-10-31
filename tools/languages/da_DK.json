@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Danish-DDT",
+    "release": "r2.18",
     "files": [
       "da_ddt-ud-train.conllu",
       "da_ddt-ud-dev.conllu",
@@ -27,5 +28,10 @@
   "expected_beyond_ascii": [
     230
   ],
-  "reachability_budget": 157
+  "reachability_budget": 157,
+  "sha256": {
+    "dan_news_2021_1M.tar.gz": "9d778504aab44fef53df07d99bb6c6b773914439fc2410bd277cc78c9784c32f",
+    "dan_newscrawl_2023_1M.tar.gz": "83e0b36500ccbfc6ddb5261e1be03730eac33e1bd240ab9d18a477d6b8f99e37",
+    "dan_wikipedia_2021_1M.tar.gz": "9ccad7f7fd5399e6040864cb1735bdd698c336b4119e788047352bdf48ada59a"
+  }
 }

@@ -23,6 +23,9 @@ interface TypingHost {
     /** The strip slot holding the typed word, or null when there is no strip. */
     fun stripTypedIndex(): Int?
 
+    /** The strip slot holding the outlined correction, or null when there is no strip. */
+    fun stripAppliedIndex(): Int?
+
     /** Takes the strip out of a held word's actions, when it shows them. */
     fun clearStripActions()
 
@@ -75,6 +78,12 @@ interface TypingHost {
      * dictionary does not hold is blocked instead when [blockWhenNotPersonal].
      */
     fun forgetWord(word: String, blockWhenNotPersonal: Boolean)
+
+    /**
+     * Reads the personal model again from the personal dictionary, once the learning waiting is
+     * written ([TypingOrchestrator.personalModelStale] to [TypingOrchestrator.personalModelFresh]).
+     */
+    fun reloadPersonalModel()
 
     /** The language tag of the input-method subtype in use. */
     fun subtypeTag(): String

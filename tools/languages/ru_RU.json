@@ -13,6 +13,7 @@
   ],
   "treebank": {
     "repository": "UD_Russian-GSD",
+    "release": "r2.18",
     "files": [
       "ru_gsd-ud-train.conllu",
       "ru_gsd-ud-dev.conllu",
@@ -25,5 +26,10 @@
   },
   "single_letter_words": "авикосуяю",
   "expected_beyond_ascii": [],
-  "reachability_budget": 178
+  "reachability_budget": 178,
+  "sha256": {
+    "rus_news_2023_1M.tar.gz": "9e09e5298f4a2a2dffed14d00478bbe61f02e53647986150879520c877e8f76d",
+    "rus_news_2024_1M.tar.gz": "7df13a6ba25c47fde0e156c1ef670fce7a86b126ee9ff9d7246ba840ef964242",
+    "rus_wikipedia_2021_1M.tar.gz": "f87d687024ccf3b586aa8b666f2928a369aae9064bfc3b22149087e79ec7ab5b"
+  }
 }

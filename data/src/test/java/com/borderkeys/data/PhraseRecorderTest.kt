@@ -5,12 +5,12 @@ package com.borderkeys.data
 
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserPairContext
 import com.borderkeys.data.entity.UserPhraseClock
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserTripleContext
+import com.borderkeys.data.personal.recordUses
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,6 +18,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * The pairs and triples the tables hold: uses recorded as typing records them, through the lookup
+ * and a flush's write ([recordUses]), and the forgets, phrases added by hand and restores.
+ */
 class PhraseRecorderTest {
 
     private val pairs = MemoryPairs()
@@ -28,11 +32,15 @@ class PhraseRecorderTest {
     private fun pair(previous: String, word: String, uses: Int = 1, language: String = "en", at: Long = 1L) =
         LearnedBigram(language, previous, word, uses, at)
 
+    /** Records [pairUses] and [tripleUses] as typing does, and returns the rows written. */
+    private suspend fun record(pairUses: List<LearnedBigram> = emptyList(), tripleUses: List<LearnedTrigram> = emptyList()) =
+        recordUses(pairs, triples, clocks, pairUses, tripleUses)
+
     @Test
     fun `each use adds to the pair, its context's total and its language's clock, and stamps both`() = runTest {
-        recorder.recordPairs(listOf(pair("vreau", "să", language = "ro")).map(::PairStep))
-        recorder.recordPairs(listOf(pair("vreau", "acasă", language = "ro")).map(::PairStep))
-        recorder.recordPairs(listOf(pair("vreau", "să", uses = 2, language = "ro", at = 5L)).map(::PairStep))
+        record(pairUses = listOf(pair("vreau", "să", language = "ro")))
+        record(pairUses = listOf(pair("vreau", "acasă", language = "ro")))
+        record(pairUses = listOf(pair("vreau", "să", uses = 2, language = "ro", at = 5L)))
         val held = pairs.rows.getValue(listOf("ro", "vreau", "să"))
         assertEquals(3, held.count)
         assertEquals(5L, held.lastUsedAt)
@@ -44,7 +52,7 @@ class PhraseRecorderTest {
 
     @Test
     fun `a language's pairs are kept apart from another's`() = runTest {
-        recorder.recordPairs(listOf(pair("de", "la", language = "ro"), pair("de", "la", language = "es")).map(::PairStep))
+        record(pairUses = listOf(pair("de", "la", language = "ro"), pair("de", "la", language = "es")))
         assertEquals(2, pairs.rows.size)
         assertEquals(1L, pairs.contexts.getValue(listOf("ro", "de")).total)
         assertEquals(1L, pairs.contexts.getValue(listOf("es", "de")).total)
@@ -55,12 +63,12 @@ class PhraseRecorderTest {
         val established = PhraseBudget.PAIRS.established
         val newcomers = PhraseBudget.PAIRS.newcomers
         for (i in 0 until established) {
-            recorder.recordPairs(listOf(pair("the", "word$i", uses = PhraseBudget.PAIRS.promotion)).map(::PairStep))
+            record(pairUses = listOf(pair("the", "word$i", uses = PhraseBudget.PAIRS.promotion)))
         }
         for (i in 0 until newcomers) {
-            recorder.recordPairs(listOf(pair("the", "new$i")).map(::PairStep))
+            record(pairUses = listOf(pair("the", "new$i")))
         }
-        val dropped = recorder.recordPairs(listOf(pair("the", "newest")).map(::PairStep))
+        val dropped = record(pairUses = listOf(pair("the", "newest"))).gonePairs
         assertEquals(listOf("new0"), dropped.map { it.word })
         assertEquals(PhraseBudget.PAIRS.most, pairs.inContext("en", "the").size)
         assertTrue(pairs.rows.containsKey(listOf("en", "the", "newest")))
@@ -72,35 +80,14 @@ class PhraseRecorderTest {
     }
 
     @Test
-    fun `a replay takes out the pairs the engine dropped at their step, and gives up no more`() = runTest {
-        val cat = UserBigram("en", "the", "cat", 1, 1L, contextSeen = 1L, languageSeen = 1L)
-        val dropped = recorder.recordPairs(
-            listOf(
-                PairStep(pair("the", "cat")),
-                PairStep(pair("the", "dog")),
-                PairStep(pair("the", "fox"), listOf(cat)),
-                PairStep(pair("the", "cat")),
-            ),
-        )
-        assertEquals(emptyList<UserBigram>(), dropped)
-        assertEquals(setOf("dog", "fox", "cat"), pairs.inContext("en", "the").map { it.word }.toSet())
-        assertEquals(
-            "a pair dropped and written again counts from its new use",
-            1, pairs.rows.getValue(listOf("en", "the", "cat")).count,
-        )
-        assertEquals("the context's total keeps every use", 4L, pairs.contexts.getValue(listOf("en", "the")).total)
-    }
-
-    @Test
-    fun `a pair the engine never held is given up by the store's own pass and reported`() = runTest {
-        // The store holds a full context the engine was never handed, so the engine drops nothing.
+    fun `a full context the store holds gives up its stalest link at its next use`() = runTest {
         for (i in 0 until PhraseBudget.PAIRS.most) {
             pairs.upsert(UserBigram("en", "the", "held$i", 1, 1L, contextSeen = i + 1L, languageSeen = i + 1L))
         }
         val most = PhraseBudget.PAIRS.most.toLong()
         pairs.upsertContext(UserPairContext("en", "the", most, 1L, seen = most))
         clocks.upsert(UserPhraseClock("en", most, 0L))
-        val dropped = recorder.recordPairs(listOf(PairStep(pair("the", "newest"))))
+        val dropped = record(pairUses = listOf(pair("the", "newest"))).gonePairs
         assertEquals(listOf("held0"), dropped.map { it.word })
         assertEquals(PhraseBudget.PAIRS.most, pairs.inContext("en", "the").size)
         assertTrue(pairs.rows.containsKey(listOf("en", "the", "newest")))
@@ -113,7 +100,7 @@ class PhraseRecorderTest {
             pairs.upsertContext(UserPairContext("en", "w$i", 1L, 1L, seen = 1L))
         }
         clocks.upsert(UserPhraseClock("en", PhraseBudget.LANGUAGE_CAP.toLong(), 0L))
-        val dropped = recorder.recordPairs(listOf(pair("fresh", "pair")).map(::PairStep))
+        val dropped = record(pairUses = listOf(pair("fresh", "pair"))).gonePairs
         assertEquals(PhraseBudget.LANGUAGE_CAP + 1 - PhraseBudget.LANGUAGE_KEEP, dropped.size)
         assertEquals(PhraseBudget.LANGUAGE_KEEP, pairs.countIn("en"))
         assertTrue(pairs.rows.containsKey(listOf("en", "fresh", "pair")))
@@ -141,7 +128,7 @@ class PhraseRecorderTest {
             pairs.upsertContext(UserPairContext("en", "f$i", high.toLong(), 1L, seen = high.toLong()))
         }
         clocks.upsert(UserPhraseClock("en", clock, 0L))
-        val dropped = recorder.recordPairs(listOf(pair("fresh", "pair")).map(::PairStep))
+        val dropped = record(pairUses = listOf(pair("fresh", "pair"))).gonePairs
         assertEquals(listOf("x", "y", "z"), dropped.take(filled).map { it.word })
     }
 
@@ -149,23 +136,21 @@ class PhraseRecorderTest {
     fun `a context's observations count every use, and the sweep halves only its uses`() = runTest {
         val cat = 4
         val dog = 2
-        recorder.recordPairs(listOf(pair("the", "cat", uses = cat), pair("the", "dog", uses = dog)).map(::PairStep))
+        record(pairUses = listOf(pair("the", "cat", uses = cat), pair("the", "dog", uses = dog)))
         val uses = (cat + dog).toLong()
         assertEquals(uses, pairs.contexts.getValue(listOf("en", "the")).seen)
         pairs.decayStaleContexts(cutoff = Long.MAX_VALUE, now = 2L)
         val swept = pairs.contexts.getValue(listOf("en", "the"))
         assertEquals(uses / PersonalWordDecay.HALVING, swept.total)
         assertEquals(uses, swept.seen)
-        recorder.recordPairs(listOf(pair("the", "cat")).map(::PairStep))
+        record(pairUses = listOf(pair("the", "cat")))
         assertEquals(uses + 1, pairs.rows.getValue(listOf("en", "the", "cat")).contextSeen)
     }
 
     @Test
     fun `a context no link follows any more goes`() = runTest {
-        recorder.recordPairs(listOf(pair("the", "cat"), pair("a", "cat"), pair("a", "dog")).map(::PairStep))
-        recorder.recordTriples(
-            listOf(LearnedTrigram("en", "on", "the", "cat", 1, 1L), LearnedTrigram("en", "in", "a", "row", 1, 1L)).map(::TripleStep),
-        )
+        record(pairUses = listOf(pair("the", "cat"), pair("a", "cat"), pair("a", "dog")))
+        record(tripleUses = listOf(LearnedTrigram("en", "on", "the", "cat", 1, 1L), LearnedTrigram("en", "in", "a", "row", 1, 1L)))
         recorder.forgetPair(pairs.rows.getValue(listOf("en", "a", "dog")))
         assertTrue("a context with a link left stays", pairs.contexts.containsKey(listOf("en", "a")))
         recorder.forgetTriple(triples.rows.getValue(listOf("en", "in", "a", "row")))
@@ -180,7 +165,7 @@ class PhraseRecorderTest {
     fun `forgetting a pair takes its uses off its context's total and observations`() = runTest {
         val cat = 2
         val dog = 3
-        recorder.recordPairs(listOf(pair("the", "cat", uses = cat), pair("the", "dog", uses = dog)).map(::PairStep))
+        record(pairUses = listOf(pair("the", "cat", uses = cat), pair("the", "dog", uses = dog)))
         recorder.forgetPair(pairs.rows.getValue(listOf("en", "the", "cat")))
         val context = pairs.contexts.getValue(listOf("en", "the"))
         assertEquals(dog.toLong(), context.total)
@@ -189,8 +174,8 @@ class PhraseRecorderTest {
 
     @Test
     fun `forgetting a word takes its pairs out, and their uses out of the totals they counted in`() = runTest {
-        recorder.recordPairs(listOf(pair("the", "cat", uses = 2), pair("the", "dog", uses = 3), pair("cat", "sat")).map(::PairStep))
-        recorder.recordTriples(listOf(LearnedTrigram("en", "the", "cat", "sat", 1, 1L)).map(::TripleStep))
+        record(pairUses = listOf(pair("the", "cat", uses = 2), pair("the", "dog", uses = 3), pair("cat", "sat")))
+        record(tripleUses = listOf(LearnedTrigram("en", "the", "cat", "sat", 1, 1L)))
         recorder.forget("Cat")
         assertNull(pairs.rows[listOf("en", "the", "cat")])
         assertNull(pairs.rows[listOf("en", "cat", "sat")])
@@ -202,81 +187,80 @@ class PhraseRecorderTest {
 
     @Test
     fun `forgetting a pair takes the triples through it`() = runTest {
-        recorder.recordPairs(listOf(pair("good", "morning")).map(::PairStep))
-        recorder.recordTriples(
-            listOf(
+        record(pairUses = listOf(pair("good", "morning")))
+        record(tripleUses = listOf(
                 LearnedTrigram("en", "good", "morning", "all", 1, 1L),
                 LearnedTrigram("en", "very", "good", "morning", 1, 1L),
                 LearnedTrigram("en", "good", "night", "all", 1, 1L),
-            ).map(::TripleStep),
-        )
+            ))
         recorder.forgetPair(pairs.rows.getValue(listOf("en", "good", "morning")))
         assertTrue(pairs.rows.isEmpty())
         assertEquals(listOf("night"), triples.rows.values.map { it.previousWord1 })
     }
 
+    /** A pair a restore reads: [uses] of [word] after [previous] in English, last used [at], [seen] its observations stamp. */
+    private fun restored(previous: String, word: String, uses: Int = 1, at: Long = 1L, seen: Long = 0L, asserted: Int = 0) =
+        UserBigram("en", previous, word, uses, at, seen, 0L, asserted)
+
     @Test
-    fun `an import keeps each context by aged score once everything is in`() = runTest {
-        val links = (0 until PhraseBudget.PAIRS.most + 2).map { pair("the", "w$it", uses = it + 1) }
-        val dropped = recorder.importLinks(links, emptyList())
-        assertEquals(listOf("w0", "w1"), dropped.pairs.map { it.word }.sorted())
-        assertEquals(PhraseBudget.PAIRS.most, pairs.inContext("en", "the").size)
+    fun `a restore keeps every link it brings, the budget being the lookup's at the context's next commit`() = runTest {
+        val links = (0 until PhraseBudget.PAIRS.most + 2).map { restored("the", "w$it", uses = it + 1) }
+        recorder.restore(links, emptyList(), emptyList(), emptyList())
+        assertEquals(PhraseBudget.PAIRS.most + 2, pairs.inContext("en", "the").size)
     }
 
     @Test
-    fun `an import with a context's carried uses ends with the device's plus the file's`() = runTest {
-        val device = 2
-        recorder.recordPairs(listOf(pair("the", "cat", uses = device)).map(::PairStep))
-        recorder.recordTriples(listOf(LearnedTrigram("en", "on", "the", "cat", device, 1L)).map(::TripleStep))
-        val linkUses = 3
-        val carriedTotal = 10L
-        val carriedSeen = 12L
-        recorder.importLinks(
-            listOf(pair("the", "dog", uses = linkUses)),
-            listOf(LearnedTrigram("en", "on", "the", "dog", linkUses, 1L)),
-            listOf(UserPairContext("en", "the", carriedTotal, 1L, carriedSeen)),
-            listOf(UserTripleContext("en", "on", "the", carriedTotal, 1L, carriedSeen)),
-        )
-        val pairContext = pairs.contexts.getValue(listOf("en", "the"))
-        assertEquals(device + carriedTotal, pairContext.total)
-        assertEquals(device + carriedSeen, pairContext.seen)
-        val tripleContext = triples.contexts.getValue(listOf("en", "on", "the"))
-        assertEquals(device + carriedTotal, tripleContext.total)
-        assertEquals(device + carriedSeen, tripleContext.seen)
+    fun `a phrase added by hand to a language past its cap keeps every link, the budget being the lookup's`() = runTest {
+        val held = PhraseBudget.LANGUAGE_CAP + 1
+        for (i in 0 until held) {
+            pairs.upsert(UserBigram("en", "w$i", "x$i", 1, 1L, contextSeen = 1L, languageSeen = i.toLong()))
+            pairs.upsertContext(UserPairContext("en", "w$i", 1L, 1L, seen = 1L))
+        }
+        clocks.upsert(UserPhraseClock("en", held.toLong(), 0L))
+        recorder.addPhrase("en", listOf("fresh", "pair"), 1L)
+        assertEquals(held + 1, pairs.countIn("en"))
     }
 
     @Test
-    fun `a carried count below its links' uses adds the links alone, and one no link follows adds nothing`() = runTest {
-        val linkUses = 3
-        val below = linkUses - 1L
-        recorder.importLinks(
-            listOf(pair("the", "dog", uses = linkUses)),
-            emptyList(),
-            listOf(UserPairContext("en", "the", below, 1L, below), UserPairContext("en", "a", below, 1L, below)),
+    fun `a restore keeps the larger of each link's count, stamps and marks, and each context the largest total and observations`() = runTest {
+        record(pairUses = listOf(pair("the", "cat", uses = 5, at = 9L)))
+        recorder.restore(
+            listOf(restored("the", "cat", uses = 2, at = 4L, seen = 50L, asserted = 1), restored("the", "dog", uses = 3, at = 4L, seen = 7L)),
+            listOf(UserPairContext("en", "the", 6L, 4L, 40L)),
+            listOf(UserTrigram("en", "on", "the", "cat", 2, 4L, 0L, 0L)),
+            listOf(UserTripleContext("en", "on", "the", 1L, 4L, 1L)),
         )
-        assertEquals(linkUses.toLong(), pairs.contexts.getValue(listOf("en", "the")).total)
+        val cat = pairs.rows.getValue(listOf("en", "the", "cat"))
+        assertEquals(listOf(5L, 9L, 50L, 1L), listOf(cat.count.toLong(), cat.lastUsedAt, cat.contextSeen, cat.asserted.toLong()))
+        assertEquals("the device's links and the file's together", UserPairContext("en", "the", 8L, 9L, 40L), pairs.contexts.getValue(listOf("en", "the")))
+        assertEquals("a context below its links' uses held at them", UserTripleContext("en", "on", "the", 2L, 4L, 2L), triples.contexts.getValue(listOf("en", "on", "the")))
+    }
+
+    @Test
+    fun `restoring the same links again changes nothing`() = runTest {
+        record(pairUses = listOf(pair("the", "cat", uses = 2)))
+        val links = listOf(restored("the", "cat", uses = 4, at = 3L), restored("the", "dog"))
+        val contexts = listOf(UserPairContext("en", "the", 9L, 3L, 11L))
+        recorder.restore(links, contexts, emptyList(), emptyList())
+        val once = pairs.rows.toMap() to pairs.contexts.toMap()
+        recorder.restore(links, contexts, emptyList(), emptyList())
+        assertEquals(once, pairs.rows.toMap() to pairs.contexts.toMap())
+    }
+
+    @Test
+    fun `a restored context no restored link follows is left out`() = runTest {
+        recorder.restore(listOf(restored("the", "dog")), listOf(UserPairContext("en", "a", 2L, 1L, 2L)), emptyList(), emptyList())
         assertNull(pairs.contexts[listOf("en", "a")])
     }
 
     @Test
-    fun `an imported last use stands, and a last use never moves back`() = runTest {
-        val earlier = 5L
-        val later = 9L
-        recorder.importLinks(listOf(pair("the", "cat", at = earlier)), emptyList())
-        assertEquals(earlier, pairs.rows.getValue(listOf("en", "the", "cat")).lastUsedAt)
-        recorder.recordPairs(listOf(pair("the", "cat", at = later)).map(::PairStep))
-        recorder.importLinks(listOf(pair("the", "cat", at = earlier)), emptyList())
-        assertEquals(later, pairs.rows.getValue(listOf("en", "the", "cat")).lastUsedAt)
-        assertEquals(later, pairs.contexts.getValue(listOf("en", "the")).lastUsedAt)
-    }
-
-    @Test
-    fun `an import stamps each link at the language's clock without moving it`() = runTest {
+    fun `a restore stamps each link at the language's clock without moving it, and at its context's observations when it carries none`() = runTest {
         val clock = 7L
         clocks.upsert(UserPhraseClock("en", clock, clock))
         val uses = 3
-        recorder.importLinks(
-            listOf(pair("the", "cat", uses = uses)), listOf(LearnedTrigram("en", "on", "the", "cat", uses, 1L)),
+        recorder.restore(
+            listOf(restored("the", "cat", uses = uses)), emptyList(),
+            listOf(UserTrigram("en", "on", "the", "cat", uses, 1L, 0L, 0L)), emptyList(),
         )
         val pair = pairs.rows.getValue(listOf("en", "the", "cat"))
         assertEquals(clock, pair.languageSeen)
@@ -286,21 +270,13 @@ class PhraseRecorderTest {
     }
 
     @Test
-    fun `an import leaves out a pair whose two words are one, and such a triple`() = runTest {
-        recorder.importLinks(listOf(pair("very", "Very")), listOf(LearnedTrigram("en", "so", "very", "VERY", 1, 1L)))
-        assertTrue(pairs.rows.isEmpty())
-        assertTrue(triples.rows.isEmpty())
-        assertTrue(pairs.contexts.isEmpty())
-    }
-
-    @Test
     fun `triples are kept by their two-word context`() = runTest {
         val established = PhraseBudget.TRIPLES.established
         for (i in 0 until established) {
-            recorder.recordTriples(listOf(LearnedTrigram("en", "on", "the", "w$i", PhraseBudget.TRIPLES.promotion, 1L)).map(::TripleStep))
+            record(tripleUses = listOf(LearnedTrigram("en", "on", "the", "w$i", PhraseBudget.TRIPLES.promotion, 1L)))
         }
         for (i in 0..PhraseBudget.TRIPLES.newcomers) {
-            recorder.recordTriples(listOf(LearnedTrigram("en", "on", "the", "new$i", 1, 1L)).map(::TripleStep))
+            record(tripleUses = listOf(LearnedTrigram("en", "on", "the", "new$i", 1, 1L)))
         }
         assertEquals(PhraseBudget.TRIPLES.most, triples.inContext("en", "on", "the").size)
         assertFalse(triples.rows.containsKey(listOf("en", "on", "the", "new0")))

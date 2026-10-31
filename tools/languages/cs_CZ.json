@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Czech-CAC",
+    "release": "r2.18",
     "files": [
       "cs_cac-ud-train.conllu",
       "cs_cac-ud-dev.conllu",
@@ -35,5 +36,10 @@
   },
   "single_letter_words": "aiksuvzo",
   "expected_beyond_ascii": [],
-  "reachability_budget": 266
+  "reachability_budget": 266,
+  "sha256": {
+    "ces_news_2024_1M.tar.gz": "9626d10984b02dcfc9d995eb438787988e834cf5f7d4adca85932b6fadb9f50a",
+    "ces_newscrawl_2019_1M.tar.gz": "1932cf17b4054a6d58aaf6db837e82321417bbc7d3fb79659ea8b493a5b756f8",
+    "ces_wikipedia_2021_1M.tar.gz": "6de8b455b9d72223880402823217ddc6c81891edfcfff3db1f22dfd9c065b4e1"
+  }
 }

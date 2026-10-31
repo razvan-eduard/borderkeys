@@ -22,7 +22,8 @@ set(BORDERKEYS_SOURCES
     letter_model.cpp
     packed_trie.cpp
     ngram_model.cpp
-    user_model.cpp
+    context_slice.cpp
+    word_table.cpp
     personal_score.cpp
     proximity.cpp
     touch_model.cpp

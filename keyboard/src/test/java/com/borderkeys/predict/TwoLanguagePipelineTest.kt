@@ -3,6 +3,7 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.theme.KeyboardPreferences
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -84,7 +85,7 @@ class TwoLanguagePipelineTest {
         Pipeline.require()
         val pipeline = Pipeline.open("ro-RO", "en-US")
         try {
-            pipeline.languageLock(BALANCED_EVIDENCE)
+            pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
             pipeline.preferredLanguage("en-US")
             assertEquals("mintea", pipeline.strip("mintea").firstOrNull())
         } finally {
@@ -106,7 +107,7 @@ class TwoLanguagePipelineTest {
         Pipeline.require()
         val written = Pipeline.open("ro-RO", "en-US")
         val evidence = try {
-            written.languageLock(BALANCED_EVIDENCE)
+            written.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
             written.commitPhrase(ENGLISH)
             written.languageEvidence()
         } finally {
@@ -114,10 +115,10 @@ class TwoLanguagePipelineTest {
         }
         val restarted = Pipeline.open("ro-RO", "en-US")
         try {
-            restarted.languageLock(0f)
+            restarted.languageLock(KeyboardPreferences.LANGUAGE_LOCK_OFF)
             restarted.restoreLanguageEvidence(evidence)
             assertEquals(-1, restarted.dominantPack())
-            restarted.languageLock(BALANCED_EVIDENCE)
+            restarted.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
             assertEquals(ENGLISH_PACK, restarted.dominantPack())
             val strip = restarted.strip("car")
             assertEquals("car", strip.firstOrNull())
@@ -131,7 +132,9 @@ class TwoLanguagePipelineTest {
     private fun decided(lead: String, strict: Boolean = false, check: (Pipeline) -> Unit) {
         val pipeline = Pipeline.open("ro-RO", "en-US")
         try {
-            pipeline.languageLock(if (strict) STRICT_EVIDENCE else BALANCED_EVIDENCE, strict)
+            pipeline.languageLock(
+                if (strict) KeyboardPreferences.LANGUAGE_LOCK_STRICT else KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+            )
             pipeline.commitPhrase(lead)
             val expected = if (lead == ENGLISH) ENGLISH_PACK else ROMANIAN_PACK
             assertEquals("the lead did not decide its language", expected, pipeline.dominantPack())
@@ -147,10 +150,6 @@ class TwoLanguagePipelineTest {
 
         private const val ROMANIAN_PACK = 0
         private const val ENGLISH_PACK = 1
-
-        /** The Languages screen's Balanced and Strict thresholds. */
-        private const val BALANCED_EVIDENCE = 1.8f
-        private const val STRICT_EVIDENCE = 0.9f
 
         private const val ENGLISH = "what is the best way to learn this song before the weekend"
         private const val ROMANIAN = "mi-a trecut prin cap că ar fi bine să vorbim despre asta mâine"

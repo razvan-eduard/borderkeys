@@ -1,0 +1,4 @@
+# Runs for the --start-rows check: each run's first word is asked, from its first letter.
+keys border test
+a b
+-test keys

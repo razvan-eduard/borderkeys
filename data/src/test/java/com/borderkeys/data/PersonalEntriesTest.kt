@@ -13,10 +13,10 @@ class PersonalEntriesTest {
 
     private val now = 1_000_000_000L
     private val settings = KeyboardPreferences(learnAfterUses = 3)
-    private fun word(text: String, count: Int, asserted: Int = 0, lastUsedAt: Long = now) =
-        UserWord(word = text, locale = "en-US", count = count, lastUsedAt = lastUsedAt, asserted = asserted)
+    private fun word(text: String, count: Int, asserted: Int = 0, lastUsedAt: Long = now, language: String = "en", added: Int = 0) =
+        UserWord(word = text, language = language, count = count, lastUsedAt = lastUsedAt, asserted = asserted, added = added)
     private fun learned(vararg words: UserWord, with: KeyboardPreferences = settings) =
-        PersonalEntries.words(words.toList(), with, now).map { it.word }
+        PersonalEntries.byLanguage(words.toList(), with, now).flatMap { it.spellings }
 
     @Test
     fun `a word is learned at the setting's number of uses, or once chosen`() {
@@ -27,9 +27,37 @@ class PersonalEntriesTest {
     }
 
     @Test
-    fun `a word's case forms count together, and all are listed`() {
+    fun `a word's case forms count together, and all are listed under the spelling served`() {
         assertEquals(listOf("This", "this"), learned(word("This", 1), word("this", 2)))
         assertEquals(emptyList<String>(), learned(word("This", 1), word("this", 1)))
+        assertEquals(
+            listOf(PersonalEntries.ListedWord("this", "en", "this", 3, 0, listOf("This", "this"))),
+            PersonalEntries.byLanguage(listOf(word("This", 1), word("this", 2)), settings, now),
+        )
+    }
+
+    @Test
+    fun `a word is listed under each language it was written in, its uses in no language known counted in each and listed apart`() {
+        val rows = listOf(
+            word("taxi", 2, language = "ro"),
+            word("taxi", 2, language = "en"),
+            word("taxi", 1, language = UserWord.UNPLACED),
+            word("Kelpa", 1, language = "en", asserted = 1, added = 1),
+            word("drum", 2, language = "ro"),
+        )
+        assertEquals(
+            listOf(
+                PersonalEntries.ListedWord("taxi", "ro", "taxi", 3, 0, listOf("taxi")),
+                PersonalEntries.ListedWord("taxi", "en", "taxi", 3, 0, listOf("taxi")),
+                PersonalEntries.ListedWord("kelpa", "en", "Kelpa", 1, 1, listOf("Kelpa")),
+            ),
+            PersonalEntries.byLanguage(rows, settings, now),
+        )
+        assertEquals(
+            "uses in no language known, listed on their own once learned",
+            listOf("taxi" to "ro", "taxi" to "en", "taxi" to UserWord.UNPLACED, "kelpa" to "en"),
+            PersonalEntries.byLanguage(rows + word("taxi", 2, language = UserWord.UNPLACED), settings, now).map { it.key to it.language },
+        )
     }
 
     @Test
@@ -55,6 +83,18 @@ class PersonalEntriesTest {
             listOf(listOf("make", "this")),
             PersonalEntries.phrases(phrases, settings, now).map { it.words },
         )
+    }
+
+    @Test
+    fun `each word is spelled as it is served, its forms in every language as one`() {
+        val rows = listOf(
+            word("Paris", 2, language = "en"),
+            word("paris", 2, language = "ro"),
+            word("paris", 1, language = UserWord.UNPLACED),
+            word("Kelpa", 1, added = 1),
+            word("kelpa", 4),
+        )
+        assertEquals(mapOf("paris" to "paris", "kelpa" to "Kelpa"), PersonalEntries.spellings(rows, settings, now))
     }
 
     @Test

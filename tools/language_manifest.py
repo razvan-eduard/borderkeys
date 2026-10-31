@@ -11,6 +11,10 @@ The keys read here:
   capitals       the corpus classify_wordlist.py counts capitals in
   heldout        a news corpus none of those is, nor from any of their years, which the test
                  corpora are drawn from
+  heldout_split  the held-out file's parts, `dev`, `personal` and `case`, each its share of the
+                 fingerprint space in thousandths (heldout_overlap.py), summing to SPLIT_UNITS;
+                 the dev and case parts never empty, the personal part empty exactly when the
+                 manifest names no persona
   persona        the name the personal corpus follows
   sha256         the SHA-256 of the archive of each corpus those name, by file name
 
@@ -41,6 +45,8 @@ were counted from and of the code that counted them.
     python3 tools/language_manifest.py --list-corpora ro_RO --also ron_news_2015_1M
     python3 tools/language_manifest.py --list-corpora en_US --write        # and record it
 """
+
+from __future__ import annotations
 
 import argparse
 import contextlib
@@ -120,6 +126,14 @@ FOLDED_LETTERS = (
 # The apostrophe merge_apostrophes.py writes every apostrophe of a list as.
 APOSTROPHE = "'"
 
+# The parts a held-out file is split into, in the order they take the fingerprint space from the
+# smallest fingerprint: the dev corpora, the personal corpus and the case corpora.
+HELDOUT_PARTS = ("dev", "personal", "case")
+DEV_PART, PERSONAL_PART, CASE_PART = HELDOUT_PARTS
+
+# The units a held-out split's shares are written in: thousandths of the fingerprint space.
+SPLIT_UNITS = 1000
+
 
 @dataclass
 class Manifest:
@@ -133,6 +147,7 @@ class Manifest:
     heldout: str | None
     persona: str | None
     sha256: dict
+    heldout_split: dict | None = None
 
     @property
     def counted(self) -> list:
@@ -168,8 +183,37 @@ def load(tag: str, languages: Path = LANGUAGES) -> Manifest:
     return parsed(path, json.loads(path.read_text(encoding="utf-8")))
 
 
+def split_problems(data: dict) -> list:
+    """What is wrong with the manifest [data]'s `heldout_split`, as the key's rule above says;
+    nothing when it has none."""
+    split = data.get("heldout_split")
+    if split is None:
+        return []
+    if not isinstance(split, dict) or set(split) != set(HELDOUT_PARTS):
+        named = sorted(split) if isinstance(split, dict) else split
+        return [f"heldout_split names {named}, not {', '.join(HELDOUT_PARTS)}"]
+    problems = []
+    if data.get("heldout") is None:
+        problems.append("heldout_split with no held-out corpus")
+    shares = [split[part] for part in HELDOUT_PARTS]
+    if any(type(share) is not int or share < 0 for share in shares):
+        return problems + [f"heldout_split's shares {shares} are not whole thousandths"]
+    if sum(shares) != SPLIT_UNITS:
+        problems.append(f"heldout_split's shares sum to {sum(shares)}, not {SPLIT_UNITS}")
+    problems += [f"heldout_split leaves the {part} part empty" for part in (DEV_PART, CASE_PART)
+                 if split[part] == 0]
+    if (split[PERSONAL_PART] > 0) != (data.get("persona") is not None):
+        problems.append(f"heldout_split's personal part is {split[PERSONAL_PART]} with "
+                        f"persona {data.get('persona')!r}")
+    return problems
+
+
 def parsed(path: Path, data: dict) -> Manifest:
-    """The manifest [data] holds, as read from [path]."""
+    """The manifest [data] holds, as read from [path]; a held-out split split_problems refuses
+    stops."""
+    problems = split_problems(data)
+    if problems:
+        raise SystemExit(f"{path}: {'; '.join(problems)}")
     return Manifest(
         path=path,
         tag=data["tag"],
@@ -180,6 +224,7 @@ def parsed(path: Path, data: dict) -> Manifest:
         heldout=data.get("heldout"),
         persona=data.get("persona"),
         sha256=dict(data.get("sha256", {})),
+        heldout_split=data.get("heldout_split"),
     )
 
 
@@ -492,7 +537,11 @@ def record_corpora(manifest: Manifest, corpora: list, digests: dict) -> None:
 
 
 def selftest() -> int:
-    """Checks, against fake archives: a first fetch pinned only after the archive reads to its end,
+    """Checks the held-out split read from a manifest, and each split refused: a part missing or
+    one too many, shares that are not whole thousandths or do not sum to SPLIT_UNITS, an empty dev
+    or case part, a personal part without a persona or a persona without one, and a split with no
+    held-out corpus. Then, against fake archives: a first fetch pinned only after the archive
+    reads to its end,
     a broken or cut one deleted with what was taken out of it and pinned nowhere, a matching pin
     kept and a wrong one deleting the archive and what was taken out of it, a pin another holder
     wrote meanwhile winning over the fetch, a corpus the manifest does not name taken out, reused
@@ -540,6 +589,32 @@ def selftest() -> int:
         manifest = load("xx_XX", languages)
         assert manifest.counted == [corpus, broken, cut, capitals], manifest.counted
         assert manifest.named == manifest.counted + [heldout], manifest.named
+        assert manifest.heldout_split is None
+
+        split = {"dev": 5, "personal": 0, "case": 995}
+        held_out = {"tag": "xx-XX", "heldout": heldout, "heldout_split": split}
+        assert parsed(path, held_out).heldout_split == split
+        assert parsed(path, {**held_out, "persona": "Friday",
+                             "heldout_split": {"dev": 5, "personal": 600, "case": 395}}
+                      ).heldout_split["personal"] == 600
+        for data, reason in (
+                ({**held_out, "heldout_split": {"dev": 5, "case": 995}}, "names"),
+                ({**held_out, "heldout_split": {**split, "extra": 0}}, "names"),
+                ({**held_out, "heldout_split": [5, 0, 995]}, "names"),
+                ({**held_out, "heldout_split": {**split, "case": 994}}, "sum"),
+                ({**held_out, "heldout_split": {**split, "dev": 4.5, "case": 995.5}}, "whole"),
+                ({**held_out, "heldout_split": {**split, "dev": True, "case": 999}}, "whole"),
+                ({**held_out, "heldout_split": {"dev": -5, "personal": 10, "case": 995}},
+                 "whole"),
+                ({**held_out, "heldout_split": {"dev": 0, "personal": 0, "case": 1000}}, "dev"),
+                ({**held_out, "heldout_split": {"dev": 5, "personal": 995, "case": 0}}, "case"),
+                ({**held_out, "heldout_split": {"dev": 5, "personal": 10, "case": 985}},
+                 "persona"),
+                ({**held_out, "persona": "Friday"}, "persona"),
+                ({"tag": "xx-XX", "heldout_split": split}, "held-out")):
+            found = split_problems(data)
+            assert any(reason in problem for problem in found), (data, found)
+            refused(lambda: parsed(path, data), f"{data}: a broken split was read")
         assert with_key("known_corpora", languages) == ["xx_XX"]
         assert with_key("persona", languages) == []
         assert candidates(manifest, [heldout, "uuu", corpus]) == manifest.named + ["uuu"]

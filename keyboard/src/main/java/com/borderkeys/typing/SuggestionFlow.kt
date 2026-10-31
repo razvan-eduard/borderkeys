@@ -17,6 +17,8 @@ class SuggestionFlow(
     private val engine: EnginePort,
     private val host: TypingHost,
     private val clock: TypingClock,
+    /** The language whose learned pairs and triples a request reads ([LanguageFlow.language]). */
+    private val requestLanguage: () -> String,
 ) : TypingFlow() {
 
     /** The word the engine was last asked about. */
@@ -54,7 +56,7 @@ class SuggestionFlow(
         requestedAt = clock.uptimeMillis()
         val tapped = taps.size > 0
         engine.requestSuggestions(
-            query, context.previous1, context.previous2,
+            query, context.previous1, context.previous2, requestLanguage(),
             if (tapped) taps.copyXs() else null, if (tapped) taps.copyYs() else null,
         )
     }
@@ -66,7 +68,7 @@ class SuggestionFlow(
             return
         }
         requestedAt = clock.uptimeMillis()
-        engine.requestSuggestions(word, null, null, null, null)
+        engine.requestSuggestions(word, null, null, requestLanguage(), null, null)
     }
 
     /**
@@ -76,7 +78,9 @@ class SuggestionFlow(
     fun requestAdopted(word: String, context: WordContext) {
         lastQuery = word
         if (session.policy.suggestionsAllowed) {
-            engine.requestSuggestions(word, context.previous1, context.previous2, null, null)
+            engine.requestSuggestions(
+                word, context.previous1, context.previous2, requestLanguage(), null, null,
+            )
         }
     }
 

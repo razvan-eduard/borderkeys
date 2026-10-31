@@ -16,6 +16,7 @@
   ],
   "treebank": {
     "repository": "UD_Georgian-GLC",
+    "release": "r2.18",
     "files": [
       "ka_glc-ud-train.conllu",
       "ka_glc-ud-dev.conllu",
@@ -33,5 +34,9 @@
   },
   "single_letter_words": "",
   "expected_beyond_ascii": [],
-  "reachability_budget": 50
+  "reachability_budget": 50,
+  "sha256": {
+    "kat_newscrawl_2016_1M.tar.gz": "15974a68a386537b058d88972885e241cd81d072ce49ee118ef183798da5fb9c",
+    "kat_wikipedia_2021_300K.tar.gz": "9bedf99660c4aa15c86a0be80ed8c392b0f15a875d43f92ea2170a5533a3d754"
+  }
 }

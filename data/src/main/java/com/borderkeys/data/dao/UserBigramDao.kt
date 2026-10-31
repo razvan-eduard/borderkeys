@@ -41,15 +41,6 @@ interface UserBigramDao {
     @Upsert
     suspend fun upsert(pair: UserBigram)
 
-    /** Lifts a pair's chosen and added counts to at least [asserted] and [added], for a restore. */
-    @Query(
-        """
-        UPDATE user_bigrams SET asserted = MAX(asserted, :asserted), added = MAX(added, :added)
-        WHERE language = :language AND previousWord = :previousWord AND word = :word
-        """,
-    )
-    suspend fun raiseMarks(language: String, previousWord: String, word: String, asserted: Int, added: Int)
-
     @Delete
     suspend fun delete(pairs: List<UserBigram>)
 
@@ -116,8 +107,8 @@ interface UserBigramDao {
 }
 
 /**
- * One pending pair update, as accumulated in memory between flushes; its words in lower case.
- * [asserted] and [added] are the counts a restore lifts the pair's marks to; a flush passes 0.
+ * Uses of a pair to record, its words in lower case: how many and the last, and how many of them
+ * were choices ([asserted]) and adds by hand ([added]).
  */
 data class LearnedBigram(
     /** The primary language subtag the pair was written in. */
@@ -129,9 +120,3 @@ data class LearnedBigram(
     val asserted: Int = 0,
     val added: Int = 0,
 )
-
-/**
- * One step of learning pairs as the engine took it: the pair use it recorded, or none once that use
- * was forgotten, and the pairs it dropped right after, in order.
- */
-data class PairStep(val use: LearnedBigram?, val dropped: List<UserBigram> = emptyList())

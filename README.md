@@ -201,9 +201,9 @@ blocked.
 The settings application measures the keyboard as it runs. The **Debug stats** line above its
 "Try it here" field opens a panel with the keystroke-to-strip and native search latency, the
 swipe decode and lift-to-text figures labelled with the decoder that ran, the swipe's duration,
-path and samples, the pack load time, typing speed and process memory — each as last, mean and
-maximum, rated against a baseline with a line on what changes it — and a Share button that hands
-the panel to any app as text. The figures in [`docs/testing.md`](docs/testing.md) come from it.
+path and samples, the pack load time, typing speed and process memory — each as last, mean,
+median, 95th percentile and maximum, rated against a baseline with a line on what changes it —
+and a Share button that hands the panel to any app as text. The figures in [`docs/testing.md`](docs/testing.md) come from it.
 
 <p align="center">
   <img src="fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/25_debug_stats.jpg" alt="Debug stats: keystroke to strip, native search, swipe decode and lift to text, each rated against its baseline" width="30%">

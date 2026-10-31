@@ -3,6 +3,8 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.LanguageSwitchCorrector
 import com.borderkeys.language.LanguageTags
 import org.junit.After
@@ -41,7 +43,7 @@ class LanguageSwitchPipelineTest {
     /** A settled Romanian verdict turns English at the sixth English word. */
     @Test
     fun `the verdict moves when the language does, and this is what it costs`() {
-        pipeline.languageLock(BALANCED_EVIDENCE)
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
         assertEquals("undecided before a word is written", NativePredictor.NO_PACK, pipeline.dominantPack())
 
         val romanian = verdictTrail(ROMANIAN)
@@ -64,7 +66,7 @@ class LanguageSwitchPipelineTest {
 
     @Test
     fun `the verdict passes through undecided rather than jumping`() {
-        pipeline.languageLock(BALANCED_EVIDENCE)
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
         verdictTrail(ROMANIAN)
         val english = verdictTrail(ENGLISH)
 
@@ -79,7 +81,7 @@ class LanguageSwitchPipelineTest {
 
     @Test
     fun `nothing is revisited while the language holds steady`() {
-        pipeline.languageLock(BALANCED_EVIDENCE)
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
         pipeline.commitPhrase(ROMANIAN)
         val settled = pipeline.dominantPack()
 
@@ -91,31 +93,67 @@ class LanguageSwitchPipelineTest {
     }
 
     @Test
-    fun `the pairs read are the verdict's language, else the heaviest pack's`() {
-        pipeline.languageLock(BALANCED_EVIDENCE)
+    fun `an answer leans on the verdict's pack, else the heaviest`() {
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
         pipeline.commitPhrase(ENGLISH)
         assertEquals("English has to be the verdict for this to mean anything",
                      englishPack, pipeline.dominantPack())
-        assertEquals("the verdict's pairs are read", LanguageTags.primary(ENGLISH_TAG), pipeline.answerLanguage(""))
+        assertEquals("the verdict's pack", ENGLISH_TAG, pipeline.answerPack(""))
 
-        pipeline.languageLock(LOCK_OFF)
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_OFF)
         assertEquals("undecided with the lock off", NativePredictor.NO_PACK, pipeline.dominantPack())
-        assertEquals("the first of the equally weighted packs is read, whatever the evidence",
-                     LanguageTags.primary(ROMANIAN_TAG), pipeline.answerLanguage(""))
+        assertEquals("the first of the equally weighted packs, whatever the evidence",
+                     ROMANIAN_TAG, pipeline.answerPack(""))
     }
 
     @Test
-    fun `a swipe's decode names the language whose pairs it read`() {
+    fun `the engine reads the store the request names`() {
         pipeline.preferredLanguage(ENGLISH_TAG)
-        assertEquals(LanguageTags.primary(ENGLISH_TAG), pipeline.swipeLanguage(ROMANIAN_WORD))
+        learnAfter(CONTEXT, ROMANIAN_NEXT, ENGLISH_NEXT)
+        assertEquals("the engine leans on English", ENGLISH_TAG, pipeline.answerPack(""))
+        assertEquals(ROMANIAN_NEXT, pipeline.strip("", CONTEXT, language = ROMANIAN_LANGUAGE).firstOrNull())
+        assertEquals(ENGLISH_NEXT, pipeline.strip("", CONTEXT, language = ENGLISH_LANGUAGE).firstOrNull())
+    }
+
+    @Test
+    fun `a swipe's decode reads the store the request names`() {
+        pipeline.preferredLanguage(ENGLISH_TAG)
+        learnAfter(UNKNOWN_CONTEXT, ROMANIAN_SWIPED, ENGLISH_SWIPED)
+        assertEquals("with no store named, the path's own word leads",
+                     ENGLISH_SWIPED, pipeline.decoded(ENGLISH_SWIPED, UNKNOWN_CONTEXT, "").first())
+        assertEquals(ROMANIAN_SWIPED, pipeline.decoded(ENGLISH_SWIPED, UNKNOWN_CONTEXT, ROMANIAN_LANGUAGE).first())
+        assertEquals(ENGLISH_SWIPED, pipeline.decoded(ENGLISH_SWIPED, UNKNOWN_CONTEXT, ENGLISH_LANGUAGE).first())
+    }
+
+    /** An explanation reads the word as a sentence's first, where each store has its own opener. */
+    @Test
+    fun `an explanation reads the store the request names`() {
+        pipeline.preferredLanguage(ENGLISH_TAG)
+        learnAfter(UserBigram.SENTENCE_START, ROMANIAN_NEXT, ENGLISH_NEXT)
+        assertEquals(0, pipeline.explain("", ROMANIAN_NEXT, ROMANIAN_LANGUAGE)?.rank)
+        assertEquals(0, pipeline.explain("", ENGLISH_NEXT, ENGLISH_LANGUAGE)?.rank)
+    }
+
+    /** Answering as a pack reads the word as a sentence's first, where each store has its own opener. */
+    @Test
+    fun `answering as a pack reads the store of that pack's language`() {
+        learnAfter(UserBigram.SENTENCE_START, ROMANIAN_NEXT, ENGLISH_NEXT)
+        assertEquals(ROMANIAN_NEXT, pipeline.answerAs(romanianPack, "")?.words?.firstOrNull())
+        assertEquals(ENGLISH_NEXT, pipeline.answerAs(englishPack, "")?.words?.firstOrNull())
+    }
+
+    @Test
+    fun `a swipe's decode names the pack it leaned on`() {
+        pipeline.preferredLanguage(ENGLISH_TAG)
+        assertEquals(ENGLISH_TAG, pipeline.swipeAnswerPack(ROMANIAN_WORD))
         pipeline.preferredLanguage(ROMANIAN_TAG)
-        assertEquals(LanguageTags.primary(ROMANIAN_TAG), pipeline.swipeLanguage(ROMANIAN_WORD))
+        assertEquals(ROMANIAN_TAG, pipeline.swipeAnswerPack(ROMANIAN_WORD))
     }
 
     /** What autocorrect reads in the letters as English, while the verdict stays Romanian. */
     @Test
     fun `answering as a language reads the letters as that language's autocorrect does`() {
-        pipeline.languageLock(BALANCED_EVIDENCE)
+        pipeline.languageLock(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
         pipeline.commitPhrase(ROMANIAN)
         assertEquals("Romanian has to be the verdict for this to mean anything",
                      romanianPack, pipeline.dominantPack())
@@ -159,13 +197,15 @@ class LanguageSwitchPipelineTest {
         }
     }
 
+    /**
+     * Replaces the personal model with [romanian] learned after [context] in Romanian's store and
+     * [english] after it in English's ([PersonalSnapshot.learnedAfter]).
+     */
+    private fun learnAfter(context: String, romanian: String, english: String) = pipeline.load(
+        PersonalSnapshot.learnedAfter(context, mapOf(ROMANIAN_LANGUAGE to romanian, ENGLISH_LANGUAGE to english), AT),
+    )
+
     private companion object {
-        /** The Languages screen's default. */
-        const val BALANCED_EVIDENCE = 1.8f
-
-        /** A lock minimum that never locks. */
-        const val LOCK_OFF = 0f
-
         const val ROMANIAN_TAG = "ro-RO"
         const val ENGLISH_TAG = "en-US"
 
@@ -177,5 +217,24 @@ class LanguageSwitchPipelineTest {
         const val ENGLISH =
             "through because another thought between however people water number system"
         val ROMANIAN_WORD = ROMANIAN.substringBefore(' ')
+
+        // A context and a word after it in each language's store.
+        const val CONTEXT = "cappuccino"
+        const val ROMANIAN_NEXT = "acesta"
+        const val ENGLISH_NEXT = "through"
+
+        // A swipe through the English word's keys decodes the Romanian one beside it.
+        const val ENGLISH_SWIPED = "far"
+        const val ROMANIAN_SWIPED = "dar"
+
+        /** A context no pack spells, so neither pack's own pairs follow it. */
+        const val UNKNOWN_CONTEXT = "zqxv"
+
+        // The primary subtags each language's store is named by.
+        val ROMANIAN_LANGUAGE = LanguageTags.primary(ROMANIAN_TAG)
+        val ENGLISH_LANGUAGE = LanguageTags.primary(ENGLISH_TAG)
+
+        /** When the loaded rows were last used. */
+        const val AT = 1_000L
     }
 }

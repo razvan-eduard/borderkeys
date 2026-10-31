@@ -3,9 +3,7 @@
 
 package com.borderkeys.predict
 
-import androidx.test.core.app.ApplicationProvider
-import com.borderkeys.data.InMemoryDictionary
-import com.borderkeys.data.SharedNativeTextRunner
+import com.borderkeys.data.MemoryDictionary
 import com.borderkeys.data.theme.KeyboardPreferences
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -14,35 +12,28 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
- * A word added by hand ([com.borderkeys.data.DictionaryRepository.add]), read back as the keyboard
- * loads its personal model ([PersonalModelLoad.read]) and typed through the whole path.
+ * A word added by hand ([com.borderkeys.data.DictionaryRepository.add]) to the personal dictionary
+ * on tables in memory, read back as the keyboard loads its personal model ([PersonalModelLoad.read])
+ * and typed through the whole path.
  */
-@RunWith(SharedNativeLibraryRunner::class)
-@Config(sdk = [SharedNativeTextRunner.SDK])
 class AddedWordPipelineTest {
 
     private lateinit var pipeline: Pipeline
-    private lateinit var dictionary: InMemoryDictionary
+    private val dictionary = MemoryDictionary()
 
     @Before
     fun open() {
         Pipeline.require()
         pipeline = Pipeline.open("en-US")
         pipeline.learning = true
-        dictionary = InMemoryDictionary(ApplicationProvider.getApplicationContext())
     }
 
     @After
     fun close() {
         if (this::pipeline.isInitialized) {
             pipeline.close()
-        }
-        if (this::dictionary.isInitialized) {
-            dictionary.close()
         }
     }
 

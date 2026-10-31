@@ -14,12 +14,15 @@
  * the test. For each one typed with a slip into a string no dictionary spells, at least three
  * letters long, it records what autocorrect commits and where the strip ranks the word meant:
  * with no taps, priced by the key geometry; with the taps and the default patterns alone; and
- * with the learned patterns at each weight and minimum.
+ * with the learned patterns at each weight and minimum. `--rows <file>` writes a rows file: per
+ * such word and setting, whether the strip ranks the word meant first and among its first three,
+ * keyed by the word's place among the corpus's words, the setting, the typed string and the word
+ * meant; what autocorrect commits stays in the report.
  *
  * Usage:
  *     touch_eval <dict dir> <tag> <layout> <taps.tsv> [--train-taps N] [--test-words N]
  *                [--test-from-taps N] [--half-life-taps N] [--weights a,b,...]
- *                [--min-taps a,b,...] [--floor P]
+ *                [--min-taps a,b,...] [--floor P] [--rows <file>]
  */
 
 #include <cmath>
@@ -27,115 +30,29 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <memory>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
 #include "engine.hpp"
+#include "replay_corpora.hpp"
+#include "rows_file.hpp"
+#include "test_support.hpp"
 
 using namespace borderkeys;
+using borderkeys_eval::Layout;
+using borderkeys_eval::RowsFile;
+using borderkeys_eval::TappedWord;
+using borderkeys_eval::loadLayout;
+using borderkeys_eval::placeOf;
+using borderkeys_eval::rankInTopThree;
+using borderkeys_eval::readTapCorpus;
+using borderkeys_eval::spelledAsTyped;
+using borderkeys_eval::typedWithSlip;
 
 namespace {
-
-struct Layout {
-    int32_t codes[64] = {};
-    float xs[64] = {};
-    float ys[64] = {};
-    int count = 0;
-    float keyWidth = 0.f;
-    float keyHeight = 0.f;
-
-    int indexOf(char letter) const {
-        for (int i = 0; i < count; ++i) {
-            if (codes[i] == static_cast<unsigned char>(letter)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-};
-
-bool loadLayout(const char* path, Layout* layout) {
-    std::FILE* const file = std::fopen(path, "r");
-    if (file == nullptr) {
-        return false;
-    }
-    char line[256];
-    while (std::fgets(line, sizeof(line), file) != nullptr) {
-        if (line[0] == '#' || line[0] == '\n') {
-            continue;
-        }
-        char code[16];
-        float a = 0.f;
-        float b = 0.f;
-        if (layout->keyWidth == 0.f && std::sscanf(line, "%f %f", &a, &b) == 2) {
-            layout->keyWidth = a;
-            layout->keyHeight = b;
-            continue;
-        }
-        if (std::sscanf(line, "%15s %f %f", code, &a, &b) == 3 && layout->count < 64) {
-            layout->codes[layout->count] = static_cast<unsigned char>(code[0]);
-            layout->xs[layout->count] = a;
-            layout->ys[layout->count] = b;
-            ++layout->count;
-        }
-    }
-    std::fclose(file);
-    return layout->count > 0 && layout->keyWidth > 0.f;
-}
-
-struct Word {
-    std::string intended;
-    std::string typed;
-    std::vector<float> xs;
-    std::vector<float> ys;
-};
-
-std::vector<Word> readCorpus(const char* path) {
-    std::vector<Word> words;
-    std::FILE* const file = std::fopen(path, "r");
-    if (file == nullptr) {
-        return words;
-    }
-    char line[4096];
-    while (std::fgets(line, sizeof(line), file) != nullptr) {
-        if (line[0] == '#' || line[0] == '\n') {
-            continue;
-        }
-        char* const firstTab = std::strchr(line, '\t');
-        char* const secondTab = firstTab != nullptr ? std::strchr(firstTab + 1, '\t') : nullptr;
-        if (secondTab == nullptr) {
-            continue;
-        }
-        Word word;
-        word.intended.assign(line, firstTab);
-        word.typed.assign(firstTab + 1, secondTab);
-        for (char* point = secondTab + 1; *point != '\0' && *point != '\n';) {
-            char* end = nullptr;
-            const float x = std::strtof(point, &end);
-            if (end == point || *end != ',') {
-                break;
-            }
-            point = end + 1;
-            const float y = std::strtof(point, &end);
-            if (end == point) {
-                break;
-            }
-            word.xs.push_back(x);
-            word.ys.push_back(y);
-            point = end;
-            while (*point == ' ') {
-                ++point;
-            }
-        }
-        if (word.xs.size() == word.intended.size() && word.typed.size() == word.intended.size()) {
-            words.push_back(std::move(word));
-        }
-    }
-    std::fclose(file);
-    return words;
-}
 
 std::vector<float> readList(const char* text) {
     std::vector<float> values;
@@ -148,28 +65,6 @@ std::vector<float> readList(const char* text) {
         p = (*end == ',') ? end + 1 : end;
     }
     return values;
-}
-
-bool loadPack(Engine& engine, const char* directory, const std::string& tag) {
-    std::string file = tag;
-    for (char& c : file) {
-        if (c == '-') {
-            c = '_';
-        }
-    }
-    const std::string path = std::string(directory) + "/" + file + ".bkd";
-    struct stat info {};
-    if (stat(path.c_str(), &info) != 0) {
-        std::printf("cannot stat %s\n", path.c_str());
-        return false;
-    }
-    const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        return false;
-    }
-    const int32_t status = engine.loadLanguage(tag.c_str(), fd, 0, info.st_size, 1.0f);
-    ::close(fd);
-    return status == kBkdOk;
 }
 
 /** Weighted sums of one key's samples: weight, offsets, squares and product, in key units. */
@@ -196,7 +91,7 @@ int main(int argc, char** argv) {
     if (argc < 5) {
         std::printf("usage: touch_eval <dict dir> <tag> <layout> <taps.tsv> [--train-taps N] "
                     "[--test-words N] [--test-from-taps N] [--half-life-taps N] "
-                    "[--weights a,b] [--min-taps a,b] [--floor P]\n");
+                    "[--weights a,b] [--min-taps a,b] [--floor P] [--rows <file>]\n");
         return 2;
     }
     long trainTaps = 20000;
@@ -206,8 +101,11 @@ int main(int argc, char** argv) {
     double floor = -1.0;
     std::vector<float> weights = {1.0f};
     std::vector<float> minimums = {30.0f};
+    const char* rowsPath = nullptr;
     for (int i = 5; i + 1 < argc; i += 2) {
-        if (std::strcmp(argv[i], "--floor") == 0) {
+        if (std::strcmp(argv[i], "--rows") == 0) {
+            rowsPath = argv[i + 1];
+        } else if (std::strcmp(argv[i], "--floor") == 0) {
             floor = std::strtod(argv[i + 1], nullptr);
         } else if (std::strcmp(argv[i], "--train-taps") == 0) {
             trainTaps = std::strtol(argv[i + 1], nullptr, 10);
@@ -229,14 +127,24 @@ int main(int argc, char** argv) {
         std::printf("could not read the layout %s\n", argv[3]);
         return 1;
     }
-    const std::vector<Word> words = readCorpus(argv[4]);
+    const std::vector<TappedWord> words = readTapCorpus(argv[4]);
     if (words.empty()) {
         std::printf("no words in %s\n", argv[4]);
         return 1;
     }
+    std::unique_ptr<FILE, int (*)(FILE*)> rowsOut(nullptr, &std::fclose);
+    if (rowsPath != nullptr) {
+        rowsOut.reset(std::fopen(rowsPath, "w"));
+        if (rowsOut == nullptr) {
+            std::printf("cannot write %s\n", rowsPath);
+            return 1;
+        }
+    }
+    const RowsFile rows(rowsOut.get());
+    rows.measures({"first", "top-three"});
 
     Engine engine;
-    if (!engine.create() || !loadPack(engine, argv[1], argv[2])) {
+    if (!engine.create() || !borderkeys_test::loadPack(engine, argv[1], argv[2])) {
         std::printf("the engine would not start on %s\n", argv[2]);
         return 1;
     }
@@ -257,7 +165,7 @@ int main(int argc, char** argv) {
     long samples = 0;
     long dropped = 0;
     for (; next < words.size() && tapIndex < trainTaps; ++next) {
-        const Word& word = words[next];
+        const TappedWord& word = words[next];
         for (size_t i = 0; i < word.intended.size(); ++i, ++tapIndex) {
             const int meant = layout.indexOf(word.intended[i]);
             const int hit = layout.indexOf(word.typed[i]);
@@ -341,6 +249,17 @@ int main(int argc, char** argv) {
         }
     }
     std::vector<Tally> tallies(settings.size());
+    // Each setting's name, in the key of its rows.
+    std::vector<std::string> settingNames;
+    for (const Setting& setting : settings) {
+        char name[64];
+        if (setting.learned) {
+            std::snprintf(name, sizeof(name), "learned %.2f %d", setting.weight, setting.minimum);
+        } else {
+            std::snprintf(name, sizeof(name), "%s", setting.tapped ? "default" : "off");
+        }
+        settingNames.emplace_back(name);
+    }
 
     for (; next < words.size() && tapIndex < testFromTaps; ++next) {
         tapIndex += static_cast<long>(words[next].intended.size());
@@ -350,16 +269,12 @@ int main(int argc, char** argv) {
     int tested = 0;
     Candidate out[Engine::kMaxCandidates];
     for (size_t end = next + testWords; next < words.size() && next < end; ++next) {
-        const Word& word = words[next];
+        const TappedWord& word = words[next];
         ++tested;
-        if (word.typed == word.intended || word.typed.size() < 3) {
+        if (!typedWithSlip(word)) {
             continue;
         }
-        char spelling[128];
-        const int spelled = engine.knownSpelling(word.typed.c_str(), word.typed.size(), spelling,
-                                                 sizeof(spelling) - 1);
-        if (spelled == static_cast<int>(word.typed.size()) &&
-            std::memcmp(spelling, word.typed.c_str(), word.typed.size()) == 0) {
+        if (spelledAsTyped(engine, word.typed)) {
             ++realWords;
             continue;
         }
@@ -389,15 +304,25 @@ int main(int argc, char** argv) {
             } else {
                 ++tally.other;
             }
-            for (int rank = 0; rank < found && rank < 3; ++rank) {
+            int rank = -1;
+            for (int i = 0; i < found; ++i) {
                 uint32_t length = 0;
-                const char* const text = engine.candidateText(out[rank], &length);
+                const char* const text = engine.candidateText(out[i], &length);
                 if (text != nullptr && length == word.intended.size() &&
                     std::memcmp(text, word.intended.c_str(), length) == 0) {
-                    tally.first += rank == 0 ? 1 : 0;
-                    ++tally.topThree;
+                    rank = i;
                     break;
                 }
+            }
+            const bool first = rank == 0;
+            const bool topThree = rankInTopThree(rank);
+            tally.first += first ? 1 : 0;
+            tally.topThree += topThree ? 1 : 0;
+            if (rows.writes()) {
+                rows.row({first, topThree},
+                         std::to_string(next) + " " + settingNames[s] + " " + word.typed + " " +
+                             word.intended,
+                         placeOf(rank) + "\t" + borderkeys_test::topWord(engine, out, found));
             }
         }
     }

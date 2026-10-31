@@ -504,7 +504,9 @@ Leipzig corpora their files are counted from and tested on, by role: `corpora` (
 `known_corpora` (the `.known` words), `case_corpora` (the `.case` evidence), `capitals` (the news
 `classify_wordlist.py` counts capitals in) and `heldout` (the most recent news edition none of
 those is, nor from any of their years, which the test corpora are drawn from), with the SHA-256 of
-each archive they name under `sha256` and the personal corpus's `persona`.
+each archive they name under `sha256`, the personal corpus's `persona`, and `heldout_split`: the
+share of the held-out sentences, in thousandths of the fingerprint space, that the dev corpora,
+the personal corpus and the case corpora each read (`docs/testing.md`, "A learned history").
 `tools/language_manifest.py` reads them and fetches a corpus into `~/.cache/borderkeys/leipzig`,
 checking its archive against the pin, or recording the pin on a first fetch. `new_language.py` does
 not build the bundled six.

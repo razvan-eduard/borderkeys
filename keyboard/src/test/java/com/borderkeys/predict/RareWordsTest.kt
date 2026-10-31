@@ -62,8 +62,7 @@ class RareWordsTest {
             .count { line ->
                 val typed = line.substringBefore('\t')
                 val expected = line.substringAfter('\t').substringBefore('\t')
-                val committed = pipeline.commit(typed).committed
-                if (expected == typed) committed == null else committed.equals(expected, ignoreCase = true)
+                pipeline.commit(typed).rightFor(expected)
             }
 
     private companion object {

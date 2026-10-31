@@ -5,19 +5,10 @@ package com.borderkeys.data
 
 import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Test
 
-/** [PhraseKey] and the language a link takes, against the engine's names for the same keys. */
+/** [PhraseKey]: a word's key in the engine's lower case, and the language a link takes. */
 class PhraseKeyTest {
-
-    @Test
-    fun `the unknown language is the engine's`() {
-        val header = NativeSource.read(NativeSource.USER_MODEL_HEADER)
-        val engine = Regex("""kUnknownLanguage\s*=\s*"([^"]*)"""").find(header)?.groupValues?.get(1)
-        assertNotNull("kUnknownLanguage not found in user_model.hpp", engine)
-        assertEquals(engine, LanguageTags.UNKNOWN)
-    }
 
     @Test
     fun `a word is keyed in the engine's lower case`() {

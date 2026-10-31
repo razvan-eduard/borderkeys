@@ -4,41 +4,91 @@
 package com.borderkeys.typing
 
 import android.text.InputType
-import com.borderkeys.data.PhraseRecorder
+import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.MemoryDictionary
+import com.borderkeys.data.SteppedExecutor
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.ime.KeyboardPersonalModel
 import com.borderkeys.ime.PersonalModelReload
 import com.borderkeys.predict.PersonalModelLoad
-import com.borderkeys.predict.PersonalSnapshot
+import com.borderkeys.predict.RefusedWords
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.completeWith
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
 import kotlin.coroutines.resume
 
 /**
  * A [TypingOrchestrator] on an in-memory field, the engine on the host bridge, a recording host
- * and ring, an in-memory store and a clock the test moves. After each key the rig delivers what
- * reaches the input method before the next one: the field's selection reports, the engine's
- * answers, and the runnables that fell due.
+ * and ring, the production store ([DictionaryLearningStore]) on the personal dictionary's
+ * repository over tables in memory, its worker on a hand-stepped thread, and a clock the test
+ * moves. After each key the rig delivers what reaches the input method before the next one: the
+ * field's selection reports, the engine's answers, the runnables that fell due and the personal
+ * dictionary's reads and writes.
  */
-internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences) {
+internal class TypingRig(
+    val engine: QueuedEngine,
+    settings: KeyboardPreferences,
+    /** The offensive words a load leaves out, and the learning refuses, while their switch is on. */
+    private val offensiveWords: Set<String> = emptySet(),
+) {
     val editor = FakeFieldEditor()
     val clock = ManualClock()
     val host = FakeTypingHost(clock)
     val ring = FakeRingUi()
-    val store = MemoryLearningStore()
+
+    /** The personal dictionary's thread, stepped as the rig settles. */
+    val personalThread = SteppedExecutor()
+
+    /** The personal dictionary, on tables in memory. */
+    val dictionary = MemoryDictionary(personalThread)
+    val store = DictionaryLearningStore(
+        dictionary.worker, { dictionary.repository }, { task -> host.postDelayed(task, AT_ONCE_MILLIS) },
+    )
     val orchestrator = TypingOrchestrator({ editor }, engine, host, ring, store, clock)
+
+    /** What an edit or a reload of the personal model threw, rethrown by [settle]. */
+    private var reloadFailure: Throwable? = null
+
+    /** Where the edits and reloads of the personal model run, as the service runs them: at once, on the test's thread. */
+    private val personalScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Unconfined + CoroutineExceptionHandler { _, error -> reloadFailure = error },
+    )
+
+    /**
+     * The personal model as the personal dictionary's edits reach it, the production host on the
+     * rig's engine and orchestrator, attached to [dictionary]: the service's reload, the dictionary's
+     * rows loaded as the service loads them, and the blocked words refused by the learning.
+     */
+    val personalModel = KeyboardPersonalModel(
+        personalScope,
+        Mutex(),
+        engine,
+        orchestrator,
+        reloadModel = { between -> reloadSteps().reload(between) },
+        refreshBlocked = {
+            orchestrator.setRefusedWords(RefusedWords.of(dictionary.repository.blockedWordSet(), offensiveWhileSwitchedOn()))
+        },
+    )
 
     init {
         engine.onSuggestions = orchestrator::onSuggestions
         engine.onGestureCandidates = orchestrator::onGestureCandidates
         engine.onGesturePreviewCandidates = orchestrator::onGesturePreviewCandidates
+        host.onReloadPersonalModel = { reloadPersonalModel() }
+        dictionary.repository.attach(personalModel)
         orchestrator.applySettings(settings)
     }
 
@@ -198,40 +248,85 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         settle()
     }
 
-    /** What a reload started by [reloadPersonalModel] threw, rethrown by [settle]. */
-    private var reloadFailure: Throwable? = null
-
-    /** Makes the host run [reloadPersonalModel], forgetting the word, at each word it is asked to forget. */
+    /** Makes the host forget each word it is asked to forget, as the service does. */
     fun reloadOnForget() {
-        host.onForgetWord = { word -> reloadPersonalModel(forgetting = word) }
+        host.onForgetWord = { word ->
+            personalScope.launch {
+                orchestrator.forgetUnsaved(word)
+                dictionary.repository.forgetEveryCase(word)
+            }
+        }
     }
 
     /**
      * The service's reload of the personal model, started at once and carried on as the engine's
-     * settle is served: [forgetting], when named, dropped from the buffer and the store after the
-     * settle, the learning waiting written, the store's words loaded.
+     * settle and the personal dictionary's reads and writes are served ([KeyboardPersonalModel.reload]).
      */
-    fun reloadPersonalModel(forgetting: String? = null) {
-        val failures = CoroutineExceptionHandler { _, error -> reloadFailure = error }
-        CoroutineScope(Dispatchers.Unconfined + failures).launch {
-            PersonalModelReload(
-                settle = {
-                    suspendCancellableCoroutine { continuation -> engine.settle { continuation.resume(Unit) } }
-                },
-                flush = { orchestrator.flushLearningNow() },
-                load = { engine.loadPersonal(store.model()) },
-            ).reload(
-                between = {
-                    if (forgetting != null) {
-                        orchestrator.forgetUnsaved(forgetting)
-                        store.forget(forgetting)
-                    }
-                },
-            )
-        }
+    fun reloadPersonalModel() {
+        personalScope.launch { personalModel.reload {} }
     }
 
-    /** Delivers the selection reports, the engine's answers and the due runnables, until none is left. */
+    /** Loads the personal dictionary's rows into the engine as the service does at its start, and settles. */
+    fun loadPersonalModel() {
+        personalScope.launch { reloadSteps().reload() }
+        settle()
+    }
+
+    /**
+     * One reload as the service runs it: the engine settled, the links marked stale, the learning
+     * waiting written, the dictionary's rows loaded as the service loads them, and the links marked
+     * fresh once the engine settles again.
+     */
+    private fun reloadSteps() = PersonalModelReload(
+        settle = { suspendCancellableCoroutine { continuation -> engine.settle { continuation.resume(Unit) } } },
+        flush = { orchestrator.flushLearningNow() },
+        load = {
+            engine.loadPersonal(
+                PersonalModelLoad.read(dictionary.repository, orchestrator.preferences, offensiveWords, clock.now),
+            )
+        },
+        stale = { orchestrator.personalModelStale() },
+        fresh = { orchestrator.personalModelFresh() },
+    )
+
+    /** [offensiveWords] while the offensive-word switch is on, else none. */
+    private fun offensiveWhileSwitchedOn(): Set<String> =
+        if (orchestrator.preferences.blockOffensiveWords) offensiveWords else emptySet()
+
+    /** Runs [block] on the personal dictionary, an edit as the pages make it, and settles; returns what it returned. */
+    fun <T> edit(block: suspend (DictionaryRepository) -> T): T = read(block)
+
+    /** What [block] reads from the personal dictionary, asked for now and answered as the rig settles. */
+    fun <T> read(block: suspend (DictionaryRepository) -> T): T {
+        val answer = CompletableDeferred<T>()
+        CoroutineScope(Dispatchers.Unconfined).launch {
+            answer.completeWith(runCatching { block(dictionary.repository) })
+        }
+        settle()
+        return runBlocking { answer.await() }
+    }
+
+    /** The word rows written to the personal dictionary, by spelling in the order each was first written. */
+    fun writtenWords(): List<UserWord> =
+        runBlocking { dictionary.words.allWords().flatMap { dictionary.words.rows(it) } }
+
+    /** The pairs written, in the order each was first written. */
+    fun writtenPairs(): List<UserBigram> = dictionary.pairs.rows.values.toList()
+
+    /** The triples written, in the order each was first written. */
+    fun writtenTriples(): List<UserTrigram> = dictionary.triples.rows.values.toList()
+
+    /** The heatmap's totals written, in the order each was first written. */
+    fun writtenTouches(): List<KeyTouch> = runBlocking { dictionary.touches.observeAll().first() }
+
+    /** Whether nothing at all was written to the personal dictionary. */
+    fun nothingWritten(): Boolean =
+        writtenWords().isEmpty() && writtenPairs().isEmpty() && writtenTriples().isEmpty() && writtenTouches().isEmpty()
+
+    /**
+     * Delivers the selection reports, the engine's answers, the due runnables and the personal
+     * dictionary's reads and writes, until none is left.
+     */
     fun settle() {
         while (true) {
             val report = editor.takeReport()
@@ -239,7 +334,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                 orchestrator.onSelectionChanged(report.selectionStart, report.selectionEnd)
                 continue
             }
-            if (engine.serveNext() || host.runDue()) {
+            if (engine.serveNext() || host.runDue() || personalThread.runNext()) {
                 continue
             }
             break
@@ -254,6 +349,9 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
     companion object {
         /** The time between two key presses. */
         const val KEY_INTERVAL_MILLIS = 150L
+
+        /** The delay of a runnable posted to run at once, as the main thread's handler runs it. */
+        private const val AT_ONCE_MILLIS = 0L
     }
 }
 
@@ -273,73 +371,6 @@ internal class ManualClock : TypingClock {
     private companion object {
         /** A wall-clock time, far from the zero the timing fields start at. */
         const val START = 1_790_000_000_000L
-    }
-}
-
-/** Every batch written, in order, and the heatmap totals it serves by bucket. */
-internal class MemoryLearningStore : LearningStore {
-    val batches = mutableListOf<LearningBatch>()
-
-    /** What [loadTouches] answers, by bucket. */
-    val storedTouches = mutableMapOf<String, List<KeyTouch>>()
-
-    /** Every heatmap total written, in order. */
-    val touches: List<KeyTouch> get() = batches.flatMap { it.touches }
-
-    override fun persist(batch: LearningBatch, onDropped: (List<UserBigram>, List<UserTrigram>) -> Unit) {
-        batches += batch
-    }
-
-    override suspend fun persistNow(batch: LearningBatch): PhraseRecorder.Dropped {
-        batches += batch
-        return PhraseRecorder.Dropped()
-    }
-
-    override fun persistBeforeShutdown(batch: LearningBatch?) {
-        if (batch != null) {
-            batches += batch
-        }
-    }
-
-    override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
-        onLoaded(storedTouches[bucket].orEmpty())
-    }
-
-    /** Drops [word], in any case, from every batch written, with the pair and triple uses naming it. */
-    fun forget(word: String) {
-        fun matches(other: String) = other.equals(word, ignoreCase = true)
-        val kept = batches.map { batch ->
-            LearningBatch(
-                batch.updates.filterNot { matches(it.word) },
-                batch.pairs.filterNot { step ->
-                    step.use?.let { matches(it.previousWord) || matches(it.word) } == true
-                },
-                batch.triples.filterNot { step ->
-                    step.use?.let { matches(it.previousWord2) || matches(it.previousWord1) || matches(it.word) } == true
-                },
-                batch.touches,
-                batch.touchHalfLifeMillis,
-            )
-        }
-        batches.clear()
-        batches += kept
-    }
-
-    /** The words the batches written add up to, as the engine loads them; no pairs or triples. */
-    fun model(): PersonalModelLoad {
-        val words = linkedMapOf<String, UserWord>()
-        for (update in batches.flatMap { it.updates }) {
-            val row = words[update.word]
-            words[update.word] = UserWord(
-                word = update.word,
-                locale = update.locale,
-                count = (row?.count ?: 0) + update.delta,
-                lastUsedAt = update.lastUsedAt,
-                deliberateCapitals = (row?.deliberateCapitals ?: 0) + (if (update.deliberateCapital) 1 else 0),
-                asserted = (row?.asserted ?: 0) + (if (update.asserted) 1 else 0),
-            )
-        }
-        return PersonalSnapshot.EMPTY.copy(words = words.values.toList())
     }
 }
 

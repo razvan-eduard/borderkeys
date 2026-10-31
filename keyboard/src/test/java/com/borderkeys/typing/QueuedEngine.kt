@@ -3,15 +3,14 @@
 
 package com.borderkeys.typing
 
-import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.entity.UserBigram
-import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.personal.LinkWrites
+import com.borderkeys.data.personal.WorkingCopy
 import com.borderkeys.predict.AnswerScratch
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.CorrectionOffer
+import com.borderkeys.predict.EngineWorkingCopy
 import com.borderkeys.predict.NativePredictor
 import com.borderkeys.predict.NewestWins
-import com.borderkeys.predict.PersonalLinks
 import com.borderkeys.predict.PersonalModelLoad
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
@@ -19,14 +18,16 @@ import com.borderkeys.predict.answerRequest
 import com.borderkeys.predict.answerRequestAs
 
 /**
- * The engine on the host bridge. Each call is queued as the prediction thread would take it, and
- * [serveNext] runs the oldest, delivering its answer at once, as the main thread would receive it
- * before the next key.
+ * The engine on the host bridge, its personal model in [workingCopy]. Each call is queued as the
+ * prediction thread would take it, and [serveNext] runs the oldest, delivering its answer at once,
+ * as the main thread would receive it before the next key; a request hands the engine its
+ * context's slice as it runs ([EngineWorkingCopy.contextFor]).
  */
 internal class QueuedEngine(
     private val handle: Long,
     private val languages: List<String>,
     private val refused: RefusedWords = RefusedWords.NONE,
+    val workingCopy: EngineWorkingCopy = EngineWorkingCopy(handle),
 ) : EnginePort {
 
     /** Receives each answer to [requestSuggestions]. */
@@ -38,7 +39,7 @@ internal class QueuedEngine(
         query: String,
         possessive: String?,
         corrections: List<CorrectionOffer>,
-        language: String?,
+        answerPack: String?,
     ) -> Unit = { _, _, _, _, _, _, _, _ -> }
 
     private class Task(val request: Boolean, val run: () -> Unit)
@@ -73,6 +74,7 @@ internal class QueuedEngine(
         composing: String,
         previous1: String?,
         previous2: String?,
+        language: String,
         tapXs: FloatArray?,
         tapYs: FloatArray?,
     ) {
@@ -81,64 +83,59 @@ internal class QueuedEngine(
         tasks.addLast(
             Task(request = true) {
                 val answer = answerRequest(
-                    handle, composing, previous1, previous2, languages, scratch, tapXs, tapYs,
+                    handle, composing, previous1, previous2, workingCopy.contextFor(language, previous1, previous2),
+                    languages, scratch, tapXs, tapYs,
                 )
                 onSuggestions(
                     answer.candidates(refused), answer.knownWord, answer.knownWordExact,
                     answer.knownWordIsName, answer.query, answer.possessive,
-                    answer.offers(refused), answer.language,
+                    answer.offers(refused), answer.answerPack,
                 )
             },
         )
     }
 
-    /** The language each [learn] call named, in order. */
+    /** The language each [commit] named, in order. */
     val learnedIn = mutableListOf<String>()
 
-    /** The word before, and the one before that, each [learn] call named, in order. */
+    /** The word before, and the one before that, each [commit] named, in order. */
     val learnedAfter = mutableListOf<Pair<String?, String?>>()
 
     /**
-     * Whether [learn] reaches the engine; off, the engine's personal model stays as loaded and
-     * nothing is reported as recorded.
+     * Whether [commit] reaches the engine; off, the personal model stays as loaded and no link row
+     * is reported changed.
      */
     var learns = true
 
-    override fun learn(
-        updates: List<LearnedWord>,
-        previous1: String?,
-        previous2: String?,
-        language: String,
-        onLearned: (LearnOutcome) -> Unit,
-    ) {
-        if (updates.isEmpty()) {
-            return
-        }
-        learnedIn += language
-        learnedAfter += previous1 to previous2
+    override fun commit(commit: Commit, onCommitted: (LinkWrites) -> Unit) {
+        learnedIn += commit.language
+        learnedAfter += commit.previous1 to commit.previous2
         if (!learns) {
             return
         }
-        tasks.addLast(
-            Task(request = false) {
-                for (update in updates) {
-                    onLearned(PersonalLinks.learn(handle, update, previous1, previous2, language))
-                }
-            },
-        )
+        tasks.addLast(Task(request = false) { onCommitted(workingCopy.commit(commit)) })
     }
 
-    override fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>) {
-        tasks.addLast(Task(request = false) { PersonalLinks.drop(handle, pairs, triples) })
+    override fun editPersonal(change: (WorkingCopy) -> LinkWrites, onEdited: (LinkWrites?) -> Unit) {
+        tasks.addLast(Task(request = false) { onEdited(if (workingCopy.loaded) change(workingCopy) else null) })
     }
 
     override fun settle(onSettled: () -> Unit) {
         tasks.addLast(Task(request = false) { onSettled() })
     }
 
+    /** How many times the personal model was replaced ([loadPersonal]). */
+    var loads = 0
+        private set
+
     /** Replaces the personal model with [model], queued as the prediction thread would take it. */
     fun loadPersonal(model: PersonalModelLoad) {
-        tasks.addLast(Task(request = false) { model.loadInto(handle) })
+        tasks.addLast(
+            Task(request = false) {
+                loads++
+                workingCopy.load(model)
+            },
+        )
     }
 
     /** The learn-after count last handed over, or null before any. */
@@ -166,6 +163,18 @@ internal class QueuedEngine(
     override fun setCorrectionStrictness(scale: Float) {
         correctionStrictness = scale
         tasks.addLast(Task(request = false) { NativePredictor.nativeSetCorrectionStrictness(handle, scale) })
+    }
+
+    override fun setLanguageLock(minimumEvidence: Float, strict: Boolean) {
+        tasks.addLast(
+            Task(request = false) { NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict) },
+        )
+    }
+
+    override fun setPreferredLanguage(tag: String) {
+        tasks.addLast(
+            Task(request = false) { NativePredictor.nativeSetPreferredLanguage(handle, tag.ifEmpty { null }) },
+        )
     }
 
     override fun setPersonalModelEnabled(enabled: Boolean) {
@@ -206,7 +215,12 @@ internal class QueuedEngine(
         }
         tasks.addLast(
             Task(request = false) {
-                onResult(words.map { answerRequestAs(handle, pack, it, languages, scratch)?.searchAnswer(refused) })
+                onResult(
+                    words.map { word ->
+                        answerRequestAs(handle, pack, word, languages, scratch) { workingCopy.contextFor(it, null, null) }
+                            ?.searchAnswer(refused)
+                    },
+                )
             },
         )
     }
@@ -225,7 +239,7 @@ internal class QueuedEngine(
         gestureRequests.cancel()
     }
 
-    /** Receives each answer to [decodeGesture], with the language it read. */
+    /** Receives each answer to [decodeGesture], with the tag of the pack it leaned on. */
     var onGestureCandidates: (List<Candidate>, String?) -> Unit = { _, _ -> }
 
     /** Receives each answer to [decodeGesturePreview]. */
@@ -242,6 +256,7 @@ internal class QueuedEngine(
         count: Int,
         previous1: String?,
         previous2: String?,
+        language: String,
     ) {
         if (count < 2) {
             return
@@ -250,9 +265,9 @@ internal class QueuedEngine(
         val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
         tasks.addLast(
             Task(request = false) {
-                val found = decode(path, previous1, previous2)
+                val found = decode(path, previous1, previous2, language)
                 if (gestureRequests.isNewest(generation)) {
-                    onGestureCandidates(found, decodeTexts[NativePredictor.TEXT_LANGUAGE])
+                    onGestureCandidates(found, decodeTexts[NativePredictor.TEXT_ANSWER_PACK])
                 }
             },
         )
@@ -265,6 +280,7 @@ internal class QueuedEngine(
         count: Int,
         previous1: String?,
         previous2: String?,
+        language: String,
     ) {
         if (count < 2) {
             return
@@ -273,7 +289,7 @@ internal class QueuedEngine(
         val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
         tasks.addLast(
             Task(request = false) {
-                val found = decode(path, previous1, previous2)
+                val found = decode(path, previous1, previous2, language)
                 if (previewRequests.isNewest(generation)) {
                     onGesturePreviewCandidates(found)
                 }
@@ -297,12 +313,21 @@ internal class QueuedEngine(
     private val decodeProperNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
     private val decodeTexts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
 
-    /** The decode of [path], best first, the refused words left out; its language in [decodeTexts]. */
-    private fun decode(path: Path, previous1: String?, previous2: String?): List<Candidate> {
+    /**
+     * The decode of [path], best first, the refused words left out, the pairs and triples read in
+     * [language]'s store; the pack it leaned on in [decodeTexts].
+     */
+    private fun decode(
+        path: Path,
+        previous1: String?,
+        previous2: String?,
+        language: String,
+    ): List<Candidate> {
         decodeTexts.fill(null)
         val found = NativePredictor.nativeDecodeGesture(
             handle, path.xs, path.ys, path.timestamps, path.xs.size, previous1, previous2,
-            decodeWords, decodeScores, decodeProperNoun, decodeTexts,
+            workingCopy.contextFor(language, previous1, previous2), decodeWords, decodeScores, decodeProperNoun,
+            decodeTexts,
         )
         return (0 until found).mapNotNull { index ->
             decodeWords[index]?.let { Candidate(it, decodeProperNoun[index], decodeScores[index]) }

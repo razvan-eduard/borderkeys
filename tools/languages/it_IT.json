@@ -18,6 +18,39 @@
   ],
   "capitals": "ita_news_2020_1M",
   "heldout": "ita_news_2023_1M",
+  "heldout_split": {
+    "dev": 5,
+    "personal": 0,
+    "case": 995
+  },
+  "treebank": [
+    {
+      "repository": "UD_Italian-TWITTIRO",
+      "release": "r2.18",
+      "files": [
+        "it_twittiro-ud-train.conllu",
+        "it_twittiro-ud-dev.conllu",
+        "it_twittiro-ud-test.conllu"
+      ]
+    },
+    {
+      "repository": "UD_Italian-MarkIT",
+      "release": "r2.18",
+      "files": [
+        "it_markit-ud-train.conllu",
+        "it_markit-ud-dev.conllu",
+        "it_markit-ud-test.conllu"
+      ]
+    },
+    {
+      "repository": "UD_Italian-ParlaMint",
+      "release": "r2.18",
+      "files": [
+        "it_parlamint-ud-train.conllu",
+        "it_parlamint-ud-test.conllu"
+      ]
+    }
+  ],
   "sha256": {
     "ita_news_2020_1M.tar.gz": "b0728fc9d2ace61947b16b61162ca89be1c04531b4a56053f55a14bb68dae20c",
     "ita_news_2021_1M.tar.gz": "2683e41cb40fab2366b8a1f9114c8612340bfc98bba2353e38e059e81bc6bd26",

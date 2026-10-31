@@ -20,5 +20,10 @@
   },
   "single_letter_words": "aső",
   "expected_beyond_ascii": [],
-  "reachability_budget": 253
+  "reachability_budget": 253,
+  "sha256": {
+    "hun_news_2024_1M.tar.gz": "1bea06e08a763633fada636476ba7b81049c357b305ae6304722a5c713495b11",
+    "hun_newscrawl_2017_1M.tar.gz": "9c1a752796b49efb07889ad618e2d7dd479ce48720326c548a6e1399e312f0e2",
+    "hun_wikipedia_2021_1M.tar.gz": "b9897d218412618023fc763379f060c5515ca586f6230ea0a9321e45c3e39f8d"
+  }
 }

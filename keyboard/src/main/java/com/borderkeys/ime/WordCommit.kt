@@ -9,10 +9,11 @@ import com.borderkeys.predict.CorrectionOffer
 /**
  * What a delimiter writes in place of the word just typed, and why. The first [CommitRule] to
  * claim the word wins, in order: a field that takes the keys verbatim, or a digit ending the
- * word, either of which leaves it as typed; the user's text shortcut; the bundled map, restoring
- * an apostrophe with corrections on in running text, or a capital with auto-capitalise on; a
- * name's possessive, with corrections on in running text; and autocorrect takes the rest. Reads
- * neither the editor nor the engine.
+ * word, either of which leaves it as typed; the user's text shortcut; a word put back with
+ * backspace in this field, left as typed; the bundled map, restoring an apostrophe with
+ * corrections on in running text, or a capital with auto-capitalise on; a name's possessive, with
+ * corrections on in running text; and autocorrect takes the rest. Reads neither the editor nor
+ * the engine.
  */
 internal object WordCommit {
 
@@ -68,11 +69,15 @@ internal object WordCommit {
     /** Nothing ran: the field takes the keys verbatim. */
     const val REASON_VERBATIM = "Verbatim"
 
+    /** Neither autocorrect nor a bundled rewrite ran: the word was put back with backspace in this field. */
+    const val REASON_PUT_BACK = "PutBack"
+
     /**
      * Decides for [typed], ended by the key [endedBy]: a space for what the strip outlines. In a
      * [verbatim] field every word stays as typed. No rewrite claims a word from a gesture
      * ([fromGesture]). [runningText] is whether the word is part of a sentence, settled as it
-     * began ([RunningText]). [possessive] is the engine's possessive for [suggestionQuery], used
+     * began ([RunningText]). [putBack] is whether a correction of [typed] was put back with
+     * backspace in this field. [possessive] is the engine's possessive for [suggestionQuery], used
      * only when that is [typed] and [typed] is not empty; [corrections] is autocorrect's list for
      * the same query, [knownWord], [knownWordExact] and [knownWordIsName] what the dictionaries
      * say of it (see [AutoCorrection.pick]).
@@ -83,6 +88,7 @@ internal object WordCommit {
         verbatim: Boolean,
         fromGesture: Boolean,
         runningText: Boolean,
+        putBack: Boolean,
         shortcuts: List<TextShortcut>,
         contractions: Map<String, String>,
         possessive: String?,
@@ -94,7 +100,7 @@ internal object WordCommit {
         settings: Settings,
     ): Outcome {
         val word = Word(
-            typed, endedBy, verbatim, fromGesture, runningText, shortcuts, contractions,
+            typed, endedBy, verbatim, fromGesture, runningText, putBack, shortcuts, contractions,
             possessive, corrections, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
             settings,
         )
@@ -111,6 +117,7 @@ internal object WordCommit {
         val verbatim: Boolean,
         val fromGesture: Boolean,
         val runningText: Boolean,
+        val putBack: Boolean,
         val shortcuts: List<TextShortcut>,
         val contractions: Map<String, String>,
         val possessive: String?,
@@ -157,6 +164,11 @@ internal object WordCommit {
         }
     }
 
+    /** A word put back with backspace in this field stays as typed. */
+    private val putBackHere = CommitRule { word ->
+        if (word.putBack) Outcome(null, Kind.NONE, null, REASON_PUT_BACK) else null
+    }
+
     /**
      * The bundled map: an entry that changes the letters is gated like autocorrect; one that
      * changes only the case, by auto-capitalise.
@@ -201,7 +213,7 @@ internal object WordCommit {
 
     /** The rules in the order they claim a word; autocorrect takes what none of them does. */
     private val RULES: List<CommitRule> =
-        listOf(verbatimField, digitEnds, shortcut, contraction, possessive, correctionsOff, notProse)
+        listOf(verbatimField, digitEnds, shortcut, putBackHere, contraction, possessive, correctionsOff, notProse)
 
     /** Autocorrect's decision, with its situation as the reason. */
     private fun autocorrect(word: Word): Outcome {

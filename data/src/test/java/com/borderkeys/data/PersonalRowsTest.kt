@@ -7,8 +7,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.dao.PairStep
-import com.borderkeys.data.dao.TripleStep
+import com.borderkeys.data.personal.LinkWrites
+import com.borderkeys.data.personal.linkUses
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,9 +41,7 @@ class PersonalRowsTest {
     @Test
     fun `the words read are the most used, the later first among equals, up to the limit`() = runTest {
         repository.applyLearning(
-            listOf(word("rare", 1, AT), word("old", 3, AT), word("new", 3, AT + 1), word("most", 5, AT)),
-            emptyList(),
-            emptyList(),
+            listOf(word("rare", 1, AT), word("old", 3, AT), word("new", 3, AT + 1), word("most", 5, AT)), LinkWrites(),
         )
         val expected = listOf("most", "new", "old")
         assertEquals(expected, repository.personalRows(expected.size).words.map { it.word })
@@ -53,13 +51,14 @@ class PersonalRowsTest {
     fun `a flush's words, pairs and triples are written keyed, and the links past a context's budget given up`() = runTest {
         val pairFollowers = followers(PhraseBudget.PAIRS.most + 1)
         val tripleFollowers = followers(PhraseBudget.TRIPLES.most + 1)
-        val dropped = repository.applyLearning(
-            listOf(word("The", 1, AT)),
-            pairFollowers.mapIndexed { at, follower -> PairStep(LearnedBigram(LANGUAGE, "The", follower, 1, AT + at)) },
-            tripleFollowers.mapIndexed { at, follower ->
-                TripleStep(LearnedTrigram(LANGUAGE, "On", "The", follower, 1, AT + at))
+        val links = repository.linkUses(
+            pairUses = pairFollowers.mapIndexed { at, follower -> LearnedBigram(LANGUAGE, "The", follower, 1, AT + at) },
+            tripleUses = tripleFollowers.mapIndexed { at, follower ->
+                LearnedTrigram(LANGUAGE, "On", "The", follower, 1, AT + at)
             },
         )
+        repository.applyLearning(listOf(word("The", 1, AT)), links)
+        val dropped = PhraseRecorder.Dropped(links.gonePairs, links.goneTriples)
         val rows = repository.personalRows(LIMIT)
         assertEquals(listOf("The"), rows.words.map { it.word })
         assertEquals(PhraseBudget.PAIRS.most, rows.pairs.size)

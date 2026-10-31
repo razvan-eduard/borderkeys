@@ -6,6 +6,8 @@ package com.borderkeys.typing
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.PhraseKey
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserPairContext
 import com.borderkeys.data.entity.UserWord
@@ -25,6 +27,7 @@ import com.borderkeys.predict.PersonalModelLoad
 import com.borderkeys.predict.PersonalSnapshot
 import com.borderkeys.predict.Pipeline
 import com.borderkeys.predict.RefusedWords
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -319,7 +322,7 @@ class TypingScenarioTest {
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("hunter\n", rig.editor.text)
         assertTrue(rig.host.privateRevealRefreshes - before >= "hunter".length)
-        assertTrue(rig.store.batches.isEmpty())
+        assertTrue(rig.nothingWritten())
     }
 
     @Test
@@ -390,7 +393,6 @@ class TypingScenarioTest {
     fun `a correction made in the wrong language is undone when the language flips`() {
         val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
-            both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
                 SMOKE_SETTINGS.copy(
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
@@ -416,7 +418,6 @@ class TypingScenarioTest {
     fun `corrections made while the language is undecided stand when it settles`() {
         val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
-            both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
                 SMOKE_SETTINGS.copy(
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
@@ -443,7 +444,6 @@ class TypingScenarioTest {
     fun `a correction made under the other language becomes what autocorrect writes in the new one`() {
         val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
-            both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
                 SMOKE_SETTINGS.copy(
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
@@ -665,8 +665,8 @@ class TypingScenarioTest {
         rig.engine.loadPersonal(
             PersonalSnapshot.EMPTY.copy(
                 words = listOf(
-                    UserWord("nadia", rig.host.subtype, 1, now, asserted = 1, added = 1),
-                    UserWord("nadir", rig.host.subtype, 5, now),
+                    UserWord("nadia", LanguageTags.primary(rig.host.subtype), 1, now, asserted = 1, added = 1),
+                    UserWord("nadir", LanguageTags.primary(rig.host.subtype), 5, now),
                 ),
             ),
         )
@@ -675,6 +675,411 @@ class TypingScenarioTest {
         val texts = rig.host.strip.map { it.text }
         val addedAt = texts.indexOf("nadia")
         assertTrue(texts.toString(), addedAt >= 0 && addedAt < texts.indexOf("nadir"))
+    }
+
+    @Test
+    fun `a tap on the outlined correction counts the word without choosing it`() {
+        learningOn()
+        rig.type("teh")
+        val outlined = rig.host.appliedIndex
+        assertEquals("the", rig.host.strip[outlined].text)
+        rig.pick(outlined, "the")
+        assertEquals(mapOf("the" to 0), learnedChoices())
+    }
+
+    @Test
+    fun `a tap on the typed chip is a choice`() {
+        learningOn()
+        rig.type("teh")
+        rig.pick(rig.host.typedIndex, "teh")
+        assertEquals(mapOf("teh" to 1), learnedChoices())
+    }
+
+    @Test
+    fun `a pick other than the word the strip leads with is a choice`() {
+        learningOn()
+        rig.type("teh")
+        val other = rig.host.strip.indices.first {
+            it != rig.host.typedIndex && it != rig.host.appliedIndex && rig.host.strip[it].text.length > 1
+        }
+        val word = rig.host.strip[other].text
+        rig.pick(other, word)
+        assertEquals(mapOf(word to 1), learnedChoices())
+    }
+
+    @Test
+    fun `with nothing typed the first prediction is the keyboard's offer and a later one a choice`() {
+        learningOn()
+        val first = rig.host.strip.first().text
+        rig.pick(0, first)
+        val later = rig.host.strip.indices.first { it > 0 && rig.host.strip[it].text.length > 1 }
+        val word = rig.host.strip[later].text
+        rig.pick(later, word)
+        assertEquals(mapOf(first to 0, word to 1), learnedChoices())
+    }
+
+    @Test
+    fun `a correction put back by backspace counts the typed word without choosing it`() {
+        learningOn()
+        rig.type("teh ")
+        rig.press(KeyCodes.DELETE)
+        assertEquals("teh ", rig.editor.text)
+        assertEquals(mapOf("teh" to 0), learnedChoices())
+    }
+
+    @Test
+    fun `each choice of a word adds one to its choices`() {
+        learningOn()
+        rig.type("teh")
+        rig.pick(rig.host.typedIndex, "teh")
+        rig.type("teh")
+        rig.pick(rig.host.typedIndex, "teh")
+        assertEquals(mapOf("teh" to 2), learnedChoices())
+    }
+
+    @Test
+    fun `a lift on the ring's top wedge, or with nothing under the finger, commits the top word without choosing it`() {
+        learningOn(radialMenuEnabled = true)
+        rig.swipeAndPause("the")
+        val top = rig.ring.opened.single().words.first()
+        rig.ring.selectionNow = RingUi.Selection.Word(0, top)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        rig.swipeAndPause("the")
+        val nextTop = rig.ring.opened.last().words.first()
+        rig.ring.selectionNow = RingUi.Selection.None
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("$top $nextTop ", rig.editor.text)
+        assertEquals(mapOf(top to 0, nextTop to 0), learnedChoices())
+    }
+
+    @Test
+    fun `a lift on a wedge below the top is a choice`() {
+        learningOn(radialMenuEnabled = true)
+        rig.swipeAndPause("the")
+        val word = rig.ring.opened.single().words[1]
+        rig.ring.selectionNow = RingUi.Selection.Word(1, word)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals(mapOf(word to 1), learnedChoices())
+    }
+
+    @Test
+    fun `the ring's timeout commits its highlighted word without choosing it`() {
+        learningOn(radialMenuEnabled = true)
+        rig.swipeAndPause("the")
+        val word = rig.ring.opened.single().words[2]
+        rig.ring.selectionNow = RingUi.Selection.Word(2, word)
+        rig.orchestrator.onRingTimedOut()
+        rig.settle()
+        assertEquals("$word ", rig.editor.text)
+        assertEquals(mapOf(word to 0), learnedChoices())
+    }
+
+    @Test
+    fun `a phrase chip's pick chooses its pair and neither of its words`() {
+        learnPhrase("we go home", PHRASE_USES_PER_WORD_USES * rig.orchestrator.preferences.learnAfter)
+        learningOn(phraseSuggestions = true)
+        rig.type("we ")
+        rig.pick(rig.host.strip.indexOfFirst { it.text == "go home" }, "go home")
+        assertEquals("we go home ", rig.editor.text)
+        assertEquals(1, pairChoices("go", "home"))
+        assertEquals(0, pairChoices("we", "go"))
+        assertEquals(mapOf("we" to 0, "go" to 0, "home" to 0), learnedChoices())
+    }
+
+    @Test
+    fun `over typed letters a phrase's first word is the chosen word`() {
+        learningOn()
+        rig.type("g")
+        val slot = rig.host.strip.indices.first { it != rig.host.typedIndex && it != rig.host.appliedIndex }
+        rig.pick(slot, "go home")
+        assertEquals("go home ", rig.editor.text)
+        assertEquals(1, pairChoices("go", "home"))
+        assertEquals(mapOf("go" to 1, "home" to 0), learnedChoices())
+    }
+
+    @Test
+    fun `a committed pair lifts the next request after its word`() {
+        val follower = "river"
+        learningOn()
+        rig.type("the ")
+        assertTrue("the pack alone does not lead with it", firstOffered() != follower)
+        repeat(rig.orchestrator.preferences.learnAfter) { rig.type("$follower the ") }
+        rig.startField()
+        rig.type("the ")
+        assertEquals(follower, firstOffered())
+    }
+
+    @Test
+    fun `a use dropped with the Learning switch never reaches the store through a later write of its link`() {
+        learningOn()
+        rig.type("the river ")
+        rig.orchestrator.applySettings(rig.orchestrator.preferences.copy(learningEnabled = false))
+        rig.settle()
+        learningOn()
+        rig.type("the river ")
+        assertEquals(listOf(1), pairCounts("the", "river"))
+    }
+
+    @Test
+    fun `pressing Disabled writes what the field gathered, a commit on its way included, then gathers nothing`() {
+        heatmapOn()
+        tapWord("the")
+        rig.press(' '.code)
+        tapWord("river")
+        // The commit of "river" is still on its way to the engine at the press.
+        unsettled(" ")
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.NONE)
+        rig.settle()
+        assertEquals(listOf("the", "river"), rig.writtenWords().map { it.word })
+        assertEquals(listOf(1), rig.writtenPairs().filter { it.previousWord == "the" && it.word == "river" }.map { it.count })
+        assertTrue("the taps are written", rig.writtenTouches().isNotEmpty())
+        rig.type("secret ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertFalse(rig.writtenWords().any { it.word == "secret" })
+        assertNull(rig.engine.workingCopy.lookup.counts("secret"))
+    }
+
+    @Test
+    fun `no word typed while Disabled reaches a pair or triple once Enabled is pressed again`() {
+        learningOn()
+        rig.type("the river ")
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.NONE)
+        rig.type("secret ")
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.ALL)
+        rig.type("word more ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val named = rig.writtenPairs().map { listOf(it.previousWord, it.word) } +
+            rig.writtenTriples().map { listOf(it.previousWord2, it.previousWord1, it.word) }
+        assertFalse(named.toString(), named.any { "secret" in it })
+        assertNull(rig.engine.workingCopy.lookup.counts("secret"))
+        assertTrue("the words after it pair with each other", listOf("word", "more") in named)
+    }
+
+    @Test
+    fun `pressing Enabled again learns on in the same field, from the uses before the press`() {
+        learningOn()
+        repeat(rig.orchestrator.preferences.learnAfter - 1) { rig.type("the river ") }
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.NONE)
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.ALL)
+        rig.type("the river ")
+        rig.type("the ")
+        assertEquals("river", firstOffered())
+        assertEquals("the personal model was not read again", 0, rig.host.reloads)
+    }
+
+    @Test
+    fun `a commit made while a forget reloads the model writes no count of the forgotten word's uses`() {
+        learningOn()
+        rig.reloadOnForget()
+        repeat(rig.orchestrator.preferences.learnAfter) { rig.type("the cat ") }
+        val catUses = pairCounts("the", "cat").single()
+        // The forget starts its reload; the next words are typed before the engine reaches its load.
+        rig.host.forgetWord("cat", blockWhenNotPersonal = false)
+        unsettled("the dog ")
+        rig.settle()
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val total = rig.dictionary.pairs.contexts[listOf(LanguageTags.primary(rig.host.subtype), "the")]?.total ?: 0L
+        assertTrue("the context counts $total uses, the forgotten word had $catUses", total < catUses)
+    }
+
+    @Test
+    fun `a forget drops the link rows waiting, counted as they are with the forgotten word's uses`() {
+        learningOn()
+        rig.reloadOnForget()
+        repeat(rig.orchestrator.preferences.learnAfter) { rig.type("the cat ") }
+        val catUses = pairCounts("the", "cat").single()
+        rig.type("the dog ")
+        rig.host.forgetWord("cat", blockWhenNotPersonal = false)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val total = rig.dictionary.pairs.contexts[listOf(LanguageTags.primary(rig.host.subtype), "the")]?.total ?: 0L
+        assertTrue("the context counts $total uses, the forgotten word had $catUses", total < catUses)
+    }
+
+    @Test
+    fun `a page edit reaches the strip without a reload`() {
+        learningOn()
+        rig.loadPersonalModel()
+        val loads = rig.engine.loads
+        val added = rig.edit { it.add("zorvani", rig.host.subtype, rig.clock.now, unblock = false) }
+        assertEquals(DictionaryRepository.Added.ADDED, added)
+        rig.type("zorv")
+        assertTrue(rig.host.strip.map { it.text }.toString(), rig.host.strip.any { it.text == "zorvani" })
+        assertEquals("the personal model was not read again", loads, rig.engine.loads)
+    }
+
+    @Test
+    fun `a forget on the pages reads the personal model again, the word's uses waiting gone with it`() {
+        learningOn()
+        rig.loadPersonalModel()
+        rig.edit { it.add("zorvani", rig.host.subtype, rig.clock.now, unblock = false) }
+        rig.type("zorvani ")
+        val loads = rig.engine.loads
+        rig.edit { it.forget(listOf("zorvani")) }
+        assertEquals("the personal model was read again once", loads + 1, rig.engine.loads)
+        rig.type("zorv")
+        assertFalse(rig.host.strip.map { it.text }.toString(), rig.host.strip.any { it.text == "zorvani" })
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertFalse(rig.writtenWords().any { it.word == "zorvani" })
+    }
+
+    @Test
+    fun `a block on the pages drops the word's uses waiting in every case and language, none written after it`() {
+        learningOn()
+        rig.loadPersonalModel()
+        rig.type("the river ")
+        // The capitalised case is committed under the new subtype's language, before an answer names a pack.
+        rig.press(KeyCodes.SHIFT)
+        rig.type("river")
+        rig.host.subtype = OTHER_SUBTYPE_TAG
+        rig.orchestrator.onSubtypeChanged()
+        rig.type(" flows ")
+        assertTrue(rig.engine.learnedIn.toString(), LanguageTags.primary(OTHER_SUBTYPE_TAG) in rig.engine.learnedIn)
+        rig.edit { it.block("river") }
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val words = rig.writtenWords()
+        assertTrue("the words around it are written: $words", words.any { it.word == "flows" })
+        assertTrue("no row of the blocked word: $words", words.none { it.word.equals("river", ignoreCase = true) })
+        val blocked = PhraseKey.word("river")
+        val pairs = rig.writtenPairs().filter { it.previousWord == blocked || it.word == blocked }
+        assertTrue("no pair of the blocked word: $pairs", pairs.isEmpty())
+    }
+
+    @Test
+    fun `a forget on the pages writes the other link rows waiting before it reads the model again`() {
+        learningOn()
+        rig.loadPersonalModel()
+        rig.type("the river ")
+        rig.edit { it.forget(listOf("zorvani")) }
+        assertEquals(listOf(1), pairCounts("the", "river"))
+    }
+
+    @Test
+    fun `forgetting everything on the pages takes what waits to be written with it, and the taps the keyboard holds`() {
+        heatmapOn()
+        rig.loadPersonalModel()
+        tapWord("river")
+        rig.press(' '.code)
+        rig.edit { it.forgetEverything() }
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertTrue(rig.nothingWritten())
+        assertEquals("the engine holds no learned touch pattern", 0, rig.engine.touchPatterns?.size)
+    }
+
+    @Test
+    fun `the clean-up's halving reaches the personal model, the next use counted on the halved count`() {
+        learningOn()
+        rig.loadPersonalModel()
+        repeat(STALE_USES) { rig.type("the river ") }
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        rig.pause(CLEAN_UP_HALF_LIFE_MILLIS)
+        rig.edit { it.decayStaleEntries(BUFFER_WORDS, CLEAN_UP_HALF_LIFE_MILLIS, null, rig.clock.now) }
+        rig.type("the river ")
+        val language = LanguageTags.primary(rig.host.subtype)
+        val halvedThenUsed = STALE_USES / 2 + 1
+        assertEquals(listOf(halvedThenUsed), pairCounts("the", "river"))
+        assertEquals(halvedThenUsed, rig.engine.workingCopy.lookup.pairsAfter(language, "the").links.single { it.word == "river" }.count)
+    }
+
+    @Test
+    fun `a phrase added by hand while a commit of its pair is on its way to the engine keeps both uses`() {
+        learningOn()
+        rig.loadPersonalModel()
+        rig.type("go ")
+        unsettled("home ")
+        rig.edit { it.addPhrase(listOf("go", "home"), rig.host.subtype, rig.clock.now, unblock = false) }
+        val language = LanguageTags.primary(rig.host.subtype)
+        assertEquals(listOf(2), pairCounts("go", "home"))
+        assertEquals(2, rig.engine.workingCopy.lookup.pairsAfter(language, "go").links.single { it.word == "home" }.count)
+    }
+
+    @Test
+    fun `switching the offensive filter off reads the personal model again, its learned words offered at once`() {
+        rig = pipeline.typingRig(SMOKE_SETTINGS.copy(learningEnabled = true, blockOffensiveWords = true), setOf("zorvani"))
+        rig.startField()
+        rig.edit { it.add("zorvani", rig.host.subtype, rig.clock.now, unblock = false) }
+        // A load under the filter leaves the word out.
+        rig.loadPersonalModel()
+        rig.type("zorv")
+        assertFalse(rig.host.strip.map { it.text }.toString(), rig.host.strip.any { it.text == "zorvani" })
+        rig.orchestrator.applySettings(rig.orchestrator.preferences.copy(blockOffensiveWords = false))
+        rig.startField()
+        rig.type("zorv")
+        assertTrue(rig.host.strip.map { it.text }.toString(), rig.host.strip.any { it.text == "zorvani" })
+    }
+
+    @Test
+    fun `a phrase chip's pick chooses its pair in the engine as in what is written`() {
+        learnPhrase("we go home", PHRASE_USES_PER_WORD_USES * rig.orchestrator.preferences.learnAfter)
+        learningOn(phraseSuggestions = true)
+        rig.type("we ")
+        rig.pick(rig.host.strip.indexOfFirst { it.text == "go home" }, "go home")
+        rig.settle()
+        val language = LanguageTags.primary(rig.host.subtype)
+        assertEquals(1, pipeline.choicesAfter(language, "go")["home"])
+        assertEquals(0, pipeline.choicesAfter(language, "we")["go"])
+    }
+
+    @Test
+    fun `a pick of three words chooses its two pairs and its triple, in the engine and in what is written`() {
+        learningOn()
+        rig.type("g")
+        val slot = rig.host.strip.indices.first { it != rig.host.typedIndex && it != rig.host.appliedIndex }
+        rig.pick(slot, "go home now")
+        assertEquals("go home now ", rig.editor.text)
+        val language = LanguageTags.primary(rig.host.subtype)
+        assertEquals(1, pipeline.choicesAfter(language, "go")["home"])
+        assertEquals(1, pipeline.choicesAfter(language, "home")["now"])
+        assertEquals(1, pipeline.choicesAfter(language, "home", before = "go")["now"])
+        assertEquals(listOf(1, 1, 1), listOf(pairChoices("go", "home"), pairChoices("home", "now"), tripleChoices("go", "home", "now")))
+    }
+
+    @Test
+    fun `behind a put-back chip the first prediction is the keyboard's offer and a later one a choice`() {
+        learningOn()
+        rig.type("teh ")
+        assertEquals("the ", rig.editor.text)
+        assertEquals("teh", rig.host.strip[rig.host.typedIndex].text)
+        val first = rig.host.typedIndex + 1
+        val offered = rig.host.strip[first].text
+        rig.pick(first, offered)
+        assertEquals(0, learnedChoices()[offered])
+        rig.type("teh ")
+        val later = rig.host.strip.indices.last()
+        val chosen = rig.host.strip[later].text
+        assertTrue(later > first && chosen != offered)
+        rig.pick(later, chosen)
+        assertEquals(1, learnedChoices()[chosen])
+    }
+
+    @Test
+    fun `a correction put back with backspace is left as typed for the rest of the field, and applied again in the next`() {
+        rig.type("teh ")
+        rig.press(KeyCodes.DELETE)
+        rig.type("teh")
+        assertEquals("nothing outlined", TypingHost.NO_SLOT, rig.host.appliedIndex)
+        rig.type(" teh ")
+        assertEquals("teh teh teh ", rig.editor.text)
+        rig.startField()
+        rig.type("teh ")
+        assertEquals("the ", rig.editor.text)
+    }
+
+    @Test
+    fun `a word put back with backspace is corrected in each new field until its uses have it learned`() {
+        learningOn()
+        val learnAfter = rig.orchestrator.preferences.learnAfter
+        repeat(learnAfter) { field ->
+            rig.startField()
+            rig.type("teh ")
+            assertEquals("corrected in field ${field + 1}", "the ", rig.editor.text)
+            rig.press(KeyCodes.DELETE)
+        }
+        rig.startField()
+        rig.type("teh ")
+        assertEquals("teh ", rig.editor.text)
     }
 
     /** The links of "we go home" at count 1, each chosen on purpose [asserted] times, under the rig's language. */
@@ -699,17 +1104,15 @@ class TypingScenarioTest {
         rig.reloadOnForget()
         rig.type("the teh ")
         assertEquals("the the ", rig.editor.text)
-        rig.press(KeyCodes.DELETE)
+        rig.pick(rig.host.typedIndex, "teh")
         assertEquals("the teh ", rig.editor.text)
         assertEquals(listOf("the" to false), rig.host.forgotten)
         // The buffer's own flush writes whatever the reload left in it.
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        val written = rig.store.batches.flatMap { it.updates }
+        val written = rig.writtenWords()
         assertEquals(listOf("teh"), written.map { it.word })
-        assertTrue("chosen on purpose", written.single().asserted)
-        val throughForgotten = rig.store.batches.flatMap { it.pairs }.filter { step ->
-            step.use?.let { it.previousWord == "the" || it.word == "the" } == true
-        }
+        assertEquals("chosen on purpose", 1, written.single().asserted)
+        val throughForgotten = rig.writtenPairs().filter { it.previousWord == "the" || it.word == "the" }
         assertTrue("no link through the forgotten word: $throughForgotten", throughForgotten.isEmpty())
         rig.type("teh ")
         assertEquals("the teh teh ", rig.editor.text)
@@ -1017,9 +1420,42 @@ class TypingScenarioTest {
         rig.type("hello")
         rig.press(KeyCodes.ENTER)
         assertEquals("hello\n", rig.editor.text)
-        assertTrue("written only after the debounce", rig.store.batches.isEmpty())
+        assertTrue("written only after the debounce", rig.nothingWritten())
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(listOf("hello"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+        assertEquals(listOf("hello"), rig.writtenWords().map { it.word })
+    }
+
+    @Test
+    fun `the buffer is written through the personal dictionary's worker at sixty-four words, or four seconds after its first`() {
+        val flow = learningFlow()
+        val words = List(BUFFER_WORDS) { at -> "w${'a' + at / LETTERS}${'a' + at % LETTERS}" }
+        for (word in words.dropLast(1)) {
+            flow.record(word, null, null)
+            rig.settle()
+        }
+        assertTrue("not yet full", rig.nothingWritten())
+        flow.record(words.last(), null, null)
+        rig.settle()
+        assertEquals("full, with no time passed", words, rig.writtenWords().map { it.word })
+        flow.record("again", null, null)
+        rig.settle()
+        rig.pause(BUFFER_WAIT_MILLIS - TICK_MILLIS)
+        assertFalse(rig.writtenWords().any { it.word == "again" })
+        rig.pause(TICK_MILLIS)
+        assertTrue(rig.writtenWords().any { it.word == "again" })
+    }
+
+    @Test
+    fun `the last flush at shutdown lands after the one in flight, and the worker's thread stops`() {
+        val flow = learningFlow()
+        flow.record("hello", null, null)
+        rig.settle()
+        // The field's flush, sent to the worker and not yet run.
+        flow.finishField()
+        flow.record("world", "hello", null)
+        flow.shutdown()
+        assertEquals(listOf("hello", "world"), rig.writtenWords().map { it.word })
+        assertTrue("the thread has stopped", rig.personalThread.stopped)
     }
 
     @Test
@@ -1276,12 +1712,12 @@ class TypingScenarioTest {
         rig.type("hello")
         rig.press(KeyCodes.ENTER)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertTrue(rig.store.batches.isEmpty())
+        assertTrue(rig.nothingWritten())
         rig.orchestrator.onUserUnlocked()
         rig.type("world")
         rig.press(KeyCodes.ENTER)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(listOf("world"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+        assertEquals(listOf("world"), rig.writtenWords().map { it.word })
     }
 
     @Test
@@ -1290,10 +1726,10 @@ class TypingScenarioTest {
         rig.startField()
         rig.type("teh ")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertFalse(rig.store.batches.flatMap { it.updates }.any { it.word == "the" })
+        assertFalse(rig.writtenWords().any { it.word == "the" })
         rig.type("a")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertTrue(rig.store.batches.flatMap { it.updates }.any { it.word == "the" })
+        assertTrue(rig.writtenWords().any { it.word == "the" })
     }
 
     @Test
@@ -1314,7 +1750,7 @@ class TypingScenarioTest {
         rig.press(KeyCodes.DELETE)
         assertEquals("the", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(listOf("the"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+        assertEquals(listOf("the"), rig.writtenWords().map { it.word })
     }
 
     @Test
@@ -1331,7 +1767,7 @@ class TypingScenarioTest {
         rig.press(KeyCodes.DELETE)
         assertEquals("on my way", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertTrue(rig.store.batches.isEmpty())
+        assertTrue(rig.nothingWritten())
     }
 
     @Test
@@ -1344,7 +1780,7 @@ class TypingScenarioTest {
         assertEquals("te ", rig.editor.text)
         assertTrue(rig.host.forgotten.isEmpty())
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(listOf("the"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+        assertEquals(listOf("the"), rig.writtenWords().map { it.word })
     }
 
     @Test
@@ -1361,7 +1797,7 @@ class TypingScenarioTest {
         rig.press(KeyCodes.DELETE)
         assertEquals("o my way ", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertTrue(rig.store.batches.isEmpty())
+        assertTrue(rig.nothingWritten())
     }
 
     @Test
@@ -1374,7 +1810,7 @@ class TypingScenarioTest {
         rig.press(KeyCodes.DELETE)
         assertEquals("hello", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(listOf("hello"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+        assertEquals(listOf("hello"), rig.writtenWords().map { it.word })
     }
 
     @Test
@@ -1466,7 +1902,6 @@ class TypingScenarioTest {
     fun `in Ask mode a language flip offers its replacements, and a picked one is applied`() {
         val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
-            both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(
                 SMOKE_SETTINGS.copy(
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_ASK,
@@ -1496,7 +1931,6 @@ class TypingScenarioTest {
     fun `with the language-switch correction off a language flip changes nothing and offers nothing`() {
         val both = Pipeline.open(ROMANIAN_TAG, ENGLISH_TAG)
         try {
-            both.languageLock(BALANCED_EVIDENCE)
             val twoLanguages = both.typingRig(SMOKE_SETTINGS)
             twoLanguages.startField()
             for (word in ROMANIAN_PHRASE.split(' ') + "in") {
@@ -1517,7 +1951,6 @@ class TypingScenarioTest {
         for (order in listOf(listOf("ro-RO", "en-US"), listOf("en-US", "ro-RO"))) {
             val both = Pipeline.open(*order.toTypedArray())
             try {
-                both.languageLock(BALANCED_EVIDENCE)
                 val twoLanguages = both.typingRig(SMOKE_SETTINGS)
                 twoLanguages.startField()
                 for (word in ROMANIAN_PHRASE.split(' ') + "in") {
@@ -1633,7 +2066,7 @@ class TypingScenarioTest {
         rig.type(" ")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("t h e", touchedLetters())
-        val t = rig.store.touches.first()
+        val t = rig.writtenTouches().first()
         assertEquals(0.1, t.sumX, 1e-5)
         assertEquals(0.2, t.sumY, 1e-5)
     }
@@ -1647,7 +2080,7 @@ class TypingScenarioTest {
         tapWord("a")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("t h e", touchedLetters())
-        assertEquals(-0.7, rig.store.touches.single { it.code == 'e'.code }.sumX, 1e-5)
+        assertEquals(-0.7, rig.writtenTouches().single { it.code == 'e'.code }.sumX, 1e-5)
     }
 
     @Test
@@ -1659,7 +2092,7 @@ class TypingScenarioTest {
         assertEquals("thw ", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("t h w", touchedLetters())
-        assertEquals(0.3, rig.store.touches.single { it.code == 'w'.code }.sumX, 1e-5)
+        assertEquals(0.3, rig.writtenTouches().single { it.code == 'w'.code }.sumX, 1e-5)
     }
 
     @Test
@@ -1673,7 +2106,7 @@ class TypingScenarioTest {
         assertEquals("the ", rig.editor.text)
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("t h e", touchedLetters())
-        assertEquals(setOf(custom.key), rig.store.touches.map { it.bucket }.toSet())
+        assertEquals(setOf(custom.key), rig.writtenTouches().map { it.bucket }.toSet())
     }
 
     @Test
@@ -1721,11 +2154,58 @@ class TypingScenarioTest {
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertTrue(rig.engine.learnedIn.isNotEmpty())
         assertEquals("not the subtype's", setOf(ROMANIAN), rig.engine.learnedIn.toSet())
-        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
-        val triples = rig.store.batches.flatMap { batch -> batch.triples.mapNotNull { it.use } }
+        val pairs = rig.writtenPairs()
+        val triples = rig.writtenTriples()
         assertTrue(pairs.isNotEmpty() && triples.isNotEmpty())
         assertEquals(setOf(ROMANIAN), pairs.map { it.language }.toSet())
         assertEquals(setOf(ROMANIAN), triples.map { it.language }.toSet())
+    }
+
+    @Test
+    fun `the personal dictionary keeps a word's uses in each language, the engine its most in one`() {
+        answeringInRomanian()
+        val romanianUses = 3
+        val englishUses = 2
+        var language = ROMANIAN
+        val flow = learningFlow { language }
+        repeat(romanianUses) {
+            flow.record(UNKNOWN_WORD, null, null)
+            rig.settle()
+        }
+        language = LanguageTags.primary(ENGLISH_TAG)
+        repeat(englishUses) {
+            flow.record(UNKNOWN_WORD, null, null)
+            rig.settle()
+        }
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(
+            mapOf(ROMANIAN to romanianUses, language to englishUses),
+            rig.writtenWords().filter { it.word == UNKNOWN_WORD }.associate { it.language to it.count },
+        )
+        assertEquals(romanianUses, pipeline.engineWord(UNKNOWN_WORD)?.entry?.count)
+    }
+
+    @Test
+    fun `a commit's word and links carry one language`() {
+        answeringInRomanian()
+        val (first, second, third) = ROMANIAN_PHRASE.split(' ')
+        rig.type("$first $second $third ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        val words = rig.writtenWords().filter { it.word in setOf(first, second, third) }
+        assertEquals("each word is written", 3, words.size)
+        assertEquals("the words, not the subtype's", setOf(ROMANIAN), words.map { it.language }.toSet())
+        val links = rig.writtenPairs().map { it.language } + rig.writtenTriples().map { it.language }
+        assertEquals("their links", setOf(ROMANIAN), links.toSet())
+    }
+
+    @Test
+    fun `the next word is read in the language its pair was learned under`() {
+        answeringInRomanian()
+        val (context, _, _, next) = ROMANIAN_PHRASE.split(' ')
+        repeat(KeyboardPreferences.DEFAULT_LEARN_AFTER_USES) { rig.type("$context $next ") }
+        rig.startField()
+        rig.type("$context ")
+        assertEquals(next, firstOffered())
     }
 
     @Test
@@ -1753,9 +2233,9 @@ class TypingScenarioTest {
         startWithSwitches(learning = true, heatmap = false)
         rig.type("is a ")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        val pairs = rig.writtenPairs()
         assertTrue(pairs.toString(), pairs.any { it.previousWord == "is" && it.word == "a" })
-        assertTrue(rig.store.batches.flatMap { it.updates }.none { it.word == "a" })
+        assertTrue(rig.writtenWords().none { it.word == "a" })
     }
 
     @Test
@@ -1765,18 +2245,19 @@ class TypingScenarioTest {
         flow.record(UNKNOWN_WORD, "the", null)
         rig.settle()
         flow.finishField()
-        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        rig.settle()
+        val pairs = rig.writtenPairs()
         assertTrue(pairs.toString(), pairs.none { it.word == UNKNOWN_WORD })
-        assertTrue("the word itself is", rig.store.batches.flatMap { it.updates }.any { it.word == UNKNOWN_WORD })
+        assertTrue("the word itself is", rig.writtenWords().any { it.word == UNKNOWN_WORD })
     }
 
     @Test
     fun `no pair or triple spans a change of answering language`() {
-        val flow = learningFlow()
-        flow.answeredIn(LanguageTags.primary(ENGLISH_TAG))
+        var language = LanguageTags.primary(ENGLISH_TAG)
+        val flow = learningFlow { language }
         flow.record("the", null, null)
         flow.record("time", "the", null)
-        flow.answeredIn(ROMANIAN)
+        language = ROMANIAN
         flow.record("water", "time", "the")
         flow.record("under", "water", "time")
         flow.record("there", "under", "water")
@@ -1806,9 +2287,9 @@ class TypingScenarioTest {
         rig.type("cat ")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals(listOf<Pair<String?, String?>>(unheld to null), rig.engine.learnedAfter)
-        val pairs = rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }
+        val pairs = rig.writtenPairs()
         assertTrue(pairs.toString(), pairs.none { it.word == "cat" })
-        assertTrue("the word itself is learned", rig.store.batches.any { batch -> batch.updates.any { it.word == "cat" } })
+        assertTrue("the word itself is learned", rig.writtenWords().any { it.word == "cat" })
     }
 
     @Test
@@ -1824,19 +2305,19 @@ class TypingScenarioTest {
         rig.type(ROMANIAN_WORD)
         rig.orchestrator.onSuggestions(
             emptyList(), "", false, false, ROMANIAN_WORD.dropLast(1), null, emptyList(),
-            language = UNANSWERED_LANGUAGE,
+            answerPack = UNANSWERED_LANGUAGE,
         )
         rig.type(" ")
         assertEquals(ROMANIAN, languageOfPairEndingIn(ROMANIAN_WORD))
     }
 
     @Test
-    fun `an answer naming the unknown language leaves the language pairs go under`() {
+    fun `an answer naming no pack leaves the language pairs go under`() {
         answeringInRomanian()
         rig.type(ROMANIAN_WORD)
         rig.orchestrator.onSuggestions(
             emptyList(), "", false, false, ROMANIAN_WORD, null, emptyList(),
-            language = LanguageTags.UNKNOWN,
+            answerPack = null,
         )
         rig.type(" ")
         assertEquals(ROMANIAN, languageOfPairEndingIn(ROMANIAN_WORD))
@@ -1857,6 +2338,26 @@ class TypingScenarioTest {
         rig.orchestrator.onSubtypeChanged()
         rig.type(" ")
         assertEquals("a subtype change", LanguageTags.primary(OTHER_SUBTYPE_TAG), rig.engine.learnedIn.last())
+    }
+
+    @Test
+    fun `a swipe and its preview read the pairs in the language the engine answered in`() {
+        answeringInRomanian()
+        rig.orchestrator.applySettings(rig.orchestrator.preferences.copy(radialMenuEnabled = true))
+        rig.engine.loadPersonal(
+            PersonalSnapshot.learnedAfter(
+                UNKNOWN_WORD,
+                mapOf(ROMANIAN to ROMANIAN_SWIPED, LanguageTags.primary(ENGLISH_TAG) to ENGLISH_SWIPED),
+                rig.clock.now,
+            ),
+        )
+        rig.startField("$UNKNOWN_WORD ")
+        assertEquals("the answers name Romanian", ROMANIAN, rig.orchestrator.language)
+        rig.swipe(ENGLISH_SWIPED)
+        assertEquals("the swipe", "$UNKNOWN_WORD $ROMANIAN_SWIPED", rig.editor.text)
+        rig.startField("$UNKNOWN_WORD ")
+        rig.swipeAndPause(ENGLISH_SWIPED)
+        assertEquals("its preview", ROMANIAN_SWIPED, rig.ring.opened.last().words.first())
     }
 
     @Test
@@ -1965,7 +2466,7 @@ class TypingScenarioTest {
         rig.type(" ")
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = false))
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        assertEquals(emptyList<LearningBatch>(), rig.store.batches)
+        assertTrue(rig.nothingWritten())
     }
 
     @Test
@@ -1975,10 +2476,14 @@ class TypingScenarioTest {
         rig.type(" ")
         assertEquals("e h t", rig.engine.touchPatterns!!.codes.joinToString(" ") { it.toChar().toString() })
         val landscape = HARNESS_BUCKET.copy(landscape = true)
-        rig.store.storedTouches[landscape.key] = listOf(
-            com.borderkeys.data.entity.KeyTouch(landscape.key, 'q'.code, 40.0, 4.0, 0.0, 1.0, 1.0, 0.0, 108f, 160f, 2.75f, rig.clock.now),
-        )
+        runBlocking {
+            rig.dictionary.touches.upsert(
+                com.borderkeys.data.entity.KeyTouch(landscape.key, 'q'.code, 40.0, 4.0, 0.0, 1.0, 1.0, 0.0, 108f, 160f, 2.75f, rig.clock.now),
+            )
+        }
         rig.orchestrator.keyGeometry = harnessGeometry(landscape)
+        // The stored totals are read on the personal dictionary's worker.
+        rig.settle()
         val patterns = rig.engine.touchPatterns!!
         assertEquals(listOf('q'.code), patterns.codes.toList())
         assertEquals(0.1f, patterns.meanX.single(), 1e-5f)
@@ -2210,12 +2715,46 @@ class TypingScenarioTest {
      */
     private fun learnedCapitals(): Map<String, Boolean> {
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        return rig.store.batches.flatMap { it.updates }.associate { it.word to it.deliberateCapital }
+        return rig.writtenWords().associate { it.word to (it.deliberateCapitals > 0) }
+    }
+
+    /** The choices counted for each word once the buffer is written, over every batch. */
+    private fun learnedChoices(): Map<String, Int> {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.writtenWords().associate { it.word to it.asserted }
+    }
+
+    /** The choices counted for the pair [previous] [word] once the buffer is written, over every batch. */
+    private fun pairChoices(previous: String, word: String): Int {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.writtenPairs().filter { it.previousWord == previous && it.word == word }.sumOf { it.asserted }
+    }
+
+    /** The count of each written pair of [word] after [previous], once the buffer is written. */
+    private fun pairCounts(previous: String, word: String): List<Int> {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.writtenPairs().filter { it.previousWord == previous && it.word == word }.map { it.count }
+    }
+
+    /** Presses the keys of [text] with nothing delivered between them: the engine's queue keeps what they ask. */
+    private fun unsettled(text: String) {
+        for (code in text.codePoints().toArray()) {
+            rig.clock.advance(TypingRig.KEY_INTERVAL_MILLIS)
+            rig.orchestrator.onKey(code)
+        }
+    }
+
+    /** The choices counted for the triple [before] [previous] [word] once the buffer is written, over every batch. */
+    private fun tripleChoices(before: String, previous: String, word: String): Int {
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        return rig.writtenTriples()
+            .filter { it.previousWord2 == before && it.previousWord1 == previous && it.word == word }
+            .sumOf { it.asserted }
     }
 
     /** The letters the heatmap wrote totals for, in order. */
     private fun touchedLetters(): String =
-        rig.store.touches.joinToString(" ") { it.code.toChar().toString() }
+        rig.writtenTouches().joinToString(" ") { it.code.toChar().toString() }
 
     /** Opens a fresh field with the Learning switch at [learning] and the Heatmap at [heatmap]. */
     /**
@@ -2225,8 +2764,13 @@ class TypingScenarioTest {
     private fun answeringInRomanian() {
         pipeline.close()
         pipeline = Pipeline.open(ENGLISH_TAG, ROMANIAN_TAG)
-        pipeline.preferredLanguage(ROMANIAN_TAG)
-        rig = pipeline.typingRig(SMOKE_SETTINGS.copy(learningEnabled = true))
+        rig = pipeline.typingRig(
+            SMOKE_SETTINGS.copy(
+                learningEnabled = true,
+                preferredLanguageTag = ROMANIAN_TAG,
+                languageLock = KeyboardPreferences.LANGUAGE_LOCK_OFF,
+            ),
+        )
         rig.host.subtype = ENGLISH_TAG
         rig.startField()
     }
@@ -2234,12 +2778,15 @@ class TypingScenarioTest {
     /** The language the latest pair ending in [word] was written under, once the buffer is written. */
     private fun languageOfPairEndingIn(word: String): String? {
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        return rig.store.batches.flatMap { batch -> batch.pairs.mapNotNull { it.use } }.lastOrNull { it.word == word }?.language
+        return rig.writtenPairs().filter { it.word == word }.maxByOrNull { it.lastUsedAt }?.language
     }
 
-    /** A learning flow on the rig's engine and store, in a field that allows learning. */
-    private fun learningFlow(): LearningFlow {
-        val flow = LearningFlow(rig.engine, rig.host, rig.store, rig.clock)
+    /**
+     * A learning flow on the rig's engine and store, in a field that allows learning, each word
+     * committed in [language], by default the rig's.
+     */
+    private fun learningFlow(language: () -> String = { rig.orchestrator.language }): LearningFlow {
+        val flow = LearningFlow(rig.engine, rig.host, rig.store, rig.clock, language)
         flow.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
         flow.startField(
             FieldSession(
@@ -2324,6 +2871,24 @@ class TypingScenarioTest {
     }
 
     private companion object {
+        /** What the learning buffer promises: a write once it holds this many words... */
+        const val BUFFER_WORDS = 64
+
+        /** ...or this long after the first one waiting. */
+        const val BUFFER_WAIT_MILLIS = 4_000L
+
+        /** The letters a word of the buffer test is spelled from. */
+        const val LETTERS = 26
+
+        /** The least time the clock moves. */
+        const val TICK_MILLIS = 1L
+
+        /** How many uses a stale link has before the clean-up halves it. */
+        const val STALE_USES = 4
+
+        /** The half-life a clean-up of the scenarios runs under: a minute of the rig's clock. */
+        const val CLEAN_UP_HALF_LIFE_MILLIS = 60_000L
+
         /** What the phrase note promises: a phrase after twice a word's uses. */
         const val PHRASE_USES_PER_WORD_USES = 2
 
@@ -2342,9 +2907,6 @@ class TypingScenarioTest {
             modifierRow = false,
             languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF,
         )
-
-        /** The Languages screen's default. */
-        const val BALANCED_EVIDENCE = 1.8f
 
         /** A name the English pack writes with a capital. */
         const val NAME = "Paris"
@@ -2370,6 +2932,10 @@ class TypingScenarioTest {
 
         /** A word no pack spells. */
         const val UNKNOWN_WORD = "zqxv"
+
+        // A swipe through the English word's keys decodes the Romanian one beside it.
+        const val ENGLISH_SWIPED = "far"
+        const val ROMANIAN_SWIPED = "dar"
 
         /** A language no open pack answers in. */
         const val UNANSWERED_LANGUAGE = "fr"

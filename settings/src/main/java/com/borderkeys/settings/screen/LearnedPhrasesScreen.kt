@@ -23,7 +23,6 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.PersonalEntries
-import com.borderkeys.data.PhraseKey
 import com.borderkeys.data.PhraseShape
 import com.borderkeys.data.UserPhrase
 import com.borderkeys.i18n.Keys
@@ -57,11 +56,9 @@ fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
     // Only the phrases that count as learned, as the keyboard counts them, from the origin chosen.
     val learned = rememberLearned(saved, PersonalEntries::phrases)
     val phrases = PersonalEntries.ofOrigin(learned, origin) { it.added }
-    // Each word in the spelling it was learned in when its capital was typed on purpose.
+    // Each word in the spelling the keyboard serves for it.
     val words by repository.words.collectAsStateWithLifecycle(initialValue = emptyList())
-    val spellings = remember(words) {
-        words.filter { it.deliberateCapitals > 0 }.associate { PhraseKey.word(it.word) to it.word }
-    }
+    val spellings = rememberLearned(words, PersonalEntries::spellings)
     val listed = remember(phrases, query, spellings) {
         if (filtering) {
             phrases.filter { textOf(it, spellings, strings).contains(query, ignoreCase = true) }
@@ -154,13 +151,7 @@ fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
         }
         for ((phraseLanguage, inLanguage) in byLanguage) {
             item(key = phraseLanguage) {
-                SectionHeader(
-                    if (phraseLanguage == LanguageTags.UNKNOWN) {
-                        strings[Keys.DICTIONARY_PHRASES_UNKNOWN_LANGUAGE]
-                    } else {
-                        displayNameFor(phraseLanguage)
-                    },
-                )
+                SectionHeader(languageHeading(phraseLanguage, strings))
             }
             items(inLanguage, key = { (listOf(it.language) + it.words).joinToString(KEY_SEPARATOR) }) { phrase ->
                 SettingRow(

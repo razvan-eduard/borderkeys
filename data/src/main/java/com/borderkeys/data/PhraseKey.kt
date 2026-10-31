@@ -17,7 +17,8 @@ object PhraseKey {
     /**
      * The language of a link that names none, by its last word: the [LanguageTags.primary] of the
      * locale [localeOf] holds for that word, else of the locale most words hold, else [fallback]. A
-     * locale that names no language counts as none.
+     * locale that names no language counts as none here, though a commit under a subtype naming
+     * none is learned under [LanguageTags.UNKNOWN], a language of its own.
      */
     fun languageOfWord(localeOf: Map<String, String>, fallback: String): (String) -> String {
         val known = localeOf.filterValues { LanguageTags.primary(it) != LanguageTags.UNKNOWN }

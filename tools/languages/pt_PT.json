@@ -12,6 +12,7 @@
   ],
   "treebank": {
     "repository": "UD_Portuguese-Bosque",
+    "release": "r2.18",
     "files": [
       "pt_bosque-ud-train.conllu",
       "pt_bosque-ud-dev.conllu",
@@ -28,5 +29,10 @@
   },
   "single_letter_words": "aeoéà",
   "expected_beyond_ascii": [],
-  "reachability_budget": 307
+  "reachability_budget": 307,
+  "sha256": {
+    "por_news_2024_1M.tar.gz": "cc8560f85eeea797ed9ddd5e8d3b8a3db5daea694f4b8272e20be8622c6ed865",
+    "por_newscrawl_2020_1M.tar.gz": "4aa0a1bef4e7524bad024d67c9ae3e449fa03550985d0707c2d3a037c2bf196b",
+    "por_wikipedia_2021_1M.tar.gz": "9668811a0aa0bf5ec64be1156687d33534c437b8e6633c97606e21d076d89bdf"
+  }
 }

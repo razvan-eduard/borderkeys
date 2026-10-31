@@ -82,6 +82,8 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
 
     override fun stripTypedIndex(): Int? = if (viewAttached) typedIndex else null
 
+    override fun stripAppliedIndex(): Int? = if (viewAttached) appliedIndex else null
+
     override fun clearStripActions() = Unit
 
     override fun setEditorEmpty(empty: Boolean) {
@@ -152,6 +154,18 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
     override fun forgetWord(word: String, blockWhenNotPersonal: Boolean) {
         forgotten += word to blockWhenNotPersonal
         onForgetWord?.invoke(word)
+    }
+
+    /** How many times the personal model was asked to be read again. */
+    var reloads = 0
+        private set
+
+    /** What [reloadPersonalModel] runs; nothing unless the rig or a test sets it. */
+    var onReloadPersonalModel: (() -> Unit)? = null
+
+    override fun reloadPersonalModel() {
+        reloads++
+        onReloadPersonalModel?.invoke()
     }
 
     override fun subtypeTag(): String = subtype

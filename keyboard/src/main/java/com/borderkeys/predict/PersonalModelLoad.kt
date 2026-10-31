@@ -16,8 +16,8 @@ import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.theme.KeyboardPreferences
 
 /**
- * What the engine's personal model is replaced with: the learned words, pairs and triples, their
- * contexts' totals and each language's clocks.
+ * What the engine's personal model is replaced with ([EngineWorkingCopy.load]): the learned words,
+ * pairs and triples, their contexts' totals and each language's clocks.
  */
 internal data class PersonalModelLoad(
     val words: List<UserWord>,
@@ -28,20 +28,18 @@ internal data class PersonalModelLoad(
     val clocks: List<UserPhraseClock>,
 ) {
 
-    /** Replaces the personal model of the engine at [handle] with this one: the words, then the links. */
-    fun loadInto(handle: Long) {
-        NativePredictor.nativeLoadUserWords(
-            handle,
-            Array(words.size) { words[it].word },
-            IntArray(words.size) { words[it].count },
-            IntArray(words.size) { words[it].deliberateCapitals },
-            IntArray(words.size) { words[it].asserted },
-            IntArray(words.size) { words[it].added },
-        )
-        PersonalLinks.load(handle, pairs, pairContexts, triples, tripleContexts, clocks)
-    }
+    /**
+     * What of the settings a load reads: how many words it takes, how fast what sits unused fades,
+     * and whether the offensive words are left out. A change of it calls for the model to be read
+     * again.
+     */
+    data class Settings(val wordLimit: Int, val halfLifeDays: Int, val offensiveLeftOut: Boolean)
 
     companion object {
+
+        /** What of [settings] a load reads ([Settings]). */
+        fun settingsOf(settings: KeyboardPreferences): Settings =
+            Settings(settings.learnedWordLimit, settings.unlearnHalfLifeDays, settings.blockOffensiveWords)
 
         /**
          * The model [dictionary] loads under [settings] at [now]: its rows as
@@ -53,7 +51,7 @@ internal data class PersonalModelLoad(
             settings: KeyboardPreferences,
             offensiveWords: Set<String>,
             now: Long,
-        ): PersonalModelLoad = of(dictionary.personalRows(settings.learnedWordLimit), settings, offensiveWords, now)
+        ): PersonalModelLoad = of(dictionary.personalRows(settingsOf(settings).wordLimit), settings, offensiveWords, now)
 
         /**
          * The model [rows] load under [settings] at [now]: with the offensive-word switch on, the
@@ -66,8 +64,9 @@ internal data class PersonalModelLoad(
             offensiveWords: Set<String>,
             now: Long,
         ): PersonalModelLoad {
-            val halfLife = PersonalWordDecay.halfLifeMillis(settings.unlearnHalfLifeDays)
-            val hidden = if (settings.blockOffensiveWords) offensiveWords else emptySet()
+            val read = settingsOf(settings)
+            val halfLife = PersonalWordDecay.halfLifeMillis(read.halfLifeDays)
+            val hidden = if (read.offensiveLeftOut) offensiveWords else emptySet()
             fun shown(word: String) = hidden.isEmpty() || WordFold.fold(word) !in hidden
             return PersonalModelLoad(
                 words = rows.words.filter { shown(it.word) }.map { it.decayed(now, halfLife) },

@@ -5,7 +5,9 @@
 
 Each case replaces one letter with a QWERTY neighbour of it, so reaching the intended word
 needs one substitution between adjacent keys. Emitted as `mangled<TAB>intended`, read by
-`suggest_eval --autocorrect`; with `--strip`, the same rows headed for the bare strip-rank mode.
+`PipelineCorpusTest`, which types each case through the app's commit, and by `suggest_eval
+--autocorrect`, which ranks it on the strip; with `--strip`, the same rows headed for the bare
+strip-rank mode.
 
 Cases whose mangled form is itself a dictionary word are skipped.
 
@@ -65,7 +67,8 @@ def main():
     if args.strip:
         print("# Read by the bare `suggest_eval`: where the strip ranks the intended word.")
     else:
-        print("# Read by `suggest_eval --autocorrect`: what the space bar commits.")
+        print("# Read by PipelineCorpusTest: what the space bar commits; and by")
+        print("# `suggest_eval --autocorrect`: where the strip ranks the intended word.")
     print(f"# Drawn from the {FROM_TOP} most frequent words of the pack, {MIN_LENGTH} to"
           f" {MAX_LENGTH} letters, {len(rows)} cases.")
     print("# Cases whose mangled form is itself a dictionary word are excluded.")
