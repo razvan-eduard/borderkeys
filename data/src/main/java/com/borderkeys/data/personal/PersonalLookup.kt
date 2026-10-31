@@ -17,11 +17,11 @@ import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.languageGone
+import com.borderkeys.data.personal.PersonalSpelling.Form
 import com.borderkeys.data.toBigram
 import com.borderkeys.data.toPairContext
 import com.borderkeys.data.toTrigram
 import com.borderkeys.data.toTripleContext
-import com.borderkeys.data.personal.PersonalSpelling.Form
 
 /**
  * The personal model as Kotlin holds it and hands it to the engine: every word with its case

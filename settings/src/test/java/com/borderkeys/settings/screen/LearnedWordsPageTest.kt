@@ -12,8 +12,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.borderkeys.data.PersonalEntries
-import com.borderkeys.data.entity.UserWord
 import com.borderkeys.data.backup.BackupRepository
+import com.borderkeys.data.entity.UserWord
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.language.LanguageTags
 import com.borderkeys.settings.LocalStrings
