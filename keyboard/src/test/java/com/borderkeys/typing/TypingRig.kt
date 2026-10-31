@@ -21,7 +21,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.completeWith
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -67,6 +69,12 @@ internal class TypingRig(
         SupervisorJob() + Dispatchers.Unconfined + CoroutineExceptionHandler { _, error -> reloadFailure = error },
     )
 
+    /** The lock the personal model's edits and reloads run under, as the service's loads do. */
+    val personalLock = Mutex()
+
+    /** What the refresh of the blocked words throws; null for nothing. */
+    var blockedRefreshFailure: Throwable? = null
+
     /**
      * The personal model as the personal dictionary's edits reach it, the production host on the
      * rig's engine and orchestrator, attached to [dictionary]: the service's reload, the dictionary's
@@ -74,13 +82,15 @@ internal class TypingRig(
      */
     val personalModel = KeyboardPersonalModel(
         personalScope,
-        Mutex(),
+        personalLock,
         engine,
         orchestrator,
         reloadModel = { between -> reloadSteps().reload(between) },
         refreshBlocked = {
+            blockedRefreshFailure?.let { throw it }
             orchestrator.setRefusedWords(RefusedWords.of(dictionary.repository.blockedWordSet(), offensiveWhileSwitchedOn()))
         },
+        failed = { error -> reloadFailure = error },
     )
 
     init {
@@ -298,12 +308,50 @@ internal class TypingRig(
 
     /** What [block] reads from the personal dictionary, asked for now and answered as the rig settles. */
     fun <T> read(block: suspend (DictionaryRepository) -> T): T {
+        val answer = ask(block)
+        settle()
+        return answer.answer()
+    }
+
+    /**
+     * Asks [block] of the personal dictionary, an edit as the pages make it, without settling: it
+     * runs until it waits on the engine or the personal dictionary's thread.
+     */
+    fun <T> ask(block: suspend (DictionaryRepository) -> T): Asked<T> {
         val answer = CompletableDeferred<T>()
-        CoroutineScope(Dispatchers.Unconfined).launch {
+        val asking = CoroutineScope(Dispatchers.Unconfined).launch {
             answer.completeWith(runCatching { block(dictionary.repository) })
         }
-        settle()
-        return runBlocking { answer.await() }
+        return Asked(answer, asking)
+    }
+
+    /** What [ask] asked, answered once it has run. */
+    class Asked<T>(private val answer: CompletableDeferred<T>, private val asking: Job) {
+        /** What the block returned, or what it threw; fails while it has not finished. */
+        fun answer(): T {
+            check(answer.isCompleted) { "the block has not finished" }
+            return runBlocking { answer.await() }
+        }
+
+        /** The asker stops waiting. */
+        fun stopWaiting() {
+            asking.cancel()
+        }
+    }
+
+    /**
+     * Stops the keyboard as the service does, the personal dictionary still holding its personal
+     * model: [KeyboardPersonalModel.stop], the learning's last flush, then [cancelPersonalScope].
+     */
+    fun stopKeyboard() {
+        personalModel.stop()
+        orchestrator.shutdown()
+        cancelPersonalScope()
+    }
+
+    /** Cancels the scope the personal model runs its edits on. */
+    fun cancelPersonalScope() {
+        personalScope.cancel()
     }
 
     /** The word rows written to the personal dictionary, by spelling in the order each was first written. */

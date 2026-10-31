@@ -5,8 +5,10 @@ package com.borderkeys.data.personal
 
 /**
  * The personal model a running keyboard holds, the lookup and the engine's working copy, as the
- * personal dictionary's edits reach it. Each call runs after every load and edit asked for before
- * it, and after every commit the keyboard handed its engine before it.
+ * personal dictionary's edits reach it. Each call runs its edit once and to its end, and returns
+ * what the edit returned or throws what it threw. While the keyboard runs, each call runs after
+ * every load and edit asked for before it, and after every commit the keyboard handed its engine
+ * before it, with the steps its description names around its edit.
  */
 interface PersonalModelHost {
 

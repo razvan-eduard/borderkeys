@@ -534,6 +534,7 @@ class BorderKeysService :
             orchestrator,
             reloadModel = { between -> dictionaryLoader.loadPersonalModel(DataGraph.dictionary, between) },
             refreshBlocked = { dictionaryLoader.refreshBlockedWords(DataGraph.dictionary) },
+            failed = { error -> android.util.Log.e("BorderKeys", "the personal model missed an edit", error) },
         )
     }
 
@@ -1174,6 +1175,7 @@ class BorderKeysService :
         unregisterClipboardListener()
         if (unlocked) {
             DataGraph.dictionary.detach(personalModel)
+            personalModel.stop()
         }
         // Runs while the engine is still alive.
         super.onDestroy()
